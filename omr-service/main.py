@@ -16,6 +16,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from engine.pipeline import ocr as engine_ocr
+from engine.pipeline import pdf_pages as engine_pdf_pages
 from engine.pipeline import process as engine_process
 
 MAX_BODY = 25 * 1024 * 1024
@@ -57,6 +58,35 @@ async def process_route(request: Request):
     loop = asyncio.get_running_loop()
     result = await loop.run_in_executor(None, lambda: engine_process(payload))
     return JSONResponse(result)
+
+
+@app.post("/api/omr/pdf_pages")
+async def pdf_pages_route(request: Request):
+    if not _authorized(request):
+        return JSONResponse({"ok": False, "stage": "unauthorized", "error": "unauthorized"}, status_code=401)
+    body = await request.body()
+    if len(body) > MAX_BODY:
+        return JSONResponse({"ok": False, "error": "payload too large"}, status_code=413)
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"ok": False, "error": f"invalid JSON body: {e}"}, status_code=400)
+    # PDF rasterization is CPU-bound (pymupdf) — worker thread, same as /process
+    loop = asyncio.get_running_loop()
+    try:
+        result = await loop.run_in_executor(
+            None,
+            lambda: engine_pdf_pages(
+                payload.get("pdfBase64", ""),
+                dpi=int(payload.get("dpi") or 200),
+                from_page=int(payload.get("fromPage") or 0),
+                max_pages=int(payload.get("maxPages") or 8),
+                quality=int(payload.get("quality") or 85),
+            ),
+        )
+    except ValueError as e:  # bad input / not-a-pdf — same posture as local server
+        return JSONResponse({"ok": False, "stage": "pdf", "error": str(e)})
+    return JSONResponse({"ok": True, **result})
 
 
 @app.post("/api/omr/ocr")
