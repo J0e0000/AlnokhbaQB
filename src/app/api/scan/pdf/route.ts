@@ -4,12 +4,17 @@
 // stays well inside serverless time budgets; the client loops with the
 // returned cursor until done — with live per-page progress in the UI.
 //
-// Body: { pdfBase64, examVersionIdHint?, batchId?, fromPage?, batchSize? }
+// Body: { pdfBase64, examVersionIdHint?, batchId?, fromPage?, batchSize?, pageChunk? }
 //  • first call: page `fromPage` is processed once WITHOUT template → engine
 //    QR-decodes the exam version (or `examVersionIdHint` is used) → org
 //    ownership verified → template + answer key resolved for the whole batch.
 //  • every page: engine /process with template → server-side grade →
 //    idempotent persist (imageHash of the rendered page) → review routing.
+//  • pageChunk mode (Vercel): the CLIENT slices the PDF per page with pdf-lib
+//    and sends ONE single-page slice per request — whole-PDF bodies exceed the
+//    platform's 4.5MB function payload cap on real scanned stacks. In this
+//    mode pdfBase64 IS one page, `pageChunk.index` is its absolute page number
+//    and `pageChunk.total` is the client-known page count.
 // Response: { total, results[], nextFrom, done, batchId, examVersionId? }
 //
 // Auth/tenant: same as /api/scan (teacher+; scans scoped via exam org).
@@ -106,6 +111,14 @@ export async function POST(req: Request) {
       1,
       Math.min(MAX_BATCH, parseInt(String(body?.batchSize ?? DEFAULT_BATCH), 10) || DEFAULT_BATCH)
     );
+    // pageChunk mode: pdfBase64 is a single client-side slice
+    const pageChunk =
+      body?.pageChunk && typeof body.pageChunk === 'object'
+        ? {
+            index: Math.max(0, parseInt(String(body.pageChunk.index ?? '0'), 10) || 0),
+            total: Math.max(1, parseInt(String(body.pageChunk.total ?? '0'), 10) || 0) || null,
+          }
+        : null;
     const hint = typeof body?.examVersionIdHint === 'string' ? body.examVersionIdHint : undefined;
     const batchId =
       typeof body?.batchId === 'string' && body.batchId.length <= 64
@@ -116,8 +129,13 @@ export async function POST(req: Request) {
     const profile = await ensureActiveCalibration();
     const thresholds = thresholdsFromConfig(profile.configJson);
 
-    // ---- rasterize this chunk
-    const chunk = await pdfPages({ pdfBase64, fromPage, maxPages: batchSize, dpi: 200 });
+    // ---- rasterize this chunk (pageChunk mode: the slice IS one page)
+    const chunk = await pdfPages({
+      pdfBase64,
+      fromPage: pageChunk ? 0 : fromPage,
+      maxPages: batchSize,
+      dpi: 200,
+    });
     if (!('pages' in chunk) || !Array.isArray((chunk as { pages?: unknown }).pages)) {
       const err = chunk as { error?: string; stage?: string };
       return NextResponse.json(
@@ -126,7 +144,7 @@ export async function POST(req: Request) {
       );
     }
     const pages = chunk.pages;
-    const total = chunk.total;
+    const total = pageChunk?.total ?? chunk.total;
     if (total > MAX_TOTAL_PAGES) {
       return NextResponse.json(
         { error: `عدد صفحات الملف ${total} يتجاوز الحد المسموح (${MAX_TOTAL_PAGES})` },
@@ -196,7 +214,7 @@ export async function POST(req: Request) {
     const results: PageResult[] = [];
 
     for (let i = 0; i < pages.length; i++) {
-      const pageIndexAbs = fromPage + i;
+      const pageIndexAbs = pageChunk ? pageChunk.index + i : fromPage + i;
       const pageB64 = pages[i];
       const imageHash = createHash('sha256').update(pageB64).digest('hex');
       const entry: PageResult = { index: pageIndexAbs, scanId: null, ok: false };
@@ -376,7 +394,7 @@ export async function POST(req: Request) {
     }
 
     const transportAbort = results.some((r) => r.transportAbort);
-    const nextFrom = fromPage + pages.length;
+    const nextFrom = pageChunk ? pageChunk.index + pages.length : fromPage + pages.length;
     return NextResponse.json({
       batchId,
       total,

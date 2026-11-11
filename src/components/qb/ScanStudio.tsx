@@ -67,6 +67,21 @@ interface ScanResult {
   images?: { debug?: string | null; corrected?: string | null };
 }
 
+// Vercel caps serverless request bodies at 4.5MB — whole-file PDF uploads on
+// real scanned stacks (e.g. 100 sheets ≈ 12MB) exceed it with FUNCTION_PAYLOAD_TOO_LARGE.
+// Keep whole-file uploads under ~3.4MB of base64 and single-page slices under ~4.2MB.
+const PDF_WHOLE_LIMIT = 3_400_000;
+const PDF_PAGE_LIMIT = 4_200_000;
+
+function bytesToDataUrl(bytes: Uint8Array, mime: string): string {
+  let bin = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return `data:${mime};base64,${btoa(bin)}`;
+}
+
 interface BatchPageResult {
   index: number;
   scanId: string | null;
@@ -299,17 +314,31 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
     setManualMode(false);
     setManualPoints([]);
     try {
-      const rawUrl = await new Promise<string>((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = () => resolve(r.result as string);
-        r.onerror = reject;
-        r.readAsDataURL(file);
-      });
       if (isPdf) {
-        await runPdfBatch(rawUrl);
+        // Whole-file vs client-side per-page slicing: Vercel caps function
+        // request bodies at 4.5MB — real scanned stacks must be sliced.
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const b64Estimate = Math.ceil(bytes.length / 3) * 4;
+        if (b64Estimate > PDF_WHOLE_LIMIT) {
+          await runPdfChunked(bytes);
+        } else {
+          const rawUrl = await new Promise<string>((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(r.result as string);
+            r.onerror = reject;
+            r.readAsDataURL(file);
+          });
+          await runPdfBatch(rawUrl);
+        }
       } else {
         // downscale BEFORE anything that keeps the image (manual-corner map
         // uses the SAME downscaled pixels the engine receives — consistent)
+        const rawUrl = await new Promise<string>((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(r.result as string);
+          r.onerror = reject;
+          r.readAsDataURL(file);
+        });
         const dataUrl = await downscaleImage(rawUrl);
         setPendingImage(dataUrl); // kept for the manual-corner fallback
         busyRef.current = true;
@@ -323,6 +352,108 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
       }
     } catch {
       toast.error('تعذر قراءة الملف');
+    }
+  };
+
+  const runPdfChunked = async (srcBytes: Uint8Array) => {
+    let batchId: string | undefined;
+    let resolvedVersion: string | undefined = hintVersion === 'auto' ? undefined : hintVersion;
+    try {
+      const { PDFDocument } = await import('pdf-lib');
+      const src = await PDFDocument.load(srcBytes);
+      const total = src.getPageCount();
+      setBatch({ running: true, total, done: 0, okCount: 0, failCount: 0, dupCount: 0, pages: [] });
+      for (let i = 0; i < total; i++) {
+        try {
+          const doc = await PDFDocument.create();
+          const [page] = await doc.copyPages(src, [i]);
+          doc.addPage(page);
+          const slice = await doc.save();
+          const sliceDataUrl = bytesToDataUrl(slice, 'application/pdf');
+          if (sliceDataUrl.length > PDF_PAGE_LIMIT) {
+            setBatch((b) =>
+              b
+                ? {
+                    ...b,
+                    done: i + 1,
+                    failCount: b.failCount + 1,
+                    pages: [
+                      ...b.pages,
+                      {
+                        index: i,
+                        scanId: null,
+                        ok: false,
+                        error: 'الصفحة أكبر من حد الرفع — أعد مسحها بدقة أقل',
+                      },
+                    ],
+                  }
+                : b
+            );
+            continue;
+          }
+          const res = await fetch('/api/scan/pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              pdfBase64: sliceDataUrl,
+              batchId,
+              examVersionIdHint: resolvedVersion,
+              pageChunk: { index: i, total },
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            toast.error(data.error ?? `فشل معالجة الصفحة ${i + 1}`);
+            setBatch((b) =>
+              b
+                ? {
+                    ...b,
+                    done: i + 1,
+                    failCount: b.failCount + 1,
+                    pages: [
+                      ...b.pages,
+                      {
+                        index: i,
+                        scanId: null,
+                        ok: false,
+                        error: data.error ?? `فشل معالجة الصفحة ${i + 1}`,
+                      },
+                    ],
+                  }
+                : b
+            );
+            if (res.status >= 500) break; // engine/platform issue — stop the batch
+            continue;
+          }
+          batchId = data.batchId;
+          if (data.examVersionId) resolvedVersion = data.examVersionId;
+          const results: BatchPageResult[] = data.results ?? [];
+          setBatch((b) =>
+            b
+              ? {
+                  ...b,
+                  done: data.nextFrom ?? i + results.length,
+                  okCount: b.okCount + results.filter((r) => r.ok && !r.duplicate).length,
+                  dupCount: b.dupCount + results.filter((r) => r.duplicate).length,
+                  failCount: b.failCount + results.filter((r) => !r.ok).length,
+                  pages: [...b.pages, ...results],
+                }
+              : b
+          );
+          if (results.some((r) => r.transportAbort)) {
+            toast.warning(data.warning ?? 'انقطع الاتصال بمحرك المعالجة — أعد المحاولة');
+            break;
+          }
+        } catch {
+          toast.error('تعذر الاتصال بخدمة التحليل');
+          break;
+        }
+      }
+      setBatch((b) => (b ? { ...b, running: false } : b));
+      onScanned?.();
+    } catch {
+      toast.error('تعذر قراءة ملف PDF');
+      setBatch((b) => (b ? { ...b, running: false } : b));
     }
   };
 
