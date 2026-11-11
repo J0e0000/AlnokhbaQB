@@ -1,0 +1,331 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// A teacher-authored exam. Draft state lives here (documentJson is the canonical
+// QBDocument). Published snapshots are immutable copies in ExamVersion.
+// ---- Multi-organisation workspaces (additive) ----
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  users     User[]
+}
+
+model User {
+  id             String       @id @default(cuid())
+  email          String       @unique
+  passwordHash   String
+  name           String
+  role           String       @default("teacher") // super_admin | org_admin | teacher | viewer
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  active         Boolean      @default(true)
+  locale         String       @default("ar") // ar | en
+  lastLoginAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  userId         String?
+  userEmail      String?
+  organizationId String?
+  action         String // e.g. login | question.create | exam.publish | scan.process
+  entity         String
+  entityId       String?
+  metaJson       String   @default("{}")
+  ip             String?
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([organizationId])
+}
+
+// Flexible taxonomy tree: subject → grade → unit → lesson → topic
+model TaxonomyTerm {
+  id             String   @id @default(cuid())
+  organizationId String?
+  kind           String // subject | grade | unit | lesson | topic
+  name           String
+  parentKey      String? // parent term name within same org (units belong to a subject…)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  @@unique([organizationId, kind, name])
+  @@index([kind])
+}
+
+// Uploaded source documents (PDF / images) for the smart-extraction pipeline
+model BankDocument {
+  id              String   @id @default(cuid())
+  organizationId  String?
+  uploadedByEmail String?
+  filename        String
+  mimeType        String
+  size            Int
+  pageCount       Int?
+  storedPath      String? // db/uploads/<id>.<ext> — only the path is stored
+  status          String   @default("ready") // ready | processing | error
+  createdAt       DateTime @default(now())
+
+  jobs ExtractionJob[]
+}
+
+// One extraction run over a BankDocument
+model ExtractionJob {
+  id             String       @id @default(cuid())
+  documentId     String
+  document       BankDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  organizationId String?
+  language       String       @default("auto") // ara | eng | auto
+  engine         String       @default("vlm")
+  status         String       @default("pending") // pending | processing | review | completed | failed
+  questionCount  Int          @default(0)
+  error          String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  extracted ExtractedQuestion[]
+
+  @@index([documentId])
+}
+
+// A candidate question produced by extraction — human-review first-class
+model ExtractedQuestion {
+  id            String        @id @default(cuid())
+  jobId         String
+  job           ExtractionJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  order         Int
+  page          Int?
+  type          String        @default("mcq") // mcq | truefalse | short
+  prompt        String
+  optionsJson   String        @default("[]")
+  correctAnswer String?
+  explanation   String?
+  difficulty    String        @default("medium")
+  marks         Int           @default(1)
+  tagsJson      String        @default("[]")
+  confidence    Float         @default(0.5)
+  status        String        @default("pending") // pending | accepted | rejected
+  questionId    String? // bank Question created on import
+  createdAt     DateTime      @default(now())
+
+  @@index([jobId])
+}
+
+model Exam {
+  id             String   @id @default(cuid())
+  organizationId String?
+  title          String
+  subject        String?
+  gradeLevel     String?
+  direction      String   @default("rtl") // rtl | ltr
+  status         String   @default("DRAFT") // DRAFT | PUBLISHED | ARCHIVED
+  documentJson   String   @default("{}") // canonical QBDocument (draft, editable)
+  answerKeyJson  String   @default("{}") // { [questionId]: optionId }
+  omrEnabled     Boolean  @default(false)
+  currentVersion Int      @default(0)
+  // Online exam mode (PHASE 3): off by default — printable/OMR exams unchanged
+  onlineEnabled  Boolean  @default(false)
+  durationMin    Int      @default(30)
+  attemptsAllowed Int     @default(1)
+  randomizeOrder Boolean  @default(false)
+  securityPolicy String   @default("warning") // warning | strict
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  versions ExamVersion[]
+  scans    Scan[]
+  attempts ExamAttempt[]
+  assignments Assignment[] // graded assignments bound to this exam (PHASE 5)
+}
+
+// ---- Online exam configuration (additive; printable/OMR unaffected) ----
+// Fields default off/neutral so every existing exam keeps behaving exactly
+// as before. Online exams still use documentJson + answerKeyJson + versions.
+
+// ---- Reusable Question Bank (PHASE 1) ----
+// Bank questions are the source pool; exams copy questions into their
+// documentJson at build/import time (exams stay self-contained snapshots).
+model Question {
+  id             String   @id @default(cuid())
+  organizationId String?
+  subject        String?
+  chapter       String?
+  topic         String?
+  type          String   @default("mcq") // mcq | truefalse | short
+  prompt        String
+  optionsJson   String   @default("[]") // [{ id: 'A', text: '...' }]
+  correctAnswer String? // option id — null = teacher must still set the key
+  explanation   String?
+  difficulty    String   @default("medium") // easy | medium | hard
+  marks         Int      @default(1)
+  tagsJson      String   @default("[]") // string[]
+  source        String? // e.g. 'ocr' | 'manual' | 'ai'
+  status        String   @default("approved") // pending_review | approved
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([subject])
+  @@index([type])
+  @@index([difficulty])
+}
+
+// One student attempt at an ONLINE exam. The attempt FREEZES its own question
+// list + answer key at start, so re-publishing can never alter an in-flight
+// exam. startedAt/expiresAt are server-authoritative; the client only displays
+// remaining time. Heavy work never happens here — instant DB rows only.
+model ExamAttempt {
+  id            String    @id @default(cuid())
+  examId        String
+  studentName   String
+  studentCode   String?
+  startedAt     DateTime  @default(now())
+  expiresAt     DateTime
+  submittedAt   DateTime?
+  status        String    @default("active") // active | submitted | expired | invalidated
+  questionsJson String    @default("[]") // frozen, WITHOUT correct answers
+  answersJson   String    @default("{}") // { [questionNumber]: optionId }
+  answerKeyJson String    @default("{}") // frozen key — NEVER sent to the client pre-submit
+  score         Float?
+  maxScore      Float?
+  securityJson  String    @default("[]") // [{ type, at }] — server timestamps
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  exam Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  // PHASE 5: when the attempt was started from a graded assignment, the
+  // assignment deadline gates start/submit and the final score is mirrored
+  // into the AssignmentSubmission ledger.
+  assignmentId String?
+  @@index([examId])
+  @@index([assignmentId])
+}
+
+// ---- Assignments (PHASE 5) ----
+// Two modes, one ledger:
+//  • graded  → bound to a PUBLISHED online exam; students run a normal
+//    ExamAttempt whose score lands here automatically on submit.
+//  • file    → students upload a document; teacher grades manually.
+// dueAt is SERVER-authoritative; the client clock is display-only.
+model Assignment {
+  id             String   @id @default(cuid())
+  organizationId String?
+  title          String
+  description String   @default("")
+  mode        String   @default("file") // graded | file
+  examId      String?
+  dueAt       DateTime
+  latePolicy  String   @default("allow") // allow (flag late) | block (reject after dueAt)
+  status      String   @default("open") // open | closed
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  exam        Exam?                   @relation(fields: [examId], references: [id], onDelete: SetNull)
+  submissions AssignmentSubmission[]
+
+  @@index([status])
+}
+
+model AssignmentSubmission {
+  id           String   @id @default(cuid())
+  assignmentId String
+  studentName  String
+  studentCode  String?
+  attemptId    String?  @unique // graded mode → one ledger row per attempt
+  filePath     String? // db/assignments/<file> — only the PATH is stored
+  fileName     String?
+  fileType     String?
+  fileSize     Int?
+  score        Float?
+  maxScore     Float?
+  feedback     String?
+  late         Boolean  @default(false)
+  status       String   @default("submitted") // submitted | graded | expired
+  submittedAt  DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@index([assignmentId])
+}
+
+// Immutable published snapshot. Old submissions keep pointing at their version.
+model ExamVersion {
+  id              String   @id @default(cuid())
+  examId          String
+  version         Int
+  title           String
+  documentJson    String // frozen QBDocument
+  answerKeyJson   String // frozen answer key
+  omrTemplateJson String? // frozen canonical OMR template (when omrEnabled)
+  publishedAt     DateTime @default(now())
+
+  exam   Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+  scans  Scan[]
+
+  @@unique([examId, version])
+}
+
+model Student {
+  id             String   @id @default(cuid())
+  organizationId String?
+  code           String   @unique // ID number filled on OMR sheets
+  name           String
+  classroom      String?
+  createdAt      DateTime @default(now())
+
+  scans Scan[]
+}
+
+// One scanned sheet. Stores detected answers, per-bubble ratios, confidence and
+// full diagnostics so failures are explainable.
+model Scan {
+  id                String   @id @default(cuid())
+  examId            String?
+  examVersionId     String?
+  studentCode       String? // decoded from student-ID bubbles
+  studentId         String?
+  imagePath         String?
+  answersJson       String   @default("{}") // per-question: ratios/detected/status/confidence
+  gradeJson         String   @default("{}")
+  overridesJson     String   @default("{}") // teacher corrections after review
+  status            String   @default("PENDING") // PENDING | PROCESSED | FAILED | REVIEWED
+  overallConfidence Float    @default(0)
+  diagnosticsJson   String   @default("{}")
+  // ---- integrity / review (additive, 2025 OMR rework) ----
+  imageHash         String? // sha256 of the uploaded bytes → idempotent retries
+  idempotencyKey    String? @unique // client-supplied dedup key
+  reviewStatus      String   @default("NONE") // NONE | PENDING | APPROVED | REJECTED
+  batchId           String? // groups pages of one PDF upload
+  pageIndex         Int? // page index within the batch
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  exam        Exam?        @relation(fields: [examId], references: [id])
+  examVersion ExamVersion? @relation(fields: [examVersionId], references: [id])
+  student     Student?     @relation(fields: [studentId], references: [id])
+
+  @@index([imageHash])
+  @@index([examVersionId, studentCode])
+  @@index([reviewStatus])
+  @@index([batchId])
+}
+
+// Calibration presets for the OMR reader (pencil / pen / light marks ...).
+model CalibrationProfile {
+  id         String   @id @default(cuid())
+  name       String
+  active     Boolean  @default(false)
+  configJson String // { filled, empty, ambiguousMargin, minAbsoluteFill, presets }
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}

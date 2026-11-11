@@ -1,0 +1,76 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files — real secrets stay local; the TEMPLATE is committed
+.env
+.env.local
+.env.*.local
+
+# vercel
+.vercel
+
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+local-*
+.claude
+.z-ai-config
+*.log
+dev.log
+dev.out.log
+test
+prompt
+
+server.log
+# Skills directory
+/skills/chrome/
+
+# user-facing deliverables (bundles/docs) — workspace-only
+download/
+.env*
+
+# generated prisma clients (custom-output builds)
+src/generated
+
+# runtime artifacts & test uploads — never ship to the public repo
+tool-results/
+upload/
+db/scans/
+db/*.db
+
+# python bytecode
+__pycache__/
+*.pyc
+
+# local browser bundle (working-tree only; serverless uses @sparticuz/chromium)
+chrome/

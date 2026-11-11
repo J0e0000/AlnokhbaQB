@@ -1,0 +1,9 @@
+# Caddy — ALNOKHBA QB production gateway
+# Replace qb.example.com with your domain. Caddy provisions HTTPS automatically.
+
+qb.example.com {
+	encode gzip
+
+	# Next.js app
+	reverse_proxy app:3000
+}

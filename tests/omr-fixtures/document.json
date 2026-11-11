@@ -1,0 +1,607 @@
+{
+  "schemaVersion": 2,
+  "pageSize": {
+    "widthMm": 210,
+    "heightMm": 297
+  },
+  "margins": {
+    "topMm": 12,
+    "rightMm": 12,
+    "bottomMm": 12,
+    "leftMm": 12
+  },
+  "direction": "rtl",
+  "branding": {
+    "institution": "مدرسة النخبة التجريبية",
+    "examTitle": "امتحان تجريبي شامل — النخبة",
+    "showBorders": true,
+    "borderStyle": "single",
+    "borderColor": "#1e293b"
+  },
+  "pageCount": 1,
+  "questions": [
+    {
+      "id": "q1",
+      "number": 1,
+      "type": "mcq",
+      "prompt": "ما ناتج ٧ × ٨ ؟",
+      "options": [
+        {
+          "id": "A",
+          "text": "٥٤"
+        },
+        {
+          "id": "B",
+          "text": "٥٦"
+        },
+        {
+          "id": "C",
+          "text": "٤٨"
+        },
+        {
+          "id": "D",
+          "text": "٦٤"
+        }
+      ],
+      "marks": 1
+    },
+    {
+      "id": "q2",
+      "number": 2,
+      "type": "mcq",
+      "prompt": "ما هو الكوكب الأحمر؟",
+      "options": [
+        {
+          "id": "A",
+          "text": "الأرض"
+        },
+        {
+          "id": "B",
+          "text": "الزهرة"
+        },
+        {
+          "id": "C",
+          "text": "المريخ"
+        },
+        {
+          "id": "D",
+          "text": "المشتري"
+        }
+      ],
+      "marks": 1
+    },
+    {
+      "id": "q3",
+      "number": 3,
+      "type": "mcq",
+      "prompt": "What is the capital of Egypt?",
+      "options": [
+        {
+          "id": "A",
+          "text": "Cairo"
+        },
+        {
+          "id": "B",
+          "text": "Paris"
+        },
+        {
+          "id": "C",
+          "text": "London"
+        },
+        {
+          "id": "D",
+          "text": "Rome"
+        }
+      ],
+      "marks": 1
+    },
+    {
+      "id": "q4",
+      "number": 4,
+      "type": "mcq",
+      "prompt": "أي مما يلي ليس من حالات الماء؟",
+      "options": [
+        {
+          "id": "A",
+          "text": "صلب"
+        },
+        {
+          "id": "B",
+          "text": "سائل"
+        },
+        {
+          "id": "C",
+          "text": "غازي"
+        },
+        {
+          "id": "D",
+          "text": "ضوئي"
+        }
+      ],
+      "marks": 1
+    },
+    {
+      "id": "q5",
+      "number": 5,
+      "type": "mcq",
+      "prompt": "ما ناتج ١٢ ÷ ٤ ؟",
+      "options": [
+        {
+          "id": "A",
+          "text": "٢"
+        },
+        {
+          "id": "B",
+          "text": "٣"
+        },
+        {
+          "id": "C",
+          "text": "٤"
+        },
+        {
+          "id": "D",
+          "text": "٦"
+        }
+      ],
+      "marks": 1
+    },
+    {
+      "id": "q6",
+      "number": 6,
+      "type": "mcq",
+      "prompt": "أطول نهر في العالم هو:",
+      "options": [
+        {
+          "id": "A",
+          "text": "النيل"
+        },
+        {
+          "id": "B",
+          "text": "الأمازون"
+        },
+        {
+          "id": "C",
+          "text": "الفرات"
+        },
+        {
+          "id": "D",
+          "text": "دجلة"
+        }
+      ],
+      "marks": 1
+    },
+    {
+      "id": "q7",
+      "number": 7,
+      "type": "mcq",
+      "prompt": "What is 15 + 27?",
+      "options": [
+        {
+          "id": "A",
+          "text": "32"
+        },
+        {
+          "id": "B",
+          "text": "42"
+        },
+        {
+          "id": "C",
+          "text": "41"
+        },
+        {
+          "id": "D",
+          "text": "52"
+        }
+      ],
+      "marks": 1
+    },
+    {
+      "id": "q8",
+      "number": 8,
+      "type": "mcq",
+      "prompt": "وحدة قياس القوة هي:",
+      "options": [
+        {
+          "id": "A",
+          "text": "الجول"
+        },
+        {
+          "id": "B",
+          "text": "النيوتن"
+        },
+        {
+          "id": "C",
+          "text": "الواط"
+        },
+        {
+          "id": "D",
+          "text": "الأمبير"
+        }
+      ],
+      "marks": 1
+    },
+    {
+      "id": "q9",
+      "number": 9,
+      "type": "mcq",
+      "prompt": "عدد أضلاع المثلث:",
+      "options": [
+        {
+          "id": "A",
+          "text": "٢"
+        },
+        {
+          "id": "B",
+          "text": "٤"
+        },
+        {
+          "id": "C",
+          "text": "٣"
+        },
+        {
+          "id": "D",
+          "text": "٥"
+        }
+      ],
+      "marks": 1
+    },
+    {
+      "id": "q10",
+      "number": 10,
+      "type": "mcq",
+      "prompt": "ما عاصمة المملكة العربية السعودية؟",
+      "options": [
+        {
+          "id": "A",
+          "text": "جدة"
+        },
+        {
+          "id": "B",
+          "text": "الرياض"
+        },
+        {
+          "id": "C",
+          "text": "الدمام"
+        },
+        {
+          "id": "D",
+          "text": "مكة"
+        }
+      ],
+      "marks": 1
+    }
+  ],
+  "elements": [
+    {
+      "id": "el-header",
+      "page": 0,
+      "x": 15,
+      "y": 12,
+      "widthMm": 180,
+      "heightMm": 22,
+      "rotation": 0,
+      "type": "header",
+      "style": {
+        "fontFamily": "Tajawal",
+        "fontSize": 16,
+        "bold": true,
+        "italic": false,
+        "underline": false,
+        "align": "center",
+        "color": "#1e293b",
+        "lineHeight": 1.3
+      },
+      "content": {
+        "text": "امتحان تجريبي شامل — النخبة",
+        "level": 1,
+        "showMeta": true
+      }
+    },
+    {
+      "id": "el-name",
+      "page": 0,
+      "x": 15,
+      "y": 36,
+      "widthMm": 180,
+      "heightMm": 20,
+      "rotation": 0,
+      "type": "name-fields",
+      "style": {
+        "fontFamily": "Tajawal",
+        "fontSize": 11,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "align": "right",
+        "color": "#0f172a",
+        "lineHeight": 1.6
+      },
+      "content": {
+        "fields": [
+          "اسم الطالب",
+          "الفصل"
+        ],
+        "showStudentId": true
+      }
+    },
+    {
+      "id": "el-q1",
+      "page": 0,
+      "x": 15,
+      "y": 60,
+      "widthMm": 180,
+      "heightMm": 20,
+      "rotation": 0,
+      "type": "question",
+      "style": {
+        "fontFamily": "Tajawal",
+        "fontSize": 12,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "align": "right",
+        "color": "#111827",
+        "lineHeight": 1.5
+      },
+      "content": {
+        "questionId": "q1",
+        "showNumber": true,
+        "optionLayout": "inline",
+        "showOptionLetter": true,
+        "showMarks": false
+      }
+    },
+    {
+      "id": "el-q2",
+      "page": 0,
+      "x": 15,
+      "y": 81.5,
+      "widthMm": 180,
+      "heightMm": 20,
+      "rotation": 0,
+      "type": "question",
+      "style": {
+        "fontFamily": "Tajawal",
+        "fontSize": 12,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "align": "right",
+        "color": "#111827",
+        "lineHeight": 1.5
+      },
+      "content": {
+        "questionId": "q2",
+        "showNumber": true,
+        "optionLayout": "inline",
+        "showOptionLetter": true,
+        "showMarks": false
+      }
+    },
+    {
+      "id": "el-q3",
+      "page": 0,
+      "x": 15,
+      "y": 103,
+      "widthMm": 180,
+      "heightMm": 20,
+      "rotation": 0,
+      "type": "question",
+      "style": {
+        "fontFamily": "Tajawal",
+        "fontSize": 12,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "align": "right",
+        "color": "#111827",
+        "lineHeight": 1.5
+      },
+      "content": {
+        "questionId": "q3",
+        "showNumber": true,
+        "optionLayout": "inline",
+        "showOptionLetter": true,
+        "showMarks": false
+      }
+    },
+    {
+      "id": "el-q4",
+      "page": 0,
+      "x": 15,
+      "y": 124.5,
+      "widthMm": 180,
+      "heightMm": 20,
+      "rotation": 0,
+      "type": "question",
+      "style": {
+        "fontFamily": "Tajawal",
+        "fontSize": 12,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "align": "right",
+        "color": "#111827",
+        "lineHeight": 1.5
+      },
+      "content": {
+        "questionId": "q4",
+        "showNumber": true,
+        "optionLayout": "inline",
+        "showOptionLetter": true,
+        "showMarks": false
+      }
+    },
+    {
+      "id": "el-q5",
+      "page": 0,
+      "x": 15,
+      "y": 146,
+      "widthMm": 180,
+      "heightMm": 20,
+      "rotation": 0,
+      "type": "question",
+      "style": {
+        "fontFamily": "Tajawal",
+        "fontSize": 12,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "align": "right",
+        "color": "#111827",
+        "lineHeight": 1.5
+      },
+      "content": {
+        "questionId": "q5",
+        "showNumber": true,
+        "optionLayout": "inline",
+        "showOptionLetter": true,
+        "showMarks": false
+      }
+    },
+    {
+      "id": "el-q6",
+      "page": 0,
+      "x": 15,
+      "y": 167.5,
+      "widthMm": 180,
+      "heightMm": 20,
+      "rotation": 0,
+      "type": "question",
+      "style": {
+        "fontFamily": "Tajawal",
+        "fontSize": 12,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "align": "right",
+        "color": "#111827",
+        "lineHeight": 1.5
+      },
+      "content": {
+        "questionId": "q6",
+        "showNumber": true,
+        "optionLayout": "inline",
+        "showOptionLetter": true,
+        "showMarks": false
+      }
+    },
+    {
+      "id": "el-q7",
+      "page": 0,
+      "x": 15,
+      "y": 189,
+      "widthMm": 180,
+      "heightMm": 20,
+      "rotation": 0,
+      "type": "question",
+      "style": {
+        "fontFamily": "Tajawal",
+        "fontSize": 12,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "align": "right",
+        "color": "#111827",
+        "lineHeight": 1.5
+      },
+      "content": {
+        "questionId": "q7",
+        "showNumber": true,
+        "optionLayout": "inline",
+        "showOptionLetter": true,
+        "showMarks": false
+      }
+    },
+    {
+      "id": "el-q8",
+      "page": 0,
+      "x": 15,
+      "y": 210.5,
+      "widthMm": 180,
+      "heightMm": 20,
+      "rotation": 0,
+      "type": "question",
+      "style": {
+        "fontFamily": "Tajawal",
+        "fontSize": 12,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "align": "right",
+        "color": "#111827",
+        "lineHeight": 1.5
+      },
+      "content": {
+        "questionId": "q8",
+        "showNumber": true,
+        "optionLayout": "inline",
+        "showOptionLetter": true,
+        "showMarks": false
+      }
+    },
+    {
+      "id": "el-q9",
+      "page": 0,
+      "x": 15,
+      "y": 232,
+      "widthMm": 180,
+      "heightMm": 20,
+      "rotation": 0,
+      "type": "question",
+      "style": {
+        "fontFamily": "Tajawal",
+        "fontSize": 12,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "align": "right",
+        "color": "#111827",
+        "lineHeight": 1.5
+      },
+      "content": {
+        "questionId": "q9",
+        "showNumber": true,
+        "optionLayout": "inline",
+        "showOptionLetter": true,
+        "showMarks": false
+      }
+    },
+    {
+      "id": "el-q10",
+      "page": 0,
+      "x": 15,
+      "y": 253.5,
+      "widthMm": 180,
+      "heightMm": 20,
+      "rotation": 0,
+      "type": "question",
+      "style": {
+        "fontFamily": "Tajawal",
+        "fontSize": 12,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "align": "right",
+        "color": "#111827",
+        "lineHeight": 1.5
+      },
+      "content": {
+        "questionId": "q10",
+        "showNumber": true,
+        "optionLayout": "inline",
+        "showOptionLetter": true,
+        "showMarks": false
+      }
+    }
+  ],
+  "omr": {
+    "enabled": true,
+    "questionsPerPage": 25,
+    "columns": 4,
+    "optionsPerQuestion": 4,
+    "includeStudentId": true,
+    "studentIdDigits": 6,
+    "includeQr": true
+  }
+}

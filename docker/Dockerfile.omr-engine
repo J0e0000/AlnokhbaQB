@@ -1,0 +1,20 @@
+# ============================================================
+# ALNOKHBA QB — OMR engine image (Python + OpenCV + Tesseract)
+# ============================================================
+
+FROM python:3.12-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      tesseract-ocr tesseract-ocr-eng libglib2.0-0 libgl1 curl \
+    && rm -rf /var/lib/apt/lists/* \
+ && pip install --no-cache-dir opencv-python-headless numpy
+
+WORKDIR /engine
+COPY engine ./engine
+COPY server.py ./
+
+ENV OMR_ENGINE_HOST="0.0.0.0"
+EXPOSE 3032
+HEALTHCHECK --interval=30s --timeout=5s \
+  CMD curl -fsS http://127.0.0.1:3032/health || exit 1
+CMD ["python", "server.py"]

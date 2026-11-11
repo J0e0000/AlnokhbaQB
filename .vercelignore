@@ -1,0 +1,27 @@
+# Deployed to Vercel from source — exclude local build/runtime artifacts.
+# (db/custom.db and public/fonts MUST ship: they are read at runtime —
+# see next.config.ts outputFileTracingIncludes and src/lib/db.ts)
+
+node_modules
+.next
+.git
+.vercel
+chrome
+.zscripts
+.claude
+.z-ai-config
+skills
+mini-services
+db/scans
+upload
+prompt
+test
+coverage
+.env
+.env.*
+*.log
+dev.log
+server.log
+
+# Python serverless function artifacts
+**/__pycache__

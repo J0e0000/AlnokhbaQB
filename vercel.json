@@ -1,0 +1,25 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "web": {
+      "root": ".",
+      "framework": "nextjs",
+      "buildCommand": "node scripts/prisma-provider.mjs && prisma generate && next build"
+    },
+    "omr-engine": {
+      "root": "omr-service",
+      "framework": "fastapi",
+      "entrypoint": "main:app",
+      "functions": {
+        "main.py": {
+          "maxDuration": 60,
+          "memory": 1769
+        }
+      }
+    }
+  },
+  "rewrites": [
+    { "source": "/api/omr/(.*)", "destination": { "service": "omr-engine" } },
+    { "source": "/(.*)", "destination": { "service": "web" } }
+  ]
+}

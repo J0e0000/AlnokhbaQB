@@ -1,0 +1,205 @@
+{
+  "passed": 24,
+  "total": 24,
+  "allPassed": true,
+  "recommendedThresholds": {
+    "filled": 0.6,
+    "empty": 0.16,
+    "ambiguousMargin": 0.1,
+    "minAbsoluteFill": 0.06
+  },
+  "ratioStats": {
+    "empty": {
+      "median": 0.0179,
+      "p99": 0.0288
+    },
+    "pencil": {
+      "median": 0.7649,
+      "p99": 0.7793
+    },
+    "pen": {
+      "median": 0.9558,
+      "p99": 0.9694
+    },
+    "blue": {
+      "median": 0.8376,
+      "p99": 0.8515
+    },
+    "light": {
+      "median": 0.026,
+      "p99": 0.0345
+    }
+  },
+  "cases": [
+    {
+      "case": "1. clean pencil scan",
+      "passed": true,
+      "detail": "accuracy=100%",
+      "extra": {
+        "problems": [],
+        "ms": 3957
+      }
+    },
+    {
+      "case": "2. clean black pen scan",
+      "passed": true,
+      "detail": "accuracy=100%",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "3. blue pen scan",
+      "passed": true,
+      "detail": "accuracy=100%",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "4. phone camera 1600px",
+      "passed": true,
+      "detail": "accuracy=100%",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "4. phone camera 1200px",
+      "passed": true,
+      "detail": "accuracy=100%",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "5. rotation 3°",
+      "passed": true,
+      "detail": "accuracy=100% rotationFixed=0",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "5. rotation -3°",
+      "passed": true,
+      "detail": "accuracy=100% rotationFixed=0",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "5. rotation 10°",
+      "passed": true,
+      "detail": "accuracy=100% rotationFixed=0",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "5. rotation -10°",
+      "passed": true,
+      "detail": "accuracy=100% rotationFixed=0",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "5. rotation 90°",
+      "passed": true,
+      "detail": "accuracy=100% rotationFixed=0",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "5. rotation 180°",
+      "passed": true,
+      "detail": "accuracy=100% rotationFixed=0",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "6. low light",
+      "passed": true,
+      "detail": "accuracy=100%",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "7. multiple marks",
+      "passed": true,
+      "detail": "multiples=[1, 5, 9] expected=[1, 5, 9]",
+      "extra": {}
+    },
+    {
+      "case": "8. blank sheet",
+      "passed": true,
+      "detail": "statuses={'unanswered'}",
+      "extra": {}
+    },
+    {
+      "case": "9. light marks",
+      "passed": true,
+      "detail": "wrongConfident=0 okOrUnclear=10/10",
+      "extra": {}
+    },
+    {
+      "case": "10. partial fills",
+      "passed": true,
+      "detail": "okOrUnclear=10/10 statuses=[(1, 'selected'), (2, 'selected'), (3, 'selected'), (4, 'selected'), (5, 'selected'), (6, 'selected'), (7, 'selected'), (8, 'selected'), (9, 'selected'), (10, 'selected')]",
+      "extra": {}
+    },
+    {
+      "case": "11. erased ghosts",
+      "passed": true,
+      "detail": "statuses={'unanswered'} medianEmpty=0.0189",
+      "extra": {}
+    },
+    {
+      "case": "12. crossed-out",
+      "passed": true,
+      "detail": "okOrUnclear=10/10 wrongConf=0 statuses=[(1, 'unclear'), (2, 'unclear'), (3, 'unclear'), (4, 'unclear'), (5, 'unclear'), (6, 'unclear'), (7, 'unclear'), (8, 'unclear'), (9, 'unclear'), (10, 'unclear')]",
+      "extra": {}
+    },
+    {
+      "case": "13. wrong template",
+      "passed": true,
+      "detail": "error=template mismatch: الورقة تنتمي إلى نسخة أخرى (QR=T-cmug687vk0002kxvn7rhby9f7 / ",
+      "extra": {}
+    },
+    {
+      "case": "14. QR-only identity",
+      "passed": true,
+      "detail": "templateId=T-cmug687vk0002kxvn7rhby9f7 sheet=0",
+      "extra": {}
+    },
+    {
+      "case": "15. student ID",
+      "passed": true,
+      "detail": "digits=314?59 conf=0.867",
+      "extra": {}
+    },
+    {
+      "case": "16. auto grading",
+      "passed": true,
+      "detail": "grade=10.0/10.0 100.0%",
+      "extra": {}
+    },
+    {
+      "case": "17. QR failure clean error",
+      "passed": true,
+      "detail": "stage=templateIdentified error=لم يُمكن قراءة رمز QR من الورقة — أعد التصوير بإضاءة أفضل أو",
+      "extra": {}
+    },
+    {
+      "case": "18. manual template w/o QR",
+      "passed": true,
+      "detail": "acc=100% src=manual rot=0",
+      "extra": {}
+    }
+  ],
+  "totalMs": 130013
+}

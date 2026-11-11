@@ -1,0 +1,403 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-gold: var(--gold);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ============================================================
+   ALNOKHBA QB — "Midnight Luxe" design system
+   Dark-first premium identity: deep charcoal-emerald surfaces,
+   gold accents for the elite brand, glassmorphism and aurora.
+   Light mode remains fully supported and refined.
+   ============================================================ */
+
+:root {
+  --radius: 0.75rem;
+  --background: oklch(0.975 0.006 165);
+  --foreground: oklch(0.21 0.02 170);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.02 170);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.02 170);
+  --primary: oklch(0.55 0.13 163);
+  --primary-foreground: oklch(0.985 0.01 165);
+  --secondary: oklch(0.955 0.008 165);
+  --secondary-foreground: oklch(0.3 0.02 170);
+  --muted: oklch(0.955 0.008 165);
+  --muted-foreground: oklch(0.52 0.015 170);
+  --accent: oklch(0.94 0.02 165);
+  --accent-foreground: oklch(0.3 0.03 170);
+  --destructive: oklch(0.55 0.21 27);
+  --border: oklch(0.9 0.01 165);
+  --input: oklch(0.9 0.01 165);
+  --ring: oklch(0.7 0.12 88);
+  --gold: oklch(0.72 0.13 88);
+  --chart-1: oklch(0.6 0.145 163);
+  --chart-2: oklch(0.72 0.13 88);
+  --chart-3: oklch(0.55 0.15 35);
+  --chart-4: oklch(0.65 0.1 200);
+  --chart-5: oklch(0.6 0.18 320);
+  --sidebar: oklch(0.985 0.005 165);
+  --sidebar-foreground: oklch(0.21 0.02 170);
+  --sidebar-primary: oklch(0.55 0.13 163);
+  --sidebar-primary-foreground: oklch(0.985 0.01 165);
+  --sidebar-accent: oklch(0.94 0.02 165);
+  --sidebar-accent-foreground: oklch(0.3 0.03 170);
+  --sidebar-border: oklch(0.9 0.01 165);
+  --sidebar-ring: oklch(0.7 0.12 88);
+}
+
+.dark {
+  --background: oklch(0.165 0.013 175);
+  --foreground: oklch(0.955 0.006 165);
+  --card: oklch(0.208 0.015 175);
+  --card-foreground: oklch(0.955 0.006 165);
+  --popover: oklch(0.225 0.015 175);
+  --popover-foreground: oklch(0.955 0.006 165);
+  --primary: oklch(0.72 0.145 163);
+  --primary-foreground: oklch(0.16 0.02 170);
+  --secondary: oklch(0.27 0.016 175);
+  --secondary-foreground: oklch(0.955 0.006 165);
+  --muted: oklch(0.27 0.016 175);
+  --muted-foreground: oklch(0.7 0.012 170);
+  --accent: oklch(0.29 0.02 175);
+  --accent-foreground: oklch(0.955 0.006 165);
+  --destructive: oklch(0.68 0.19 25);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 13%);
+  --ring: oklch(0.82 0.13 88);
+  --gold: oklch(0.82 0.135 88);
+  --chart-1: oklch(0.72 0.145 163);
+  --chart-2: oklch(0.82 0.13 88);
+  --chart-3: oklch(0.7 0.15 35);
+  --chart-4: oklch(0.72 0.1 200);
+  --chart-5: oklch(0.7 0.16 320);
+  --sidebar: oklch(0.208 0.015 175);
+  --sidebar-foreground: oklch(0.955 0.006 165);
+  --sidebar-primary: oklch(0.72 0.145 163);
+  --sidebar-primary-foreground: oklch(0.16 0.02 170);
+  --sidebar-accent: oklch(0.29 0.02 175);
+  --sidebar-accent-foreground: oklch(0.955 0.006 165);
+  --sidebar-border: oklch(1 0 0 / 9%);
+  --sidebar-ring: oklch(0.82 0.13 88);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--gold) 32%, transparent);
+  }
+}
+
+/* ---------- global thin scrollbar ---------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--primary) 45%, transparent) transparent;
+}
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklab, var(--primary) 40%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklab, var(--primary) 65%, transparent);
+}
+
+/* ---------- ambient aurora + grid backdrop ---------- */
+.app-aurora {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.app-aurora::before,
+.app-aurora::after {
+  content: "";
+  position: absolute;
+  width: 46rem;
+  height: 46rem;
+  border-radius: 9999px;
+  filter: blur(90px);
+  opacity: 0.55;
+  will-change: transform;
+}
+.app-aurora::before {
+  top: -18rem;
+  inset-inline-start: -12rem;
+  background: radial-gradient(circle at center, oklch(0.6 0.14 163 / 0.5), transparent 65%);
+  animation: aurora-a 26s ease-in-out infinite alternate;
+}
+.app-aurora::after {
+  bottom: -20rem;
+  inset-inline-end: -14rem;
+  background: radial-gradient(circle at center, oklch(0.75 0.13 88 / 0.34), transparent 65%);
+  animation: aurora-b 32s ease-in-out infinite alternate;
+}
+html:not(.dark) .app-aurora::before,
+html:not(.dark) .app-aurora::after {
+  opacity: 0.3;
+}
+@keyframes aurora-a {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  100% { transform: translate3d(6rem, 4rem, 0) scale(1.15); }
+}
+@keyframes aurora-b {
+  0% { transform: translate3d(0, 0, 0) scale(1.1); }
+  100% { transform: translate3d(-7rem, -3rem, 0) scale(1); }
+}
+.app-grid {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to left, color-mix(in oklab, var(--foreground) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--foreground) 4%, transparent) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 30%, transparent 75%);
+}
+
+/* ---------- reusable premium primitives ---------- */
+.glass {
+  background: color-mix(in oklab, var(--card) 78%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
+}
+.text-gradient {
+  background: linear-gradient(100deg, oklch(0.75 0.14 163) 15%, oklch(0.85 0.13 95) 85%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+html:not(.dark) .text-gradient {
+  background: linear-gradient(100deg, oklch(0.5 0.13 163) 15%, oklch(0.55 0.12 80) 85%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+.logo-glow {
+  box-shadow:
+    0 0 0 1px oklch(1 0 0 / 18%) inset,
+    0 8px 28px -8px oklch(0.6 0.15 163 / 0.55),
+    0 4px 18px -6px oklch(0.8 0.14 88 / 0.4);
+}
+.btn-primary-grad {
+  background-image: linear-gradient(120deg, oklch(0.62 0.15 163), oklch(0.66 0.13 155));
+  box-shadow: 0 6px 20px -8px oklch(0.6 0.15 163 / 0.6);
+}
+.btn-primary-grad:hover {
+  filter: brightness(1.07);
+}
+html:not(.dark) .btn-primary-grad {
+  background-image: linear-gradient(120deg, oklch(0.5 0.13 163), oklch(0.54 0.12 155));
+}
+.card-hover {
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
+  box-shadow: 0 14px 38px -18px oklch(0 0 0 / 0.5);
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up {
+  animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-pop-in {
+  animation: pop-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Thin custom scrollbar for long OMR answer-key lists */
+.omr-key-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(16 185 129 / 0.45) transparent;
+}
+.omr-key-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.omr-key-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.omr-key-scroll::-webkit-scrollbar-thumb {
+  background-color: rgb(16 185 129 / 0.45);
+  border-radius: 8px;
+}
+.omr-key-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(5 150 105 / 0.65);
+}
+
+/* ============================================================
+   DARK-MODE BRIDGE LAYER
+   Most panes hardcode light utility colors (bg-white, text-slate-600,
+   bg-emerald-50 …). This layer re-maps those exact utilities under
+   `html.dark` so the WHOLE app inherits the premium dark identity
+   without touching every component. Semantic tokens + inline styles
+   (exam paper) are untouched — paper stays white like a real sheet.
+   ============================================================ */
+html.dark .bg-white {
+  background-color: var(--card);
+}
+html.dark .bg-white\/90,
+html.dark .bg-white\/80 {
+  background-color: color-mix(in oklab, var(--card) 88%, transparent);
+}
+html.dark .bg-white\/70,
+html.dark .bg-white\/60 {
+  background-color: color-mix(in oklab, var(--card) 72%, transparent);
+}
+html.dark .bg-slate-50,
+html.dark .hover\:bg-slate-50:hover {
+  background-color: oklch(0.245 0.015 175);
+}
+html.dark .bg-slate-100,
+html.dark .hover\:bg-slate-100:hover {
+  background-color: oklch(0.27 0.016 175);
+}
+html.dark .bg-slate-200,
+html.dark .hover\:bg-slate-200:hover {
+  background-color: oklch(0.32 0.017 175);
+}
+html.dark .hover\:bg-slate-300:hover {
+  background-color: oklch(0.37 0.018 175);
+}
+html.dark .border-slate-100,
+html.dark .border-slate-200,
+html.dark .border-slate-300 {
+  border-color: oklch(1 0 0 / 11%);
+}
+html.dark .text-slate-300,
+html.dark .text-slate-400 {
+  color: oklch(0.62 0.012 170);
+}
+html.dark .text-slate-500 {
+  color: oklch(0.7 0.012 170);
+}
+html.dark .text-slate-600,
+html.dark .text-slate-700 {
+  color: oklch(0.87 0.008 170);
+}
+html.dark .text-slate-800,
+html.dark .text-slate-900 {
+  color: oklch(0.96 0.005 165);
+}
+html.dark .bg-emerald-50,
+html.dark .hover\:bg-emerald-50:hover {
+  background-color: oklch(0.72 0.145 163 / 13%);
+}
+html.dark .bg-emerald-100 {
+  background-color: oklch(0.72 0.145 163 / 18%);
+}
+html.dark .text-emerald-600,
+html.dark .text-emerald-700 {
+  color: oklch(0.8 0.13 163);
+}
+html.dark .text-emerald-800,
+html.dark .text-emerald-900 {
+  color: oklch(0.85 0.12 162);
+}
+html.dark .border-emerald-100,
+html.dark .border-emerald-200 {
+  border-color: oklch(0.72 0.145 163 / 28%);
+}
+html.dark .bg-amber-50 {
+  background-color: oklch(0.82 0.13 88 / 12%);
+}
+html.dark .bg-amber-100 {
+  background-color: oklch(0.82 0.13 88 / 17%);
+}
+html.dark .text-amber-600,
+html.dark .text-amber-700,
+html.dark .text-amber-800 {
+  color: oklch(0.86 0.12 90);
+}
+html.dark .border-amber-200 {
+  border-color: oklch(0.82 0.13 88 / 28%);
+}
+html.dark .bg-red-50,
+html.dark .hover\:bg-red-50:hover {
+  background-color: oklch(0.65 0.2 25 / 12%);
+}
+html.dark .bg-red-100 {
+  background-color: oklch(0.65 0.2 25 / 17%);
+}
+html.dark .text-red-500,
+html.dark .text-red-600,
+html.dark .text-red-700 {
+  color: oklch(0.75 0.17 25);
+}
+html.dark .hover\:text-red-500:hover,
+html.dark .hover\:text-red-600:hover,
+html.dark .hover\:text-red-700:hover {
+  color: oklch(0.8 0.17 25);
+}
+html.dark .bg-gradient-to-br.from-slate-50,
+html.dark .from-slate-50 {
+  --tw-gradient-from: oklch(0.245 0.015 175);
+}

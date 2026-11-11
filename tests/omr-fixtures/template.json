@@ -1,0 +1,352 @@
+{
+  "templateVersion": 1,
+  "templateId": "T-cmug687vk0002kxvn7rhby9f7",
+  "examId": "cmug687vg0000kxvn1co2tfkb",
+  "examVersionId": "cmug687vk0002kxvn7rhby9f7",
+  "examTitle": "امتحان تجريبي شامل — النخبة",
+  "versionNumber": 1,
+  "totalQuestions": 10,
+  "marksPerQuestion": 1,
+  "direction": "rtl",
+  "page": {
+    "widthMm": 210,
+    "heightMm": 297
+  },
+  "referenceDpi": 300,
+  "sheets": 1,
+  "grid": {
+    "firstRowYMm": {
+      "main": 112,
+      "continuation": 56
+    },
+    "rowPitchMm": 6.6,
+    "rows": 25,
+    "optionXsMm": [
+      12,
+      20,
+      28,
+      36
+    ],
+    "numberXMm": 48,
+    "columnLeftsMm": [
+      6,
+      55.5,
+      105,
+      154.5
+    ],
+    "columnWidthMm": 49.5,
+    "radiusMm": 2
+  },
+  "frame": {
+    "x": 6,
+    "y": 6,
+    "w": 198,
+    "h": 285
+  },
+  "markers": [
+    {
+      "id": "TL",
+      "x": 14,
+      "y": 14,
+      "sizeMm": 7
+    },
+    {
+      "id": "TR",
+      "x": 196,
+      "y": 14,
+      "sizeMm": 7
+    },
+    {
+      "id": "BL",
+      "x": 14,
+      "y": 283,
+      "sizeMm": 7
+    },
+    {
+      "id": "BR",
+      "x": 196,
+      "y": 283,
+      "sizeMm": 5
+    }
+  ],
+  "qr": {
+    "x": 24,
+    "y": 24,
+    "sizeMm": 18,
+    "payloadBySheet": [
+      "ANQB|1|cmug687vk0002kxvn7rhby9f7|T-cmug687vk0002kxvn7rhby9f7|0|1|0BA01535"
+    ]
+  },
+  "studentId": {
+    "digits": 6,
+    "digitColumnXs": [
+      26,
+      34,
+      42,
+      50,
+      58,
+      66
+    ],
+    "valueYs": [
+      54,
+      58.6,
+      63.2,
+      67.8,
+      72.4,
+      77,
+      81.6,
+      86.19999999999999,
+      90.8,
+      95.4
+    ],
+    "bubbleRMm": 1.6
+  },
+  "questions": [
+    {
+      "number": 1,
+      "sheet": 0,
+      "column": 3,
+      "options": {
+        "A": {
+          "x": 190.5,
+          "y": 112
+        },
+        "B": {
+          "x": 182.5,
+          "y": 112
+        },
+        "C": {
+          "x": 174.5,
+          "y": 112
+        },
+        "D": {
+          "x": 166.5,
+          "y": 112
+        }
+      },
+      "radiusMm": 2
+    },
+    {
+      "number": 2,
+      "sheet": 0,
+      "column": 3,
+      "options": {
+        "A": {
+          "x": 190.5,
+          "y": 118.6
+        },
+        "B": {
+          "x": 182.5,
+          "y": 118.6
+        },
+        "C": {
+          "x": 174.5,
+          "y": 118.6
+        },
+        "D": {
+          "x": 166.5,
+          "y": 118.6
+        }
+      },
+      "radiusMm": 2
+    },
+    {
+      "number": 3,
+      "sheet": 0,
+      "column": 3,
+      "options": {
+        "A": {
+          "x": 190.5,
+          "y": 125.2
+        },
+        "B": {
+          "x": 182.5,
+          "y": 125.2
+        },
+        "C": {
+          "x": 174.5,
+          "y": 125.2
+        },
+        "D": {
+          "x": 166.5,
+          "y": 125.2
+        }
+      },
+      "radiusMm": 2
+    },
+    {
+      "number": 4,
+      "sheet": 0,
+      "column": 3,
+      "options": {
+        "A": {
+          "x": 190.5,
+          "y": 131.8
+        },
+        "B": {
+          "x": 182.5,
+          "y": 131.8
+        },
+        "C": {
+          "x": 174.5,
+          "y": 131.8
+        },
+        "D": {
+          "x": 166.5,
+          "y": 131.8
+        }
+      },
+      "radiusMm": 2
+    },
+    {
+      "number": 5,
+      "sheet": 0,
+      "column": 3,
+      "options": {
+        "A": {
+          "x": 190.5,
+          "y": 138.4
+        },
+        "B": {
+          "x": 182.5,
+          "y": 138.4
+        },
+        "C": {
+          "x": 174.5,
+          "y": 138.4
+        },
+        "D": {
+          "x": 166.5,
+          "y": 138.4
+        }
+      },
+      "radiusMm": 2
+    },
+    {
+      "number": 6,
+      "sheet": 0,
+      "column": 3,
+      "options": {
+        "A": {
+          "x": 190.5,
+          "y": 145
+        },
+        "B": {
+          "x": 182.5,
+          "y": 145
+        },
+        "C": {
+          "x": 174.5,
+          "y": 145
+        },
+        "D": {
+          "x": 166.5,
+          "y": 145
+        }
+      },
+      "radiusMm": 2
+    },
+    {
+      "number": 7,
+      "sheet": 0,
+      "column": 3,
+      "options": {
+        "A": {
+          "x": 190.5,
+          "y": 151.6
+        },
+        "B": {
+          "x": 182.5,
+          "y": 151.6
+        },
+        "C": {
+          "x": 174.5,
+          "y": 151.6
+        },
+        "D": {
+          "x": 166.5,
+          "y": 151.6
+        }
+      },
+      "radiusMm": 2
+    },
+    {
+      "number": 8,
+      "sheet": 0,
+      "column": 3,
+      "options": {
+        "A": {
+          "x": 190.5,
+          "y": 158.2
+        },
+        "B": {
+          "x": 182.5,
+          "y": 158.2
+        },
+        "C": {
+          "x": 174.5,
+          "y": 158.2
+        },
+        "D": {
+          "x": 166.5,
+          "y": 158.2
+        }
+      },
+      "radiusMm": 2
+    },
+    {
+      "number": 9,
+      "sheet": 0,
+      "column": 3,
+      "options": {
+        "A": {
+          "x": 190.5,
+          "y": 164.8
+        },
+        "B": {
+          "x": 182.5,
+          "y": 164.8
+        },
+        "C": {
+          "x": 174.5,
+          "y": 164.8
+        },
+        "D": {
+          "x": 166.5,
+          "y": 164.8
+        }
+      },
+      "radiusMm": 2
+    },
+    {
+      "number": 10,
+      "sheet": 0,
+      "column": 3,
+      "options": {
+        "A": {
+          "x": 190.5,
+          "y": 171.4
+        },
+        "B": {
+          "x": 182.5,
+          "y": 171.4
+        },
+        "C": {
+          "x": 174.5,
+          "y": 171.4
+        },
+        "D": {
+          "x": 166.5,
+          "y": 171.4
+        }
+      },
+      "radiusMm": 2
+    }
+  ],
+  "thresholds": {
+    "filled": 0.45,
+    "empty": 0.17,
+    "ambiguousMargin": 0.1,
+    "minAbsoluteFill": 0.08
+  }
+}

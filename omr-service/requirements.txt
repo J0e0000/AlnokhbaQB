@@ -1,0 +1,6 @@
+fastapi>=0.115
+# 4.13 wheels link libxcb (absent on the Vercel python host); 4.10.0.84 has
+# NO external lib deps and the engine produces byte-identical results (verified
+# against the omr-fixtures sheet: same confidences on 4.13 vs 4.10)
+opencv-python-headless==4.10.0.84
+numpy==2.1.3

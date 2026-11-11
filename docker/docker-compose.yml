@@ -1,0 +1,52 @@
+# ============================================================
+# ALNOKHBA QB — Hostinger VPS / any Docker host
+#   docker compose up -d --build
+# Public traffic: Caddy (:80/:443) → app (:3000) → omr-engine (:3032, internal)
+# ============================================================
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: file:/app/db/custom.db
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
+      OMR_ENGINE_URL: http://omr-engine:3032
+    volumes:
+      - app-db:/app/db            # SQLite database + uploads + scan images
+    depends_on:
+      - omr-engine
+    expose:
+      - "3000"
+
+  omr-engine:
+    build:
+      context: ../mini-services/omr-engine
+      dockerfile: ../../docker/Dockerfile.omr-engine
+    restart: unless-stopped
+    environment:
+      OMR_ENGINE_HOST: 0.0.0.0
+    mem_limit: 1g
+    expose:
+      - "3032"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+volumes:
+  app-db:
+  caddy-data:
+  caddy-config:
