@@ -169,45 +169,60 @@ async function enginePostJson<T>(
   body: unknown,
   timeoutMs: number
 ): Promise<T | OmrClientError> {
-  const res = await engineFetch(path, {
+  const init: RequestInit & { timeoutMs: number } = {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
     timeoutMs,
-  });
-  if (res instanceof Response === false) return res as OmrClientError;
+  };
 
-  const httpRes = res as Response;
-  let parsed: unknown;
-  try {
-    parsed = await httpRes.json();
-  } catch {
-    parsed = null;
-  }
+  // Unstructured 5xx bodies (HTML / {"detail":...}) come from the platform or
+  // an engine crash — on serverless these are usually cold-start/boot hiccups
+  // that a single short retry heals (observed in production as a one-off
+  // "engine internal error" that succeeds on immediate retry). Structured
+  // business errors and 4xx are NEVER retried.
+  const TRANSIENT_5XX = new Set([500, 502, 503, 504]);
 
-  if (!httpRes.ok) {
-    // engine replied with an error status AND a structured body → keep the body
-    if (parsed && typeof parsed === 'object' && 'ok' in (parsed as Record<string, unknown>)) {
-      return parsed as T;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt === 1) await new Promise((r) => setTimeout(r, 900));
+    const res = await engineFetch(path, init);
+    if (res instanceof Response === false) return res as OmrClientError;
+
+    const httpRes = res as Response;
+    let parsed: unknown;
+    try {
+      parsed = await httpRes.json();
+    } catch {
+      parsed = null;
     }
-    return {
-      ok: false,
-      stage: 'engineHttpError',
-      status: httpRes.status,
-      error: `OMR engine returned HTTP ${httpRes.status}`,
-      details: parsed,
-    };
-  }
 
-  if (!parsed || typeof parsed !== 'object') {
-    return {
-      ok: false,
-      stage: 'engineProtocol',
-      error: 'OMR engine returned a malformed (non-JSON) response',
-      details: parsed,
-    };
+    if (!httpRes.ok) {
+      // engine replied with an error status AND a structured body → keep the body
+      if (parsed && typeof parsed === 'object' && 'ok' in (parsed as Record<string, unknown>)) {
+        return parsed as T;
+      }
+      if (attempt === 0 && TRANSIENT_5XX.has(httpRes.status)) continue; // one healing retry
+      return {
+        ok: false,
+        stage: 'engineHttpError',
+        status: httpRes.status,
+        error: `OMR engine returned HTTP ${httpRes.status}`,
+        details: parsed,
+      };
+    }
+
+    if (!parsed || typeof parsed !== 'object') {
+      return {
+        ok: false,
+        stage: 'engineProtocol',
+        error: 'OMR engine returned a malformed (non-JSON) response',
+        details: parsed,
+      };
+    }
+    return parsed as T;
   }
-  return parsed as T;
+  // unreachable — both loop exits return
+  return { ok: false, stage: 'engineProtocol', error: 'OMR engine retry loop exited' };
 }
 
 // ---------- /pdf_pages ----------
