@@ -59,6 +59,17 @@ main() {
         fi
     done
     
+    # omr-engine is a Python service (no bun entrypoint at its root) — the
+    # index.ts launcher is bundled above; copy its Python runtime next to the
+    # bundle so the Z.ai deployment can spawn server.py.
+    if [ -d "$ROOT_DIR/omr-engine" ]; then
+        mkdir -p "$DIST_DIR/omr-engine"
+        cp -r "$ROOT_DIR/omr-engine/engine" "$DIST_DIR/omr-engine/" 2>/dev/null
+        cp -r "$ROOT_DIR/omr-engine/tessdata" "$DIST_DIR/omr-engine/" 2>/dev/null
+        cp "$ROOT_DIR/omr-engine/server.py" "$ROOT_DIR/omr-engine/requirements.txt" "$DIST_DIR/omr-engine/" 2>/dev/null
+        echo "📦 omr-engine Python runtime copied -> $DIST_DIR/omr-engine"
+    fi
+
     if [ -f ./.zscripts/mini-services-start.sh ]; then
         cp ./.zscripts/mini-services-start.sh "$DIST_DIR/mini-services-start.sh"
         chmod +x "$DIST_DIR/mini-services-start.sh"
