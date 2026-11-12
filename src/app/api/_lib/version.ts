@@ -21,6 +21,12 @@ export interface LoadedVersion {
 export async function loadVersion(id: string): Promise<LoadedVersion | null> {
   const row = await db.examVersion.findUnique({ where: { id }, include: { exam: true } });
   if (!row) return null;
+  return assembleVersion(row);
+}
+
+function assembleVersion(
+  row: ExamVersion & { exam: Exam }
+): LoadedVersion {
   const document = sanitizeDocument(JSON.parse(row.documentJson));
   let answerKey: QBAnswerKey = {};
   try {
@@ -37,6 +43,33 @@ export async function loadVersion(id: string): Promise<LoadedVersion | null> {
     }
   }
   return { row, document, answerKey, omrTemplate };
+}
+
+/**
+ * Resolve a scan hint that MAY be an ExamVersion id (new clients) or an
+ * EXAM id (legacy ScanStudio builds its version picker from /api/exams and
+ * used to send exam.id). Falls back exam.id → its currentVersion's snapshot,
+ * then the newest snapshot of that exam. Returns null when nothing matches
+ * (the routes turn that into 404 noMatchingVersion).
+ */
+export async function loadVersionHint(hint: string): Promise<LoadedVersion | null> {
+  const direct = await loadVersion(hint);
+  if (direct) return direct;
+  const exam = await db.exam.findUnique({ where: { id: hint } });
+  if (!exam) return null;
+  if (exam.currentVersion > 0) {
+    const current = await db.examVersion.findUnique({
+      where: { examId_version: { examId: exam.id, version: exam.currentVersion } },
+      include: { exam: true },
+    });
+    if (current) return assembleVersion(current);
+  }
+  const latest = await db.examVersion.findFirst({
+    where: { examId: exam.id },
+    orderBy: { version: 'desc' },
+    include: { exam: true },
+  });
+  return latest ? assembleVersion(latest) : null;
 }
 
 /** Binary PDF response with inline disposition. */

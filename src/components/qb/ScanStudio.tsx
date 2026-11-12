@@ -231,12 +231,34 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
   const loadVersions = useCallback(async () => {
     try {
       const res = await fetch('/api/exams');
-      const exams = (await res.json()) as { id: string; title: string; currentVersion: number; status: string }[];
-      const versions: { id: string; label: string }[] = [];
-      for (const ex of exams.filter((e) => e.currentVersion > 0)) {
-        versions.push({ id: `${ex.id}`, label: `${ex.title} — نسخة ${ex.currentVersion}` });
-      }
-      setExamVersions(versions);
+      const exams = (await res.json()) as {
+        id: string;
+        title: string;
+        currentVersion: number;
+        omrEnabled: boolean;
+        status: string;
+      }[];
+      // Resolve REAL ExamVersion ids — a version hint must be an ExamVersion.id
+      // (the scan APIs look up version snapshots by id). Sending the Exam.id
+      // only works via the server-side legacy fallback; the explicit id is
+      // correct, faster, and lets older versions be scanned too.
+      const omrExams = exams.filter((e) => e.omrEnabled && e.currentVersion > 0).slice(0, 100);
+      const perExam = await Promise.all(
+        omrExams.map(async (ex) => {
+          try {
+            const vres = await fetch(`/api/exams/${ex.id}/versions`);
+            if (!vres.ok) return [];
+            const versions = (await vres.json()) as { id: string; version: number; title?: string | null }[];
+            return versions.map((v) => ({
+              id: v.id,
+              label: `${ex.title} — نسخة ${v.version}`,
+            }));
+          } catch {
+            return [];
+          }
+        })
+      );
+      setExamVersions(perExam.flat());
     } catch {
       /* non-critical */
     }

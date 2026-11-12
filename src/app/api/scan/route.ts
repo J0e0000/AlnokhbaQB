@@ -46,7 +46,7 @@ import {
 } from '../_lib/shared';
 import { persistScanImage } from '@/lib/omr/scan-store';
 import { requireSession } from '../_lib/auth-guard';
-import { loadVersion } from '../_lib/version';
+import { loadVersion, loadVersionHint } from '../_lib/version';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -307,7 +307,8 @@ export async function POST(req: Request) {
     };
 
     if (manualMarkers && hint) {
-      const loaded = await loadVersion(hint);
+      // hint may be an ExamVersion id (new clients) or an Exam id (legacy picker)
+      const loaded = await loadVersionHint(hint);
       if (!loaded || !loaded.omrTemplate) {
         return NextResponse.json(
           { error: 'لا توجد نسخة امتحان مطابقة', stage: 'noMatchingVersion' },
@@ -380,7 +381,9 @@ export async function POST(req: Request) {
           { status: 404 }
         );
       }
-      const loaded = await loadVersion(qrVersionId);
+      // A client-supplied hint may be an EXAM id (legacy picker) → tolerant
+      // resolution; a QR-decoded id is always an ExamVersion id → strict load.
+      const loaded = hint ? await loadVersionHint(qrVersionId) : await loadVersion(qrVersionId);
       if (!loaded) {
         return NextResponse.json(
           { error: 'لا توجد نسخة امتحان مطابقة لرمز QR', stage: 'noMatchingVersion' },

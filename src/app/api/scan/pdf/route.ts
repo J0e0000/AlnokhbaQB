@@ -43,7 +43,7 @@ import {
   thresholdsFromConfig,
 } from '../../_lib/shared';
 import { requireSession } from '../../_lib/auth-guard';
-import { loadVersion } from '../../_lib/version';
+import { loadVersion, loadVersionHint } from '../../_lib/version';
 import { persistScanImage } from '@/lib/omr/scan-store';
 
 export const runtime = 'nodejs';
@@ -337,7 +337,8 @@ export async function POST(req: Request) {
         if (ident.ok && ident.qr?.examVersionId) versionId = ident.qr.examVersionId;
       }
       if (!versionId) return false;
-      const loaded = await loadVersion(versionId);
+      // hint may be an ExamVersion id (new clients) or an Exam id (legacy picker)
+      const loaded = await loadVersionHint(versionId);
       if (!loaded || !loaded.omrTemplate) return false;
       if (
         g.session.role !== 'super_admin' &&
