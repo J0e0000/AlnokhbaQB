@@ -17,11 +17,14 @@ import { spawn } from 'child_process';
 import { existsSync } from 'fs';
 import path from 'path';
 
+// bun exposes import.meta.dir; the cast keeps tsc (Next's tsconfig) happy —
+// same pattern as watch.ts in this folder.
+const DIR = (import.meta as unknown as { dir: string }).dir;
 const candidates = [
   // running from source (bun run dev / manual)
-  path.join(import.meta.dir, 'server.py'),
+  path.join(DIR, 'server.py'),
   // running from the built bundle (mini-services-dist/mini-service-omr-engine.js)
-  path.join(import.meta.dir, 'omr-engine', 'server.py'),
+  path.join(DIR, 'omr-engine', 'server.py'),
 ];
 const serverPy = candidates.find((p) => existsSync(p));
 
