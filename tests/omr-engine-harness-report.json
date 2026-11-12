@@ -10,24 +10,24 @@
   },
   "ratioStats": {
     "empty": {
-      "median": 0.0179,
-      "p99": 0.0288
+      "median": 0.0171,
+      "p99": 0.026
     },
     "pencil": {
-      "median": 0.7649,
-      "p99": 0.7793
+      "median": 0.7691,
+      "p99": 0.7802
     },
     "pen": {
-      "median": 0.9558,
-      "p99": 0.9694
+      "median": 0.9572,
+      "p99": 0.9714
     },
     "blue": {
-      "median": 0.8376,
-      "p99": 0.8515
+      "median": 0.8453,
+      "p99": 0.8525
     },
     "light": {
-      "median": 0.026,
-      "p99": 0.0345
+      "median": 0.0204,
+      "p99": 0.0308
     }
   },
   "cases": [
@@ -37,7 +37,7 @@
       "detail": "accuracy=100%",
       "extra": {
         "problems": [],
-        "ms": 3957
+        "ms": 688
       }
     },
     {
@@ -155,7 +155,7 @@
     {
       "case": "11. erased ghosts",
       "passed": true,
-      "detail": "statuses={'unanswered'} medianEmpty=0.0189",
+      "detail": "statuses={'unanswered'} medianEmpty=0.0172",
       "extra": {}
     },
     {
@@ -201,5 +201,5 @@
       "extra": {}
     }
   ],
-  "totalMs": 130013
+  "totalMs": 36905
 }
