@@ -35,6 +35,9 @@ import {
   ensureActiveCalibration,
   rateLimit,
   readJsonBody,
+  scanMaxPdfBytes,
+  scanMaxPdfPages,
+  scanPdfDpi,
   serverError,
   stripDataUrl,
   thresholdsFromConfig,
@@ -47,8 +50,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const MAX_PDF_BYTES = 40 * 1024 * 1024;
-const MAX_TOTAL_PAGES = 200;
+const MAX_TOTAL_PAGES = scanMaxPdfPages();
 const DEFAULT_BATCH = 6;
 const MAX_BATCH = 10;
 
@@ -70,74 +72,234 @@ function saveScanImage(base64: string, scanId: string, kind: 'debug' | 'correcte
   return persistScanImage(scanId, kind, base64);
 }
 
+interface PdfInput {
+  base64: string;
+  /** bytes kept for server-side validation (signature/pages/encryption) */
+  bytes: Buffer;
+  /** scalar fields accepted from either transport */
+  fromPage: number;
+  batchSize: number;
+  pageChunk: { index: number; total: number | null } | null;
+  hint: string | undefined;
+  batchId: string;
+}
+
+function intField(raw: unknown, fallback: number, min: number, max: number): number {
+  const n = parseInt(String(raw ?? ''), 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+/**
+ * Read the PDF from EITHER a multipart/form-data upload (binary `pdf` file —
+ * preferred: no base64 overhead, works past the JSON body limits on
+ * self-hosted runs) or the legacy JSON body (`pdfBase64`). Applies the
+ * shared size cap + %PDF signature check and returns raw bytes, base64
+ * and the request's scalar fields.
+ */
+async function readPdfInput(req: Request): Promise<
+  { ok: true; input: PdfInput } | { ok: false; status: number; error: string }
+> {
+  const maxBytes = scanMaxPdfBytes();
+  const contentType = req.headers.get('content-type') ?? '';
+  if (contentType.toLowerCase().includes('multipart/form-data')) {
+    let form: FormData;
+    try {
+      form = await req.formData();
+    } catch {
+      return { ok: false, status: 400, error: 'تعذر قراءة البيانات المرفوعة (multipart)' };
+    }
+    const file = form.get('pdf');
+    if (!(file instanceof File)) {
+      return { ok: false, status: 400, error: 'ملف PDF مطلوب (الحقل pdf)' };
+    }
+    if (file.size > maxBytes) {
+      return {
+        ok: false,
+        status: 413,
+        error: `حجم الملف كبير جدًا (الحد ${Math.round(maxBytes / 1024 / 1024)} ميجابايت)`,
+      };
+    }
+    const bytes = Buffer.from(await file.arrayBuffer());
+    if (bytes.subarray(0, 5).toString('latin1') !== '%PDF-') {
+      return { ok: false, status: 415, error: 'الملف ليس PDF صالحًا' };
+    }
+    const chunkRaw = form.get('pageChunk');
+    let pageChunk: PdfInput['pageChunk'] = null;
+    if (typeof chunkRaw === 'string' && chunkRaw.trim()) {
+      try {
+        const parsed = JSON.parse(chunkRaw) as Record<string, unknown>;
+        if (parsed && typeof parsed === 'object') {
+          pageChunk = {
+            index: intField(parsed.index, 0, 0, 100000),
+            total: intField(parsed.total, 0, 0, 100000) || null,
+          };
+        }
+      } catch {
+        /* malformed pageChunk → treated as absent */
+      }
+    }
+    const batchIdRaw = form.get('batchId');
+    return {
+      ok: true,
+      input: {
+        base64: bytes.toString('base64'),
+        bytes,
+        fromPage: intField(form.get('fromPage'), 0, 0, 100000),
+        batchSize: intField(form.get('batchSize'), DEFAULT_BATCH, 1, MAX_BATCH),
+        pageChunk,
+        hint: typeof form.get('examVersionIdHint') === 'string' ? (form.get('examVersionIdHint') as string) : undefined,
+        batchId:
+          typeof batchIdRaw === 'string' && batchIdRaw.length > 0 && batchIdRaw.length <= 64
+            ? batchIdRaw
+            : randomUUID(),
+      },
+    };
+  }
+
+  // legacy JSON path (kept for old clients + the engine-side E2E script)
+  const body = await readJsonBody(req);
+  const rawPdf = typeof body?.pdfBase64 === 'string' ? body.pdfBase64 : '';
+  if (!rawPdf) {
+    return { ok: false, status: 400, error: 'ملف PDF مطلوب (الحقل pdf أو pdfBase64)' };
+  }
+  const { base64 } = stripDataUrl(rawPdf);
+  const bytes = Buffer.from(base64, 'base64');
+  if (bytes.length > maxBytes) {
+    return {
+      ok: false,
+      status: 413,
+      error: `حجم الملف كبير جدًا (الحد ${Math.round(maxBytes / 1024 / 1024)} ميجابايت)`,
+    };
+  }
+  if (bytes.subarray(0, 5).toString('latin1') !== '%PDF-') {
+    return { ok: false, status: 415, error: 'الملف ليس PDF صالحًا' };
+  }
+  return {
+    ok: true,
+    input: {
+      base64,
+      bytes,
+      fromPage: intField(body?.fromPage, 0, 0, 100000),
+      batchSize: intField(body?.batchSize, DEFAULT_BATCH, 1, MAX_BATCH),
+      pageChunk:
+        body?.pageChunk && typeof body.pageChunk === 'object'
+          ? {
+              index: intField((body.pageChunk as Record<string, unknown>).index, 0, 0, 100000),
+              total: intField((body.pageChunk as Record<string, unknown>).total, 0, 0, 100000) || null,
+            }
+          : null,
+      hint: typeof body?.examVersionIdHint === 'string' ? body.examVersionIdHint : undefined,
+      batchId:
+        typeof body?.batchId === 'string' && body.batchId.length <= 64
+          ? body.batchId
+          : randomUUID(),
+    },
+  };
+}
+
+/**
+ * Server-side structural PDF validation BEFORE the engine runs:
+ * page count cap + encryption + gross corruption (pdf-lib parse).
+ * Returns the page count, or an HTTP-mappable rejection.
+ */
+async function validatePdfStructure(bytes: Buffer): Promise<
+  { ok: true; pageCount: number } | { ok: false; status: number; error: string }
+> {
+  let doc: import('pdf-lib').PDFDocument;
+  try {
+    doc = await (await import('pdf-lib')).PDFDocument.load(bytes, {
+      updateMetadata: false,
+      throwOnInvalidObject: false,
+    });
+  } catch (err) {
+    const name = (err as { name?: string })?.name ?? '';
+    const msg = err instanceof Error ? err.message : String(err);
+    if (name === 'EncryptedPDFError' || /encrypt/i.test(msg)) {
+      return {
+        ok: false,
+        status: 422,
+        error: 'الملف محمي بكلمة مرور — أزل التشفير ثم أعد الرفع',
+      };
+    }
+    return {
+      ok: false,
+      status: 422,
+      error: 'الملف تالف أو غير قابل للقراءة — أعد مسحه أو تصديره بصيغة PDF قياسية',
+    };
+  }
+  const pageCount = doc.getPageCount();
+  if (pageCount <= 0) {
+    return { ok: false, status: 422, error: 'الملف لا يحتوي على أي صفحات' };
+  }
+  if (pageCount > MAX_TOTAL_PAGES) {
+    return {
+      ok: false,
+      status: 413,
+      error: `عدد صفحات الملف ${pageCount} يتجاوز الحد المسموح (${MAX_TOTAL_PAGES})`,
+    };
+  }
+  return { ok: true, pageCount };
+}
+
 export async function POST(req: Request) {
   try {
     const g = await requireSession('teacher', req);
     if ('error' in g) return g.error;
-    if (!rateLimit(`scanpdf:${g.session.id}`, 30, 60_000)) {
+    if (!rateLimit(`scanpdf:${g.session.uid}`, 30, 60_000)) {
       return NextResponse.json(
         { error: 'عدد كبير من عمليات المعالجة — انتظر لحظة ثم أعد المحاولة' },
         { status: 429 }
       );
     }
 
-    const body = await readJsonBody(req);
-    const rawPdf = typeof body?.pdfBase64 === 'string' ? body.pdfBase64 : '';
-    if (!rawPdf) {
-      return NextResponse.json({ error: 'ملف PDF مطلوب (pdfBase64)' }, { status: 400 });
+    const pdfInput = await readPdfInput(req);
+    if (!pdfInput.ok) {
+      return NextResponse.json({ error: pdfInput.error }, { status: pdfInput.status });
     }
-    const { base64: pdfBase64 } = stripDataUrl(rawPdf);
-    const pdfBytes = Buffer.from(pdfBase64, 'base64');
-    if (pdfBytes.length > MAX_PDF_BYTES) {
-      return NextResponse.json(
-        { error: `حجم الملف كبير جدًا (الحد ${Math.round(MAX_PDF_BYTES / 1024 / 1024)} ميجابايت)` },
-        { status: 413 }
-      );
-    }
-    // content sniff: real PDFs start with %PDF
-    if (pdfBytes.subarray(0, 5).toString('latin1') !== '%PDF-') {
-      return NextResponse.json({ error: 'الملف ليس PDF صالحًا' }, { status: 415 });
+    const { base64: pdfBase64, ...fields } = pdfInput.input;
+    // Structural validation (pages/encryption/corruption) BEFORE engine CPU:
+    // cheap pdf-lib parse, precise Arabic errors, correct HTTP statuses.
+    const structure = await validatePdfStructure(pdfInput.input.bytes);
+    if (!structure.ok) {
+      return NextResponse.json({ error: structure.error }, { status: structure.status });
     }
 
-    const fromPage = Math.max(0, parseInt(String(body?.fromPage ?? '0'), 10) || 0);
-    const batchSize = Math.max(
-      1,
-      Math.min(MAX_BATCH, parseInt(String(body?.batchSize ?? DEFAULT_BATCH), 10) || DEFAULT_BATCH)
-    );
+    const fromPage = fields.fromPage;
+    const batchSize = fields.batchSize;
     // pageChunk mode: pdfBase64 is a single client-side slice
-    const pageChunk =
-      body?.pageChunk && typeof body.pageChunk === 'object'
-        ? {
-            index: Math.max(0, parseInt(String(body.pageChunk.index ?? '0'), 10) || 0),
-            total: Math.max(1, parseInt(String(body.pageChunk.total ?? '0'), 10) || 0) || null,
-          }
-        : null;
-    const hint = typeof body?.examVersionIdHint === 'string' ? body.examVersionIdHint : undefined;
-    const batchId =
-      typeof body?.batchId === 'string' && body.batchId.length <= 64
-        ? body.batchId
-        : randomUUID();
+    const pageChunk = fields.pageChunk;
+    const hint = fields.hint;
+    const batchId = fields.batchId;
 
     // ---- calibration
     const profile = await ensureActiveCalibration();
     const thresholds = thresholdsFromConfig(profile.configJson);
 
     // ---- rasterize this chunk (pageChunk mode: the slice IS one page)
+    // DPI defaults to 300 — the engine's canonical warp resolution — so small
+    // bubbles keep their geometry; SCAN_PDF_DPI can lower it for slow hosts.
     const chunk = await pdfPages({
       pdfBase64,
       fromPage: pageChunk ? 0 : fromPage,
       maxPages: batchSize,
-      dpi: 200,
+      dpi: scanPdfDpi(),
     });
     if (!('pages' in chunk) || !Array.isArray((chunk as { pages?: unknown }).pages)) {
       const err = chunk as { error?: string; stage?: string };
+      // engine 'pdf' stage = bad input (encrypted/corrupt/empty) → 422;
+      // transport stages (engine down/timeout) → 503 for client retries.
+      const badInput = err.stage === 'pdf' || err.stage === 'engineProtocol';
       return NextResponse.json(
-        { error: err.error ?? 'تعذر قراءة ملف PDF في محرك المعالجة', stage: err.stage },
-        { status: 503 }
+        {
+          error: err.error ?? 'تعذر قراءة ملف PDF في محرك المعالجة',
+          stage: err.stage,
+        },
+        { status: badInput ? 422 : 503 }
       );
     }
     const pages = chunk.pages;
-    const total = pageChunk?.total ?? chunk.total;
+    const total = pageChunk?.total ?? Math.max(chunk.total, structure.pageCount);
     if (total > MAX_TOTAL_PAGES) {
       return NextResponse.json(
         { error: `عدد صفحات الملف ${total} يتجاوز الحد المسموح (${MAX_TOTAL_PAGES})` },
@@ -395,7 +557,10 @@ export async function POST(req: Request) {
       nextFrom,
       done: !transportAbort && nextFrom >= total,
       examVersionId: resolvedVersionId ?? hint ?? null,
-      templateId: template?.templateId ?? null,
+      // `template` is assigned inside the resolveVersion closure; TS's
+      // flow analysis narrows the outer binding to never here — the cast
+      // documents the runtime reality (it IS an OMRTemplate or null).
+      templateId: (template as OMRTemplate | null)?.templateId ?? null,
       ...(transportAbort
         ? { warning: 'انقطع الاتصال بمحرك المعالجة — أعد المحاولة للاستكمال من نفس الموضع' }
         : {}),

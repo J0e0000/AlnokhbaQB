@@ -62,6 +62,56 @@ export function stripDataUrl(s: string): { base64: string; mime: string } {
   return { base64: trimmed, mime: '' };
 }
 
+// ---------- upload limits (env-configurable safe defaults) ----------
+//
+// All scan endpoints enforce these on BOTH the JSON/base64 and the
+// multipart/binary paths. Defaults keep current behavior; deployments can
+// tighten them (SCAN_MAX_IMAGE_MB=10, SCAN_MAX_PDF_MB=25, SCAN_MAX_PDF_PAGES=30)
+// or widen them for self-hosted hosts without platform body caps.
+
+function envNumber(name: string, fallback: number, min: number, max: number): number {
+  const raw = Number(process.env[name]);
+  if (!Number.isFinite(raw) || raw <= 0) return fallback;
+  return Math.min(max, Math.max(min, raw));
+}
+
+/** Single sheet image cap (bytes). Default 25 MB. */
+export function scanMaxImageBytes(): number {
+  return Math.floor(envNumber('SCAN_MAX_IMAGE_MB', 25, 1, 100) * 1024 * 1024);
+}
+
+/** PDF upload cap (bytes). Default 40 MB (scanned stacks are large). */
+export function scanMaxPdfBytes(): number {
+  return Math.floor(envNumber('SCAN_MAX_PDF_MB', 40, 1, 200) * 1024 * 1024);
+}
+
+/** PDF page-count cap. Default 200 pages. */
+export function scanMaxPdfPages(): number {
+  return Math.floor(envNumber('SCAN_MAX_PDF_PAGES', 200, 1, 1000));
+}
+
+/** PDF rasterization DPI sent to the engine. Default 300 (engine clamps 72..300). */
+export function scanPdfDpi(): number {
+  return Math.floor(envNumber('SCAN_PDF_DPI', 300, 72, 300));
+}
+
+/** Content sniff: accept only real JPEG/PNG bytes (magic numbers). */
+export function imageSignature(bytes: Uint8Array): 'jpeg' | 'png' | null {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return 'jpeg';
+  }
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47
+  ) {
+    return 'png';
+  }
+  return null;
+}
+
 // ---------- calibration (OMR thresholds) ----------
 
 export interface CalibrationPreset {

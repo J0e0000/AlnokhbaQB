@@ -32,6 +32,7 @@ import {
   FlashlightOff,
   Loader2,
   RefreshCw,
+  RotateCcw,
   ScanLine,
   Stethoscope,
   SwitchCamera,
@@ -68,18 +69,17 @@ interface ScanResult {
 }
 
 // Vercel caps serverless request bodies at 4.5MB — whole-file PDF uploads on
-// real scanned stacks (e.g. 100 sheets ≈ 12MB) exceed it with FUNCTION_PAYLOAD_TOO_LARGE.
-// Keep whole-file uploads under ~3.4MB of base64 and single-page slices under ~4.2MB.
-const PDF_WHOLE_LIMIT = 3_400_000;
-const PDF_PAGE_LIMIT = 4_200_000;
+// real scanned stacks (e.g. 100 sheets ≈ 12MB) exceed it with
+// FUNCTION_PAYLOAD_TOO_LARGE. Multipart sends RAW binary (no base64's +33%),
+// so the whole-file ceiling is ~4MB of actual PDF bytes; above that the client
+// slices per page with pdf-lib. Self-hosted runs have no such cap but use the
+// same thresholds — consistent behavior everywhere.
+const PDF_WHOLE_LIMIT_BYTES = 4_000_000;
+const PDF_PAGE_LIMIT_BYTES = 4_200_000;
 
-function bytesToDataUrl(bytes: Uint8Array, mime: string): string {
-  let bin = '';
-  const CHUNK = 0x8000;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  }
-  return `data:${mime};base64,${btoa(bin)}`;
+async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
+  const res = await fetch(dataUrl);
+  return await res.blob();
 }
 
 interface BatchPageResult {
@@ -94,6 +94,8 @@ interface BatchPageResult {
   score?: number | null;
   maxScore?: number | null;
   needsReview?: boolean;
+  /** engine died mid-batch — client must stop and offer resume/retry */
+  transportAbort?: boolean;
 }
 
 // BarcodeDetector typing (Chrome/Android; feature-detected at runtime)
@@ -220,6 +222,11 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
     dupCount: number;
     pages: BatchPageResult[];
   } | null>(null);
+  // duplicate-submit guard: an upload/scan/batch is in flight → the picker,
+  // dropzone and retry buttons are inert until it settles
+  const [uploadBusy, setUploadBusy] = useState(false);
+  // the PDF currently being processed (kept for per-page retries)
+  const currentPdfRef = useRef<File | null>(null);
 
   const loadVersions = useCallback(async () => {
     try {
@@ -248,16 +255,14 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
     manualMarkers?: Array<[number, number]>
   ) => {
     busyRef.current = true;
+    setUploadBusy(true);
     try {
-      const res = await fetch('/api/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageBase64: dataUrl,
-          examVersionIdHint: hintVersion === 'auto' ? undefined : hintVersion,
-          manualMarkers,
-        }),
-      });
+      // multipart binary upload — no base64 overhead (≈33% smaller bodies)
+      const form = new FormData();
+      form.append('image', await dataUrlToBlob(dataUrl), 'sheet.jpg');
+      if (hintVersion !== 'auto') form.append('examVersionIdHint', hintVersion);
+      if (manualMarkers) form.append('manualMarkers', JSON.stringify(manualMarkers));
+      const res = await fetch('/api/scan', { method: 'POST', body: form });
       const data = await res.json();
       if (!res.ok) {
         toast.error(data.error ?? 'فشل تحليل الورقة');
@@ -298,11 +303,13 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
       toast.error('تعذر الاتصال بخدمة التحليل');
     } finally {
       busyRef.current = false;
+      setUploadBusy(false);
     }
   };
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    if (uploadBusy || busyRef.current) return; // duplicate-submit guard
     const file = files[0];
     const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
     if (file.size > 40 * 1024 * 1024) {
@@ -313,26 +320,27 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
     setOverrides({});
     setManualMode(false);
     setManualPoints([]);
+    setUploadBusy(true);
     try {
       if (isPdf) {
-        // Whole-file vs client-side per-page slicing: Vercel caps function
-        // request bodies at 4.5MB — real scanned stacks must be sliced.
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        const b64Estimate = Math.ceil(bytes.length / 3) * 4;
-        if (b64Estimate > PDF_WHOLE_LIMIT) {
+        currentPdfRef.current = file;
+        // Whole-file multipart vs client-side per-page slicing: Vercel caps
+        // function request bodies at 4.5MB — real scanned stacks must be sliced.
+        if (file.size > PDF_WHOLE_LIMIT_BYTES) {
+          const bytes = new Uint8Array(await file.arrayBuffer());
           await runPdfChunked(bytes);
         } else {
-          const rawUrl = await new Promise<string>((resolve, reject) => {
-            const r = new FileReader();
-            r.onload = () => resolve(r.result as string);
-            r.onerror = reject;
-            r.readAsDataURL(file);
-          });
-          await runPdfBatch(rawUrl);
+          const finished = await runPdfBatch(file);
+          if (!finished) {
+            // transport rejected the whole file (platform body cap) → slice
+            const bytes = new Uint8Array(await file.arrayBuffer());
+            await runPdfChunked(bytes);
+          }
         }
       } else {
         // downscale BEFORE anything that keeps the image (manual-corner map
-        // uses the SAME downscaled pixels the engine receives — consistent)
+        // uses the SAME downscaled pixels the engine receives — consistent;
+        // the canvas re-encode also strips EXIF rotation)
         const rawUrl = await new Promise<string>((resolve, reject) => {
           const r = new FileReader();
           r.onload = () => resolve(r.result as string);
@@ -352,6 +360,81 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
       }
     } catch {
       toast.error('تعذر قراءة الملف');
+    } finally {
+      setUploadBusy(false);
+    }
+  };
+
+  /** Retry a single failed page from the current PDF (per-page retry). */
+  const retryPage = async (index: number) => {
+    const srcFile = currentPdfRef.current;
+    if (!srcFile || uploadBusy) return;
+    setUploadBusy(true);
+    try {
+      const { PDFDocument } = await import('pdf-lib');
+      const src = await PDFDocument.load(new Uint8Array(await srcFile.arrayBuffer()));
+      const total = src.getPageCount();
+      const doc = await PDFDocument.create();
+      const [page] = await doc.copyPages(src, [index]);
+      doc.addPage(page);
+      const slice = await doc.save();
+      if (slice.byteLength > PDF_PAGE_LIMIT_BYTES) {
+        toast.error('الصفحة أكبر من حد الرفع — أعد مسحها بدقة أقل');
+        return;
+      }
+      setBatch((b) =>
+        b
+          ? {
+              ...b,
+              pages: b.pages.map((p) =>
+                p.index === index ? { ...p, ok: false, error: 'جارٍ إعادة المحاولة…', transportAbort: false } : p
+              ),
+            }
+          : b
+      );
+      const form = new FormData();
+      form.append('pdf', new Blob([slice as unknown as BlobPart], { type: 'application/pdf' }), `page-${index + 1}.pdf`);
+      form.append('pageChunk', JSON.stringify({ index, total }));
+      if (hintVersion !== 'auto') form.append('examVersionIdHint', hintVersion);
+      const res = await fetch('/api/scan/pdf', { method: 'POST', body: form });
+      const data = await res.json();
+      const results: BatchPageResult[] = data.results ?? [];
+      if (!res.ok || !results.length) {
+        toast.error(data.error ?? `فشل إعادة محاولة الصفحة ${index + 1}`);
+        setBatch((b) =>
+          b
+            ? {
+                ...b,
+                pages: b.pages.map((p) =>
+                  p.index === index ? { ...p, ok: false, error: data.error ?? 'فشل إعادة المحاولة' } : p
+                ),
+              }
+            : b
+        );
+        return;
+      }
+      const r = results[0];
+      setBatch((b) => {
+        if (!b) return b;
+        const wasOk = b.pages.find((p) => p.index === index)?.ok;
+        return {
+          ...b,
+          okCount: b.okCount + (r.ok && !r.duplicate && !wasOk ? 1 : 0) - (wasOk ? 1 : 0),
+          dupCount: b.dupCount + (r.duplicate && !wasOk ? 1 : 0),
+          failCount: b.failCount + (!r.ok && !wasOk ? 1 : 0) - (!wasOk ? 1 : 0),
+          pages: b.pages.map((p) => (p.index === index ? r : p)),
+        };
+      });
+      if (r.ok) {
+        toast.success(r.duplicate ? `الصفحة ${index + 1}: مكررة — تم تجاهلها` : `تمت إعادة معالجة الصفحة ${index + 1}`);
+        onScanned?.();
+      } else {
+        toast.error(r.error ?? `فشل معالجة الصفحة ${index + 1}`);
+      }
+    } catch {
+      toast.error('تعذر قراءة ملف PDF لإعادة المحاولة');
+    } finally {
+      setUploadBusy(false);
     }
   };
 
@@ -369,8 +452,7 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
           const [page] = await doc.copyPages(src, [i]);
           doc.addPage(page);
           const slice = await doc.save();
-          const sliceDataUrl = bytesToDataUrl(slice, 'application/pdf');
-          if (sliceDataUrl.length > PDF_PAGE_LIMIT) {
+          if (slice.byteLength > PDF_PAGE_LIMIT_BYTES) {
             setBatch((b) =>
               b
                 ? {
@@ -391,16 +473,13 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
             );
             continue;
           }
-          const res = await fetch('/api/scan/pdf', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              pdfBase64: sliceDataUrl,
-              batchId,
-              examVersionIdHint: resolvedVersion,
-              pageChunk: { index: i, total },
-            }),
-          });
+          // multipart binary slice — raw bytes, no base64 overhead
+          const form = new FormData();
+          form.append('pdf', new Blob([slice as unknown as BlobPart], { type: 'application/pdf' }), `page-${i + 1}.pdf`);
+          form.append('pageChunk', JSON.stringify({ index: i, total }));
+          if (batchId) form.append('batchId', batchId);
+          if (resolvedVersion) form.append('examVersionIdHint', resolvedVersion);
+          const res = await fetch('/api/scan/pdf', { method: 'POST', body: form });
           const data = await res.json();
           if (!res.ok) {
             toast.error(data.error ?? `فشل معالجة الصفحة ${i + 1}`);
@@ -432,7 +511,7 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
             b
               ? {
                   ...b,
-                  done: data.nextFrom ?? i + results.length,
+                  done: Math.max(b.done, data.nextFrom ?? i + results.length),
                   okCount: b.okCount + results.filter((r) => r.ok && !r.duplicate).length,
                   dupCount: b.dupCount + results.filter((r) => r.duplicate).length,
                   failCount: b.failCount + results.filter((r) => !r.ok).length,
@@ -457,7 +536,9 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
     }
   };
 
-  const runPdfBatch = async (dataUrl: string) => {
+  /** Whole-file multipart batch. Returns true when the file was consumed;
+   *  false when the transport rejected the body (caller falls back to slicing). */
+  const runPdfBatch = async (file: File): Promise<boolean> => {
     setBatch({ running: true, total: 0, done: 0, okCount: 0, failCount: 0, dupCount: 0, pages: [] });
     let fromPage = 0;
     let batchId: string | undefined;
@@ -465,17 +546,18 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
     let guard = 0;
     try {
       while (guard++ < 60) {
-        const res = await fetch('/api/scan/pdf', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            pdfBase64: dataUrl,
-            fromPage,
-            batchSize: 6,
-            batchId,
-            examVersionIdHint: resolvedVersion,
-          }),
-        });
+        const form = new FormData();
+        form.append('pdf', file, file.name);
+        form.append('fromPage', String(fromPage));
+        form.append('batchSize', '6');
+        if (batchId) form.append('batchId', batchId);
+        if (resolvedVersion) form.append('examVersionIdHint', resolvedVersion);
+        const res = await fetch('/api/scan/pdf', { method: 'POST', body: form });
+        if (res.status === 413 || res.status === 400) {
+          // body too large for the transport (platform cap) → caller slices
+          setBatch(null);
+          return false;
+        }
         const data = await res.json();
         if (!res.ok) {
           toast.error(data.error ?? 'فشل معالجة ملف PDF');
@@ -503,9 +585,11 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
       }
       setBatch((b) => (b ? { ...b, running: false } : b));
       onScanned?.();
+      return true;
     } catch {
       toast.error('تعذر الاتصال بخدمة التحليل');
       setBatch((b) => (b ? { ...b, running: false } : b));
+      return true; // consumed (network failure — slicing would not help)
     }
   };
 
@@ -696,7 +780,9 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
     const track = streamRef.current?.getVideoTracks()[0];
     if (!track) return;
     try {
-      await track.applyConstraints({ advanced: [{ torch: !torchOn }] } as MediaTrackConstraints);
+      // `advanced` is legacy-but-supported by Chrome/Android; cast via unknown
+      // because TS's MediaTrackConstraints does not model the torch key.
+      await track.applyConstraints({ advanced: [{ torch: !torchOn }] } as unknown as MediaTrackConstraints);
       setTorchOn((v) => !v);
     } catch {
       toast.error('الفلاش غير مدعوم على هذه الكاميرا');
@@ -927,13 +1013,24 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
             </div>
           ) : (
             <div
+              role="button"
+              aria-label="رفع ورقة إجابة أو ملف PDF"
+              aria-disabled={uploadBusy}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
+                if (uploadBusy) return; // duplicate-submit guard
                 void handleFiles(e.dataTransfer.files);
               }}
-              onClick={() => fileInputRef.current?.click()}
-              className="flex min-h-36 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-emerald-300 bg-emerald-50/40 p-6 text-center transition hover:border-emerald-400 hover:bg-emerald-50"
+              onClick={() => {
+                if (uploadBusy) return;
+                fileInputRef.current?.click();
+              }}
+              className={`flex min-h-36 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-emerald-300 p-6 text-center transition ${
+                uploadBusy
+                  ? 'cursor-not-allowed bg-emerald-50/60 opacity-60'
+                  : 'cursor-pointer bg-emerald-50/40 hover:border-emerald-400 hover:bg-emerald-50'
+              }`}
             >
               <input
                 ref={fileInputRef}
@@ -941,15 +1038,18 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
                 accept="image/*,application/pdf"
                 capture="environment"
                 className="hidden"
+                disabled={uploadBusy}
                 onChange={(e) => void handleFiles(e.target.files)}
               />
-              {batch?.running ? (
+              {uploadBusy || batch?.running ? (
                 <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
               ) : (
                 <FileScan className="h-8 w-8 text-emerald-600" />
               )}
               <div className="text-sm font-medium text-emerald-800">
-                التقط صورة أو أفلت ملفًا هنا — صور أو PDF متعدد الصفحات
+                {uploadBusy || batch?.running
+                  ? 'جارٍ المعالجة… انتظر انتهاء الرفع الحالي'
+                  : 'التقط صورة أو أفلت ملفًا هنا — صور أو PDF متعدد الصفحات'}
               </div>
               <div className="text-xs text-slate-500">
                 يُقرأ رمز QR تلقائيًا لتحديد نسخة الامتحان • ملف PDF يُعالَج صفحة صفحة مع شريط تقدم
@@ -1042,6 +1142,7 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
                     <th className="p-2">الحالة</th>
                     <th className="p-2">رقم الطالب</th>
                     <th className="p-2">الدرجة</th>
+                    <th className="p-2">الخطأ</th>
                     <th className="p-2"></th>
                   </tr>
                 </thead>
@@ -1064,6 +1165,19 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
                         {p.score != null ? `${p.score}/${p.maxScore ?? ''}` : '—'}
                       </td>
                       <td className="p-2 text-red-600">{p.error ? String(p.error).slice(0, 60) : ''}</td>
+                      <td className="p-2">
+                        {!p.ok && !p.duplicate && !batch.running && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 gap-1 px-2 text-[10px]"
+                            disabled={uploadBusy}
+                            onClick={() => void retryPage(p.index)}
+                          >
+                            <RotateCcw className="h-3 w-3" /> إعادة
+                          </Button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

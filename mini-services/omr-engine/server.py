@@ -104,12 +104,20 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self._send(404, {"ok": False, "error": "not found"})
         except ValueError as e:
-            self._send(200, {"ok": False, "stage": "pdf", "error": str(e)})
+            # Caller input problems (bad base64, missing header, encrypted/corrupt
+            # pdf, wrong parameters) → 422 with a STRUCTURED body. The Node client
+            # preserves structured bodies on non-2xx statuses, so callers keep
+            # reading ok/stage/error exactly as before — but HTTP semantics are
+            # now correct instead of masking validation failures behind 200.
+            self._send(422, {"ok": False, "stage": "pdf", "error": str(e)})
         except Exception as e:  # noqa: BLE001
             import traceback
 
             traceback.print_exc()
-            self._send(200, {"ok": False, "stage": "unhandled", "error": f"internal error: {e}"})
+            # Unhandled engine crash → 500. The Node client retries structured
+            # 5xx once (transient crash windows) and otherwise surfaces a
+            # transport error instead of a fake success.
+            self._send(500, {"ok": False, "stage": "unhandled", "error": f"internal error: {e}"})
 
     def log_message(self, fmt, *args):  # quiet-ish
         sys.stderr.write("[omr-engine] " + (fmt % args) + "\n")

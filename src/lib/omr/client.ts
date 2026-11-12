@@ -55,7 +55,8 @@ export interface OmrClientError {
 // ---------- /process ----------
 
 export interface OmrProcessRequest {
-  imageBase64: string;
+  /** sheet image base64 (no data: prefix) — required unless pdfBase64 is given */
+  imageBase64?: string;
   /** PDF input (alternative to imageBase64): engine rasterizes pageIndex */
   pdfBase64?: string;
   pageIndex?: number;

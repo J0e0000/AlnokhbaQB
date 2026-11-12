@@ -848,7 +848,21 @@ def pdf_pages(pdf_b64: str, dpi: int = 200, from_page: int = 0, max_pages: int =
         doc = fitz.open(stream=buf, filetype="pdf")
     except Exception as e:
         raise ValueError(f"could not open pdf: {e}")
+    # Encrypted/password-protected PDFs fail later with a confusing crypt
+    # error — reject them here with an explicit, actionable message.
+    if getattr(doc, "needs_pass", False) or getattr(doc, "is_encrypted", False):
+        try:
+            doc.close()
+        except Exception:  # noqa: BLE001
+            pass
+        raise ValueError("pdf is encrypted or password-protected — remove the password before uploading")
     total = int(doc.page_count)
+    if total <= 0:
+        try:
+            doc.close()
+        except Exception:  # noqa: BLE001
+            pass
+        raise ValueError("pdf contains no pages")
     dpi = max(72, min(300, int(dpi)))
     zoom = dpi / 72.0
     pages: List[str] = []

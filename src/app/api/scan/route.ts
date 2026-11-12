@@ -1,5 +1,7 @@
 // POST /api/scan { imageBase64 | pdfBase64+pageIndex, examVersionIdHint?,
 //                   manualMarkers?, debug?, idempotencyKey? }
+//            OR multipart/form-data (binary `image` file + scalar fields) —
+//            the preferred transport: no base64 overhead, correct sizes.
 // Full OMR scan pipeline:
 //   1. load (or seed) the active CalibrationProfile → thresholds
 //   2. engine /process WITHOUT template (engine QR-decodes the sheet)
@@ -34,8 +36,10 @@ import type {
 } from '@/lib/qb/types';
 import {
   ensureActiveCalibration,
+  imageSignature,
   rateLimit,
   readJsonBody,
+  scanMaxImageBytes,
   serverError,
   stripDataUrl,
   thresholdsFromConfig,
@@ -125,38 +129,137 @@ function transportArabic(stage: string, rawError: string): string {
   }
 }
 
+interface ScanInput {
+  /** raw base64 (no data: prefix) of the sheet image or single-page PDF */
+  base64: string;
+  isPdf: boolean;
+  pageIndex: number | null;
+  hint?: string;
+  manualMarkers: number[][] | null;
+  idempotencyKey: string | null;
+}
+
+/**
+ * Accept the sheet from EITHER a multipart/form-data upload (binary `image`
+ * file — preferred transport: ~33% smaller than base64 JSON and no JSON
+ * escaping cost) or the legacy JSON body. Returns raw base64 + all fields.
+ */
+async function readScanInput(req: Request): Promise<
+  { ok: true; input: ScanInput } | { ok: false; status: number; error: string }
+> {
+  const maxImageBytes = scanMaxImageBytes();
+  const contentType = req.headers.get('content-type') ?? '';
+  if (contentType.toLowerCase().includes('multipart/form-data')) {
+    let form: FormData;
+    try {
+      form = await req.formData();
+    } catch {
+      return { ok: false, status: 400, error: 'تعذر قراءة البيانات المرفوعة (multipart)' };
+    }
+    const file = form.get('image');
+    if (!(file instanceof File)) {
+      return { ok: false, status: 400, error: 'صورة الورقة مطلوبة (الحقل image)' };
+    }
+    if (file.size > maxImageBytes) {
+      return {
+        ok: false,
+        status: 413,
+        error: `حجم الصورة كبير جدًا (الحد ${Math.round(maxImageBytes / 1024 / 1024)} ميجابايت)`,
+      };
+    }
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (!imageSignature(bytes)) {
+      return {
+        ok: false,
+        status: 415,
+        error: 'الملف ليس صورة صالحة — استخدم JPEG أو PNG',
+      };
+    }
+    const markersRaw = form.get('manualMarkers');
+    let manualMarkers: number[][] | null = null;
+    if (typeof markersRaw === 'string' && markersRaw.trim()) {
+      try {
+        manualMarkers = parseManualMarkers(JSON.parse(markersRaw));
+      } catch {
+        manualMarkers = null;
+      }
+    }
+    const hintRaw = form.get('examVersionIdHint');
+    const keyRaw = form.get('idempotencyKey');
+    return {
+      ok: true,
+      input: {
+        base64: Buffer.from(bytes).toString('base64'),
+        isPdf: false,
+        pageIndex: null,
+        hint: typeof hintRaw === 'string' && hintRaw ? hintRaw : undefined,
+        manualMarkers,
+        idempotencyKey:
+          typeof keyRaw === 'string' && keyRaw.length >= 8 && keyRaw.length <= 128
+            ? keyRaw
+            : null,
+      },
+    };
+  }
+
+  // legacy JSON body (base64 data-URL or bare base64)
+  const body = await readJsonBody(req);
+  const rawImage = typeof body?.imageBase64 === 'string' ? body.imageBase64 : '';
+  const rawPdf = typeof body?.pdfBase64 === 'string' ? body.pdfBase64 : '';
+  if (!rawImage && !rawPdf) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'صورة الورقة أو ملف PDF مطلوب (الحقل image أو imageBase64/pdfBase64)',
+    };
+  }
+  const isPdf = !rawImage && !!rawPdf;
+  const sourceB64 = isPdf ? rawPdf : rawImage;
+  const { base64 } = stripDataUrl(sourceB64);
+  if (!isPdf && base64.length / 4 * 3 > maxImageBytes) {
+    return {
+      ok: false,
+      status: 413,
+      error: `حجم الصورة كبير جدًا (الحد ${Math.round(maxImageBytes / 1024 / 1024)} ميجابايت)`,
+    };
+  }
+  return {
+    ok: true,
+    input: {
+      base64,
+      isPdf,
+      pageIndex: isPdf ? Math.max(0, Math.min(2000, Number(body?.pageIndex) || 0)) : null,
+      hint: typeof body?.examVersionIdHint === 'string' ? body.examVersionIdHint : undefined,
+      manualMarkers: parseManualMarkers(body?.manualMarkers),
+      idempotencyKey:
+        typeof body?.idempotencyKey === 'string' &&
+        body.idempotencyKey.length >= 8 &&
+        body.idempotencyKey.length <= 128
+          ? body.idempotencyKey
+          : null,
+    },
+  };
+}
+
 export async function POST(req: Request) {
   try {
     const g = await requireSession('teacher', req);
     if ('error' in g) return g.error;
-    if (!rateLimit(`scan:${g.session.id}`, 60, 60_000)) {
+    if (!rateLimit(`scan:${g.session.uid}`, 60, 60_000)) {
       return NextResponse.json(
         { error: 'عدد كبير من عمليات المسح — انتظر لحظة ثم أعد المحاولة' },
         { status: 429 }
       );
     }
-    const body = await readJsonBody(req);
-    const rawImage = typeof body?.imageBase64 === 'string' ? body.imageBase64 : '';
-    const rawPdf = typeof body?.pdfBase64 === 'string' ? body.pdfBase64 : '';
-    if (!rawImage && !rawPdf) {
-      return NextResponse.json(
-        { error: 'صورة الورقة أو ملف PDF مطلوب (imageBase64 أو pdfBase64)' },
-        { status: 400 }
-      );
+    const input = await readScanInput(req);
+    if (!input.ok) {
+      return NextResponse.json({ error: input.error }, { status: input.status });
     }
-    const isPdf = !rawImage && !!rawPdf;
-    const sourceB64 = isPdf ? rawPdf : rawImage;
-    const { base64: sourceBase64 } = stripDataUrl(sourceB64);
+    const sourceBase64 = input.input.base64;
     const imageHash = createHash('sha256').update(sourceBase64).digest('hex');
-    const pageIndex = isPdf
-      ? Math.max(0, Math.min(2000, Number(body?.pageIndex) || 0))
-      : null;
-    const idempotencyKey =
-      typeof body?.idempotencyKey === 'string' &&
-      body.idempotencyKey.length >= 8 &&
-      body.idempotencyKey.length <= 128
-        ? body.idempotencyKey
-        : null;
+    const isPdf = input.input.isPdf;
+    const pageIndex = input.input.pageIndex;
+    const idempotencyKey = input.input.idempotencyKey;
     // idempotent retry: same bytes already finalized → return that scan
     if (idempotencyKey) {
       const existing = await db.scan.findUnique({ where: { idempotencyKey } });
@@ -175,8 +278,8 @@ export async function POST(req: Request) {
         });
       }
     }
-    const hint = typeof body?.examVersionIdHint === 'string' ? body.examVersionIdHint : undefined;
-    const manualMarkers = parseManualMarkers(body?.manualMarkers);
+    const hint = input.input.hint;
+    const manualMarkers = input.input.manualMarkers;
 
     // ---- 1. calibration thresholds (seeds the default profile on first call)
     const profile = await ensureActiveCalibration();
