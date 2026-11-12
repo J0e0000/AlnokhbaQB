@@ -20,6 +20,7 @@ import { Slider } from '@/components/ui/slider';
 import ScanStudio from '@/components/qb/ScanStudio';
 import OcrImport from '@/components/qb/OcrImport';
 import OnlinePane from '@/components/qb/OnlinePane';
+import ReviewQueue from '@/components/qb/ReviewQueue';
 import AssignmentsPane from '@/components/qb/AssignmentsPane';
 import Designer from '@/components/qb/designer/Designer';
 import LoginView from '@/components/qb/LoginView';
@@ -31,7 +32,7 @@ import AdminPane from '@/components/qb/AdminPane';
 import type { QBQuestion } from '@/lib/qb/types';
 import { keyFingerprint } from '@/lib/qb/key-fingerprint';
 import {
-  Activity, Archive, BookOpen, ClipboardList, Eraser, Eye, FileDown, FileInput, FileStack, Files, GraduationCap, KeyRound, LayoutDashboard,
+  Activity, Archive, BookOpen, ClipboardCheck, ClipboardList, Eraser, Eye, FileDown, FileInput, FileStack, Files, GraduationCap, KeyRound, LayoutDashboard,
   Languages, Loader2, LogOut, Moon, PenTool, PencilRuler, Plus, RefreshCcw, ScanLine, ScanText, Settings2, ShieldCheck, Sparkles, Sun, Users,
 } from 'lucide-react';
 
@@ -53,7 +54,7 @@ interface ExamDetail {
   versions: { id: string; version: number; publishedAt: string; omrTemplate?: boolean; answerKeyCount?: number; answerKeyHash?: string }[];
 }
 
-type View = 'dashboard' | 'bank' | 'design' | 'preview' | 'omr' | 'scan' | 'ocr' | 'extract' | 'pdf' | 'whiteboard' | 'online' | 'assignments' | 'students' | 'admin' | 'settings';
+type View = 'dashboard' | 'bank' | 'design' | 'preview' | 'omr' | 'scan' | 'review' | 'ocr' | 'extract' | 'pdf' | 'whiteboard' | 'online' | 'assignments' | 'students' | 'admin' | 'settings';
 
 interface SessionUserInfo {
   id: string;
@@ -259,6 +260,7 @@ export default function Home() {
             <NavBtn active={view === 'preview'} onClick={() => selectedExamId && setView('preview')} disabled={!selectedExamId} icon={<Eye className="h-4 w-4" />}>{L('معاينة', 'Preview')}</NavBtn>
             <NavBtn active={view === 'omr'} onClick={() => selectedExamId && setView('omr')} disabled={!selectedExamId} icon={<Files className="h-4 w-4" />}>{L('أوراق OMR', 'OMR')}</NavBtn>
             <NavBtn active={view === 'scan'} onClick={() => setView('scan')} icon={<ScanLine className="h-4 w-4" />}>{L('مسح وتصحيح', 'Scanning')}</NavBtn>
+            <NavBtn active={view === 'review'} onClick={() => setView('review')} icon={<ClipboardCheck className="h-4 w-4" />}>{L('قائمة المراجعة', 'Review')}</NavBtn>
             <NavBtn active={view === 'ocr'} onClick={() => setView('ocr')} icon={<FileInput className="h-4 w-4" />}>{L('استيراد OCR', 'OCR Import')}</NavBtn>
             <NavBtn active={view === 'pdf'} onClick={() => setView('pdf')} icon={<FileStack className="h-4 w-4" />}>{L('مساحة PDF', 'PDF Workspace')}</NavBtn>
             <NavBtn active={view === 'whiteboard'} onClick={() => setView('whiteboard')} icon={<PenTool className="h-4 w-4" />}>{L('السبورة', 'Whiteboard')}</NavBtn>
@@ -324,6 +326,7 @@ export default function Home() {
         {view === 'preview' && selectedExamId && <PreviewPane examId={selectedExamId} />}
         {view === 'omr' && selectedExamId && <OmrStudio examId={selectedExamId} />}
         {view === 'scan' && <ScanStudio onScanned={() => setReloadKey((k) => k + 1)} />}
+        {view === 'review' && <ReviewQueue />}
         {view === 'ocr' && <OcrImport onCreated={(examId) => { void refreshExams(); setSelectedExamId(examId); setView('design'); }} />}
         {view === 'pdf' && <PdfWorkspace onExtractPages={() => { setView('extract'); toast.info('انتقل إلى الاستخراج الذكي وارفع الملف لاستخراج الأسئلة'); }} />}
         {view === 'whiteboard' && <Whiteboard />}

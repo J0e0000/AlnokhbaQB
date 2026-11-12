@@ -281,6 +281,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
     return NextResponse.json({
       id: updated.id,
       status: updated.status,
+      reviewStatus: updated.reviewStatus,
+      studentCode: updated.studentCode,
+      studentId: updated.studentId,
       grade,
       overrides: cleanOverrides,
     });
