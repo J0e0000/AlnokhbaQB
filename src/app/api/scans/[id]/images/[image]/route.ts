@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { blobConfigured, blobPathname } from '@/lib/omr/scan-store';
 import { scansDir } from '@/lib/omr/scans-dir';
 import { requireSession } from '../../../../_lib/auth-guard';
 import { serverError } from '../../../../_lib/shared';
@@ -58,6 +59,26 @@ export async function GET(req: Request, ctx: Ctx) {
       return NextResponse.json({ error: 'مسار غير صالح' }, { status: 400 });
     }
     if (!existsSync(resolved)) {
+      // Local/self-hosted: the file should exist on disk. Vercel: disk copies
+      // die with the serverless instance — stream the canonical copy from
+      // Vercel Blob (uploaded by the scan writers) behind this authed route.
+      if (blobConfigured()) {
+        try {
+          const { get } = await import('@vercel/blob');
+          const blob = await get(blobPathname(id, image as 'debug' | 'corrected'), { access: 'public' });
+          if (blob) {
+            return new NextResponse(blob.stream, {
+              status: 200,
+              headers: {
+                'Content-Type': blob.blob.contentType || 'image/jpeg',
+                'Cache-Control': 'private, max-age=3600',
+              },
+            });
+          }
+        } catch {
+          /* not in Blob either → fall through to 404 */
+        }
+      }
       return NextResponse.json({ error: 'الصورة غير موجودة' }, { status: 404 });
     }
 

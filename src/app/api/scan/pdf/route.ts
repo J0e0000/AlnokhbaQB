@@ -20,7 +20,6 @@
 // Auth/tenant: same as /api/scan (teacher+; scans scoped via exam org).
 
 import { createHash, randomUUID } from 'crypto';
-import { mkdirSync, writeFileSync } from 'fs';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { audit } from '@/lib/auth';
@@ -42,7 +41,7 @@ import {
 } from '../../_lib/shared';
 import { requireSession } from '../../_lib/auth-guard';
 import { loadVersion } from '../../_lib/version';
-import { scanRelPath, scansDir } from '@/lib/omr/scans-dir';
+import { persistScanImage } from '@/lib/omr/scan-store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -66,15 +65,9 @@ function normalizeStudentCode(raw: unknown): string | null {
   return digits;
 }
 
-function saveScanImage(base64: string, scanId: string, kind: 'debug' | 'corrected'): string | null {
-  try {
-    const dir = scansDir();
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(`${dir}/${scanId}_${kind}.jpg`, Buffer.from(base64, 'base64'));
-    return scanRelPath(scanId, kind);
-  } catch {
-    return null;
-  }
+/** Persist via disk + Vercel Blob (canonical on serverless) — see scan-store.ts. */
+function saveScanImage(base64: string, scanId: string, kind: 'debug' | 'corrected'): Promise<string | null> {
+  return persistScanImage(scanId, kind, base64);
 }
 
 export async function POST(req: Request) {
@@ -342,10 +335,10 @@ export async function POST(req: Request) {
           },
         });
         const debugPath = res.debugImage
-          ? saveScanImage(stripDataUrl(res.debugImage).base64, scan.id, 'debug')
+          ? await saveScanImage(stripDataUrl(res.debugImage).base64, scan.id, 'debug')
           : null;
         const correctedPath = res.correctedImage
-          ? saveScanImage(stripDataUrl(res.correctedImage).base64, scan.id, 'corrected')
+          ? await saveScanImage(stripDataUrl(res.correctedImage).base64, scan.id, 'corrected')
           : null;
         if (debugPath || correctedPath) {
           await db.scan.update({

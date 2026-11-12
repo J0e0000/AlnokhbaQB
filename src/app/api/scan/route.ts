@@ -17,7 +17,6 @@
 // Engine down → clean 503. Unknown QR → 404. Template mismatch → 409.
 
 import { createHash } from 'crypto';
-import { mkdirSync, writeFileSync } from 'fs';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { audit } from '@/lib/auth';
@@ -41,7 +40,7 @@ import {
   stripDataUrl,
   thresholdsFromConfig,
 } from '../_lib/shared';
-import { scanRelPath, scansDir } from '@/lib/omr/scans-dir';
+import { persistScanImage } from '@/lib/omr/scan-store';
 import { requireSession } from '../_lib/auth-guard';
 import { loadVersion } from '../_lib/version';
 
@@ -51,15 +50,9 @@ export const dynamic = 'force-dynamic';
 // each is CPU-bound OpenCV. 60s covers the slowest serverless CPU class.
 export const maxDuration = 60;
 
-function decodeImage(base64: string, scanId: string, kind: 'debug' | 'corrected'): string | null {
-  try {
-    const dir = scansDir(); // /tmp on Vercel (read-only FS), db/scans locally
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(`${dir}/${scanId}_${kind}.jpg`, Buffer.from(base64, 'base64'));
-    return scanRelPath(scanId, kind);
-  } catch {
-    return null;
-  }
+/** Persist via disk + Vercel Blob (canonical on serverless) — see scan-store.ts. */
+function decodeImage(base64: string, scanId: string, kind: 'debug' | 'corrected'): Promise<string | null> {
+  return persistScanImage(scanId, kind, base64);
 }
 
 function normalizeStudentCode(raw: unknown): string | null {
@@ -372,10 +365,10 @@ export async function POST(req: Request) {
         },
       });
       const debugPath = result.debugImage
-        ? decodeImage(stripDataUrl(result.debugImage).base64, scan.id, 'debug')
+        ? await decodeImage(stripDataUrl(result.debugImage).base64, scan.id, 'debug')
         : null;
       const correctedPath = result.correctedImage
-        ? decodeImage(stripDataUrl(result.correctedImage).base64, scan.id, 'corrected')
+        ? await decodeImage(stripDataUrl(result.correctedImage).base64, scan.id, 'corrected')
         : null;
       return NextResponse.json(
         {
@@ -474,10 +467,10 @@ export async function POST(req: Request) {
     });
 
     const debugPath = result.debugImage
-      ? decodeImage(stripDataUrl(result.debugImage).base64, scan.id, 'debug')
+      ? await decodeImage(stripDataUrl(result.debugImage).base64, scan.id, 'debug')
       : null;
     const correctedPath = result.correctedImage
-      ? decodeImage(stripDataUrl(result.correctedImage).base64, scan.id, 'corrected')
+      ? await decodeImage(stripDataUrl(result.correctedImage).base64, scan.id, 'corrected')
       : null;
 
     const diagnostics = {
