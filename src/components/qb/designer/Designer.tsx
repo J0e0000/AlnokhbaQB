@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -371,6 +371,7 @@ function QuestionBankDialog({ open, onOpenChange }: { open: boolean; onOpenChang
       <DialogContent className="max-w-2xl" dir="rtl">
         <DialogHeader>
           <DialogTitle className="text-right">بنك الأسئلة ({doc.questions.length})</DialogTitle>
+          <DialogDescription className="text-right">أسئلة هذا الامتحان — أضفها إلى الصفحات أو عدّلها.</DialogDescription>
         </DialogHeader>
         <div className="max-h-[50vh] space-y-2 overflow-y-auto pl-1">
           {doc.questions.map((q) => (

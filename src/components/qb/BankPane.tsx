@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -296,7 +296,10 @@ export default function BankPane({ onExamCreated }: { onExamCreated?: (examId: s
       {/* editor dialog */}
       <Dialog open={editing !== null} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto" dir="rtl">
-          <DialogHeader><DialogTitle className="text-right">{editing?.id ? 'تعديل سؤال' : 'سؤال جديد'}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="text-right">{editing?.id ? 'تعديل سؤال' : 'سؤال جديد'}</DialogTitle>
+            <DialogDescription className="text-right">املأ نص السؤال وخياراته وحدد الإجابة الصحيحة والدرجة.</DialogDescription>
+          </DialogHeader>
           {editing && (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -453,6 +456,7 @@ function AiGenerateDialog({
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md" dir="rtl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base"><Sparkles className="h-5 w-5 text-violet-600" /> توليد أسئلة بالذكاء الاصطناعي</DialogTitle>
+          <DialogDescription className="text-right">حدد المادة والصف ونوع الأسئلة ليقوم الذكاء الاصطناعي بإنشائها للمراجعة.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1">

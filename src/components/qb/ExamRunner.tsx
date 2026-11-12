@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
@@ -324,7 +324,10 @@ export default function ExamRunner({ attempt, onExit }: { attempt: StartedAttemp
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent className="max-w-sm" dir="rtl">
-          <DialogHeader><DialogTitle className="text-right">تأكيد التسليم</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="text-right">تأكيد التسليم</DialogTitle>
+            <DialogDescription className="text-right">راجع عدد الأسئلة المُجابة قبل تسليم محاولتك نهائيًا.</DialogDescription>
+          </DialogHeader>
           <p className="text-sm text-slate-600">
             أجبت على {answeredCount} من {attempt.questions.length} سؤال.
             {answeredCount < attempt.questions.length && ' الأسئلة غير المجابة ستُحسب فارغة.'}

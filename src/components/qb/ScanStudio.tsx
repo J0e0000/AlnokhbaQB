@@ -20,7 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
   Camera,
@@ -1248,6 +1248,7 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
                   <DialogContent className="max-w-3xl" dir="rtl">
                     <DialogHeader>
                       <DialogTitle className="text-right">تشخيص المسح</DialogTitle>
+                      <DialogDescription className="text-right">تفاصيل تقنية لعملية المسح: رمز QR، التصحيح الهندسي، ونسب تظليل الفقاعات.</DialogDescription>
                     </DialogHeader>
                     <ScanDiagnostics result={result} />
                   </DialogContent>

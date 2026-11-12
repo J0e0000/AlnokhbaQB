@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Loader2, Search, FolderDown } from 'lucide-react';
 import { useDesignerStore } from '@/lib/qb/designer-store';
@@ -121,6 +121,7 @@ function BankImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
       <DialogContent className="max-h-[85vh] max-w-xl overflow-y-auto" dir="rtl">
         <DialogHeader>
           <DialogTitle className="text-right">استيراد من بنك الأسئلة</DialogTitle>
+          <DialogDescription className="text-right">ابحث في بنك الأسئلة واختر الأسئلة لاستيرادها إلى الامتحان.</DialogDescription>
         </DialogHeader>
         <div className="relative">
           <Search className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />

@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Building2, KeyRound, Loader2, Plus, RefreshCw, ScrollText, ShieldCheck, UserCog, Users,
@@ -313,6 +313,7 @@ export default function AdminPane({ sessionRole, sessionOrgId }: { sessionRole: 
         <DialogContent className="max-w-md" dir="rtl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><UserCog className="h-4 w-4 text-emerald-600" /> إضافة مستخدم</DialogTitle>
+            <DialogDescription className="text-right">أنشئ حسابًا جديدًا وحدد دوره وصلاحياته داخل المؤسسة.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1">

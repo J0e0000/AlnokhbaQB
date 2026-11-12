@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -453,7 +453,10 @@ function Dashboard({ exams, health, onOpen, onChanged }: { exams: ExamRow[]; hea
             <Button className="btn-primary-grad gap-1 border-0 text-white"><Plus className="h-4 w-4" /> امتحان جديد</Button>
           </DialogTrigger>
           <DialogContent className="max-w-md" dir="rtl">
-            <DialogHeader><DialogTitle className="text-right">إنشاء امتحان</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle className="text-right">إنشاء امتحان</DialogTitle>
+              <DialogDescription className="text-right">أنشئ امتحانًا جديدًا بعنوان ومادة وصف دراسي، ثم افتح المصمم لإضافة الأسئلة.</DialogDescription>
+            </DialogHeader>
             <div className="space-y-3">
               <div><Label>عنوان الامتحان</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="امتحان الرياضيات — أكتوبر" /></div>
               <div><Label>المادة</Label><Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="رياضيات" /></div>

@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -509,6 +509,7 @@ function CreateAssignmentDialog({
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base"><ClipboardList className="h-5 w-5 text-emerald-600" /> واجب جديد</DialogTitle>
+          <DialogDescription className="text-right">حدد الامتحان والطلاب وموعد الإغلاق لإنشاء واجب جديد.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1">
@@ -646,6 +647,7 @@ function AssignmentDetailDialog({
               ? <Badge className="bg-emerald-100 text-emerald-700">مفتوح</Badge>
               : <Badge className="bg-red-100 text-red-700">مغلق</Badge>}
           </DialogTitle>
+          <DialogDescription>تفاصيل الواجب وحالة تسليم الطلاب وإدارة الإغلاق.</DialogDescription>
         </DialogHeader>
 
         {loading ? (
