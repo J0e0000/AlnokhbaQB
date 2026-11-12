@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from engine.pipeline import ocr, process  # noqa: E402
 
-PORT = 3032
+PORT = int(os.environ.get("OMR_ENGINE_PORT", "3032"))  # container platforms inject $PORT
 HOST = os.environ.get("OMR_ENGINE_HOST", "127.0.0.1")  # 0.0.0.0 in Docker
 MAX_BODY = 40 * 1024 * 1024
 SHARED_SECRET = os.environ.get("OMR_SHARED_SECRET", "").strip()

@@ -44,9 +44,15 @@ export async function POST(req: Request) {
         error:
           lang === 'ara'
             ? 'فشل التعرف الضوئي باللغة العربية في المحرك وفي النموذج البديل'
-            : result.error || 'فشل التعرف الضوئي في المحرك',
+            : result.stage === 'engineError' || result.stage === 'engineEmpty'
+              ? 'فشل التعرف الضوئي — تعذر الوصول إلى محرك OCR من هذه الاستضافة'
+              : result.error || 'فشل التعرف الضوئي في المحرك',
         stage: result.stage ?? 'engineError',
         details: result.error,
+        hint:
+          result.stage === 'engineError' || result.stage === 'engineEmpty'
+            ? 'تعذر الوصول إلى محرك OCR من هذه الاستضافة — اضبط OMR_ENGINE_URL على مضيف يحتوي tesseract (انظر mini-services/omr-engine/Dockerfile) أو استخدم استضافة تدعم نموذج الرؤية.'
+            : undefined,
         needsReview: true,
       },
       result.stage === 'noProcessor' || result.stage === 'engineUnreachable' ? { status: 503 } : { status: 502 }

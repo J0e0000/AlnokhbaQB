@@ -1,0 +1,6 @@
+# ALNOKHBA QB — OMR engine Python deps (container).
+# Same pin rationale as omr-service/requirements.txt: 4.10.0.84 wheels have
+# NO external native deps (the 4.13 wheels link libxcb) and produce
+# byte-identical engine results (verified against tests/omr-fixtures).
+opencv-python-headless==4.10.0.84
+numpy==2.1.3
