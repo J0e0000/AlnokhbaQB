@@ -61,6 +61,10 @@ export const vlmProcessor: DocumentProcessor = {
   langs: ['ara', 'eng'],
   async process({ base64, mime }) {
     try {
+      // The SDK reads a .z-ai-config FILE — absent on Vercel unless we
+      // materialize it from ZAI_CONFIG_JSON first (see src/lib/zai-config.ts).
+      const { ensureZaiConfig } = await import('@/lib/zai-config');
+      if (!ensureZaiConfig()) return null;
       const mod = (await import('z-ai-web-dev-sdk')) as unknown as {
         default: {
           create: () => Promise<{
@@ -90,7 +94,10 @@ export const vlmProcessor: DocumentProcessor = {
       const text = completion.choices?.[0]?.message?.content;
       if (!text || !text.trim()) return null;
       return { engine: 'vlm', text: text.trim(), confidence: null };
-    } catch {
+    } catch (err) {
+      // surface the real reason in server logs — silent nulls made Vercel
+      // OCR failures indistinguishable from genuinely-empty model output
+      console.warn(`[ocr] vlm processor failed: ${err instanceof Error ? err.message : String(err)}`);
       return null;
     }
   },
