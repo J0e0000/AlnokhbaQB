@@ -40,12 +40,80 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
 
   const extract = async (file: File) => {
     if (file.size > 20 * 1024 * 1024) {
-      toast.error('حجم الصورة كبير جدًا (الحد 20 ميجابايت)');
+      toast.error('حجم الملف كبير جدًا (الحد 20 ميجابايت)');
       return;
     }
     setOcrBusy(true);
     setEngine(null);
     try {
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      if (isPdf) {
+        const pdfjs = await import('pdfjs-dist');
+        // Use the static worker asset already shipped in /public (same
+        // convention as PdfWorkspace / ExtractionStudio in this codebase).
+        pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+        const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+        if (pdf.numPages > 30) throw new Error('الحد الأقصى لمعالجة الملف هو 30 صفحة');
+
+        const pageTexts: string[] = [];
+        let usedOcr = false;
+        for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+          const page = await pdf.getPage(pageNumber);
+          const content = await page.getTextContent();
+          const embeddedText = content.items
+            .map((item) => {
+              if (!('str' in item)) return '';
+              return `${item.str}${item.hasEOL ? '\n' : ' '}`;
+            })
+            .join('')
+            .trim();
+
+          if (embeddedText.length >= 20) {
+            pageTexts.push(embeddedText);
+            await page.cleanup();
+            continue;
+          }
+
+          // No useful text layer: render this scanned page and OCR it.
+          usedOcr = true;
+          const baseViewport = page.getViewport({ scale: 1 });
+          const scale = Math.min(2, 1800 / baseViewport.width);
+          const viewport = page.getViewport({ scale });
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.ceil(viewport.width);
+          canvas.height = Math.ceil(viewport.height);
+          const context = canvas.getContext('2d');
+          if (!context) throw new Error('تعذر تجهيز صفحة PDF للتحليل');
+          await page.render({ canvas, canvasContext: context, viewport }).promise;
+          const pageImage = canvas.toDataURL('image/jpeg', 0.9);
+          if (pageNumber === 1) setImagePreview(pageImage);
+          canvas.width = 0;
+          canvas.height = 0;
+          const res = await fetch('/api/ocr', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageBase64: pageImage, lang }),
+          });
+          const d = (await res.json()) as {
+            ok?: boolean;
+            text?: string;
+            error?: string;
+            details?: string;
+            engine?: string;
+          };
+          if (!res.ok || !d.ok) {
+            throw new Error(d.details ? `${d.error ?? 'فشل تحليل الصفحة'} — ${d.details}` : d.error ?? `فشل تحليل الصفحة ${pageNumber}`);
+          }
+          pageTexts.push(d.text ?? '');
+          await page.cleanup();
+        }
+        const extracted = pageTexts.filter(Boolean).join('\n\n').trim();
+        setText(extracted);
+        setEngine(usedOcr ? 'PDF + OCR' : 'PDF text');
+        toast.success(usedOcr ? 'تم استخراج نص صفحات PDF عبر OCR' : 'تم استخراج النص المضمّن في PDF');
+        return;
+      }
+
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const r = new FileReader();
         r.onload = () => resolve(r.result as string);
@@ -66,8 +134,8 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
       setText(d.text ?? '');
       setEngine(d.engine ?? null);
       toast.success(d.engine === 'vlm' ? 'تم الاستخراج باللغة العربية (نموذج رؤية)' : 'تم استخراج النص (Tesseract)');
-    } catch {
-      toast.error('تعذر الاتصال بخدمة OCR');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'تعذر الاتصال بخدمة OCR');
     } finally {
       setOcrBusy(false);
     }
@@ -132,8 +200,8 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
             <Select value={lang} onValueChange={(v) => setLang(v === 'eng' ? 'eng' : 'ara')}>
               <SelectTrigger className="h-8 w-56 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="ara">العربية (نموذج رؤية ذكي)</SelectItem>
-                <SelectItem value="eng">English (Tesseract)</SelectItem>
+                <SelectItem value="ara">العربية (Tesseract — مراجعة مطلوبة)</SelectItem>
+                <SelectItem value="eng">English (Tesseract — review required)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -150,7 +218,7 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
             <input
               ref={inputRef}
               type="file"
-              accept="image/*"
+              accept="image/*,.pdf,application/pdf"
               capture="environment"
               className="hidden"
               onChange={(e) => {
@@ -159,8 +227,8 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
               }}
             />
             {ocrBusy ? <Loader2 className="h-7 w-7 animate-spin text-emerald-600" /> : <ImageIcon className="h-7 w-7 text-emerald-600" />}
-            <div className="text-sm font-medium text-emerald-800">التقط صورة ورقة الأسئلة أو أفلتها هنا</div>
-            <div className="text-[11px] text-slate-500">يُستخرج النص كما هو — لا يُستخدم OCR أبدًا في قراءة فقاعات OMR</div>
+            <div className="text-sm font-medium text-emerald-800">اختر صورة أو ملف PDF لورقة الأسئلة</div>
+            <div className="text-[11px] text-slate-500">يُقرأ النص المضمّن في PDF، وتُحوّل الصفحات المصوّرة تلقائيًا إلى OCR</div>
           </div>
           {imagePreview && !ocrBusy && (
             <img src={imagePreview} alt="الصورة المرفوعة" className="max-h-40 w-full rounded-lg border object-contain" />
