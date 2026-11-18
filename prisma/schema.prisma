@@ -329,3 +329,12 @@ model CalibrationProfile {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
+
+// ---- FormScan (general-purpose form/sheet scanner) saved templates ----
+model FormTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  dataJson  String // full FormTemplate JSON (areas, markers, key, weights...)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
