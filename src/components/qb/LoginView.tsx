@@ -1,7 +1,7 @@
 'use client';
 
 // ============================================================
-// ALNOKHBA QB — Login / Register view ("Midnight Luxe" identity)
+// ALNOKHBA QB — Login / Register view ("Amethyst Royale" identity)
 // Split hero: brand showcase + glass auth card. Arabic-first.
 // ============================================================
 
@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
-  ArrowRight, BookOpen, Files, Info, Loader2, LogIn, PenTool, ScanLine, ShieldCheck, Sparkles, UserPlus,
+  ArrowRight, BookOpen, Files, Loader2, LogIn, PenTool, ScanLine, ShieldCheck, Sparkles, UserPlus,
 } from 'lucide-react';
 
 interface Props {
@@ -89,18 +89,18 @@ export default function LoginView({ onLoggedIn, onBack }: Props) {
         {/* ---------- Brand panel ---------- */}
         <section className="animate-fade-up hidden flex-col gap-7 lg:flex">
           <div className="flex items-center gap-4">
-            <div className="logo-glow flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 font-black text-white" style={{ fontFamily: 'Amiri, serif' }}>
+            <div className="logo-glow flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-700 font-black text-white" style={{ fontFamily: 'Amiri, serif' }}>
               <span className="text-3xl leading-none">ن</span>
             </div>
             <div>
               <h1 className="text-3xl font-extrabold leading-tight" style={{ fontFamily: 'Amiri, serif' }}>
                 منصة <span className="text-gradient">النخبة QB</span>
               </h1>
-              <p className="mt-0.5 text-sm text-slate-500">بنك أسئلة • امتحانات PDF و OMR • تصحيح آلي</p>
+              <p className="mt-0.5 text-sm text-muted-foreground">بنك أسئلة • امتحانات PDF و OMR • تصحيح آلي</p>
             </div>
           </div>
 
-          <p className="max-w-md text-[15px] leading-8 text-slate-500">
+          <p className="max-w-md text-[15px] leading-8 text-muted-foreground">
             نظام متكامل واحد يغذي كل شيء: صمّم الامتحان، ولّد أوراق OMR بنسخ متعددة، امسح أوراق الطلاب بالكاميرا،
             واحصل على الدرجات فورًا — بمنحنى ثقة يضع علامة على كل إجابة ملتبسة للمراجعة.
           </p>
@@ -108,17 +108,17 @@ export default function LoginView({ onLoggedIn, onBack }: Props) {
           <ul className="grid max-w-md gap-3">
             {FEATURES.map((f) => (
               <li key={f.title} className="glass card-hover flex items-start gap-3 rounded-xl p-3">
-                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-600/15 text-emerald-600">{f.icon}</span>
+                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-300">{f.icon}</span>
                 <span>
-                  <span className="block text-sm font-bold text-slate-700">{f.title}</span>
-                  <span className="block text-xs text-slate-500">{f.desc}</span>
+                  <span className="block text-sm font-bold text-foreground">{f.title}</span>
+                  <span className="block text-xs text-muted-foreground">{f.desc}</span>
                 </span>
               </li>
             ))}
           </ul>
 
-          <div className="flex max-w-md items-center gap-2 text-[11px] text-slate-400">
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+          <div className="flex max-w-md items-center gap-2 text-[11px] text-muted-foreground">
+            <ShieldCheck className="h-3.5 w-3.5 text-violet-500" />
             جلسات مشفّرة (JWT) • عزل بيانات كل مؤسسة • سجل تدقيق كامل
           </div>
         </section>
@@ -128,24 +128,24 @@ export default function LoginView({ onLoggedIn, onBack }: Props) {
           {onBack && (
             <button
               onClick={onBack}
-              className="mb-3 flex items-center gap-1.5 text-xs font-medium text-slate-500 transition hover:text-emerald-600"
+              className="mb-3 flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition hover:text-primary"
             >
               <ArrowRight className="h-3.5 w-3.5" /> العودة إلى صفحة التعريف
             </button>
           )}
           {/* compact brand for mobile */}
           <div className="mb-5 flex flex-col items-center gap-2 text-center lg:hidden">
-            <div className="logo-glow flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 font-black text-white brand-serif">
+            <div className="logo-glow flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-700 font-black text-white brand-serif">
               <span className="text-2xl leading-none">ن</span>
             </div>
             <h1 className="brand-serif text-lg font-extrabold">
               منصة <span className="text-gradient">النخبة QB</span>
             </h1>
-            <p className="text-xs text-slate-500">بنك أسئلة • امتحانات PDF و OMR • تصحيح آلي</p>
+            <p className="text-xs text-muted-foreground">بنك أسئلة • امتحانات PDF و OMR • تصحيح آلي</p>
           </div>
 
           <div className="glass animate-pop-in rounded-2xl p-5 shadow-2xl shadow-black/10 sm:p-6">
-            <div className="mb-4 flex items-center gap-2 text-emerald-600">
+            <div className="mb-4 flex items-center gap-2 text-primary">
               <Sparkles className="h-4 w-4" />
               <span className="text-xs font-bold">حلقة الوصول إلى مساحة العمل</span>
             </div>
@@ -173,15 +173,6 @@ export default function LoginView({ onLoggedIn, onBack }: Props) {
                 <Button className="btn-primary-grad w-full border-0 text-white" disabled={busy || !email.trim() || !password} onClick={() => void login()}>
                   {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />} دخول
                 </Button>
-
-                <Alert className="border-emerald-600/25 bg-emerald-600/10">
-                  <Info className="h-4 w-4 text-emerald-600" />
-                  <AlertDescription className="text-[11px] leading-relaxed text-emerald-700 dark:text-emerald-800">
-                    <div className="font-bold">حسابات تجريبية جاهزة:</div>
-                    مدير النظام: <span dir="ltr" className="font-mono">admin@alnokhba.qb / Admin@2025</span><br />
-                    معلم: <span dir="ltr" className="font-mono">teacher@alnokhba.qb / Teacher@2025</span>
-                  </AlertDescription>
-                </Alert>
               </TabsContent>
 
               <TabsContent value="register" className="space-y-3">
@@ -204,12 +195,12 @@ export default function LoginView({ onLoggedIn, onBack }: Props) {
                 <Button className="btn-primary-grad w-full border-0 text-white" disabled={busy || !name.trim() || !orgName.trim() || !email.trim() || password.length < 8} onClick={() => void register()}>
                   {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} إنشاء مؤسسة وحساب مدير
                 </Button>
-                <p className="text-center text-[11px] text-slate-400">سيصبح حسابك مدير المؤسسة (org_admin) ويكون بنك الأسئلة معزولًا تمامًا لمؤسستك.</p>
+                <p className="text-center text-[11px] text-muted-foreground">سيصبح حسابك مدير المؤسسة (org_admin) ويكون بنك الأسئلة معزولًا تمامًا لمؤسستك.</p>
               </TabsContent>
             </Tabs>
           </div>
 
-          <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-[11px] text-slate-400 lg:hidden">
+          <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-[11px] text-muted-foreground lg:hidden">
             <ShieldCheck className="h-3.5 w-3.5" /> جلسات مشفّرة (JWT) • عزل بيانات كل مؤسسة • سجل تدقيق كامل
           </p>
         </section>

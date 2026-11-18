@@ -19,8 +19,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { EmptyState, PaneHeader } from '@/components/qb/pane-kit';
+import { AiGenerateDialog } from './AiGenerateDialog';
 import {
-  BookOpen, Download, FileJson, FileUp, FolderTree, Loader2, Pencil, Plus,
+  BookOpen, BrainCircuit, Download, FileJson, FileUp, FolderTree, Loader2, Pencil, Plus,
   Search, Trash2, TriangleAlert, X,
 } from 'lucide-react';
 
@@ -85,6 +86,7 @@ export default function BankManager() {
   const [saving, setSaving] = useState(false);
   const [dupes, setDupes] = useState<Array<{ id: string; prompt: string; subject: string | null }>>([]);
   const [taxonomyOpen, setTaxonomyOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -277,6 +279,7 @@ export default function BankManager() {
 
   return (
     <div className="space-y-4" dir="rtl">
+      <AiGenerateDialog open={aiOpen} onOpenChange={setAiOpen} onGenerated={() => void load()} />
       <PaneHeader
         icon={BookOpen}
         title="بنك الأسئلة"
@@ -284,6 +287,7 @@ export default function BankManager() {
         actions={
           <>
             <Badge variant="secondary">{total} سؤال</Badge>
+            <Button size="sm" className="btn-primary-grad gap-1 border-0 text-white" onClick={() => setAiOpen(true)}><BrainCircuit className="h-4 w-4" /> توليد بالذكاء الاصطناعي</Button>
             <Button size="sm" variant="outline" className="gap-1" onClick={() => setTaxonomyOpen(true)}><FolderTree className="h-4 w-4 text-emerald-600" /> التصنيفات</Button>
             <Button size="sm" variant="outline" className="gap-1" onClick={() => void downloadExport('json')}><FileJson className="h-4 w-4" /> تصدير JSON</Button>
             <Button size="sm" variant="outline" className="gap-1" onClick={() => void downloadExport('csv')}><Download className="h-4 w-4" /> تصدير CSV</Button>

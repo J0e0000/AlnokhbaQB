@@ -1,7 +1,7 @@
 'use client';
 
 // ============================================================
-// ALNOKHBA QB — Pane design-language kit ("Royal Emerald Luxe")
+// ALNOKHBA QB — Pane design-language kit ("Amethyst Royale")
 // Every feature pane opens with the same PaneHeader rhythm:
 // glass banner + glowing icon tile + Amiri title + gold caption.
 // EmptyState replaces ad-hoc "no data" cards. StatCard for KPIs.
@@ -39,7 +39,7 @@ export function PaneHeader({
       <div className="pointer-events-none absolute -bottom-24 start-1/2 h-48 w-48 rounded-full bg-amber-400/10 blur-3xl" />
       <div className="relative flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="logo-glow flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white">
+          <div className="logo-glow flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-700 text-white">
             <Icon className="h-5 w-5" />
           </div>
           <div className="min-w-0">

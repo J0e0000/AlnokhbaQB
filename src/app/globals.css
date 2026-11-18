@@ -6,8 +6,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: Cairo, Tajawal, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -45,81 +45,83 @@
 }
 
 /* ============================================================
-   ALNOKHBA QB — "Midnight Luxe" design system
-   Dark-first premium identity: deep charcoal-emerald surfaces,
-   gold accents for the elite brand, glassmorphism and aurora.
-   Light mode remains fully supported and refined.
+   ALNOKHBA QB — "AMETHYST ROYALE" design system
+   Dark-first luxury identity for the elite brand (النخبة):
+   deep plum-charcoal surfaces, royal amethyst primary,
+   champagne-gold accents, glassmorphism and soft aurora.
+   Light mode ("Royal Ivory") stays fully supported and refined.
+   Hue geometry:  violet ~300 · gold ~80 · red ~25 · neutral ~295
    ============================================================ */
 
 :root {
   --radius: 0.75rem;
-  --background: oklch(0.975 0.006 165);
-  --foreground: oklch(0.21 0.02 170);
+  --background: oklch(0.975 0.008 300);
+  --foreground: oklch(0.22 0.025 300);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.21 0.02 170);
+  --card-foreground: oklch(0.22 0.025 300);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0.02 170);
-  --primary: oklch(0.55 0.13 163);
-  --primary-foreground: oklch(0.985 0.01 165);
-  --secondary: oklch(0.955 0.008 165);
-  --secondary-foreground: oklch(0.3 0.02 170);
-  --muted: oklch(0.955 0.008 165);
-  --muted-foreground: oklch(0.52 0.015 170);
-  --accent: oklch(0.94 0.02 165);
-  --accent-foreground: oklch(0.3 0.03 170);
+  --popover-foreground: oklch(0.22 0.025 300);
+  --primary: oklch(0.52 0.16 300);
+  --primary-foreground: oklch(0.985 0.01 300);
+  --secondary: oklch(0.955 0.01 300);
+  --secondary-foreground: oklch(0.3 0.025 300);
+  --muted: oklch(0.955 0.01 300);
+  --muted-foreground: oklch(0.52 0.02 298);
+  --accent: oklch(0.94 0.025 300);
+  --accent-foreground: oklch(0.3 0.03 300);
   --destructive: oklch(0.55 0.21 27);
-  --border: oklch(0.9 0.01 165);
-  --input: oklch(0.9 0.01 165);
-  --ring: oklch(0.7 0.12 88);
-  --gold: oklch(0.72 0.13 88);
-  --chart-1: oklch(0.6 0.145 163);
-  --chart-2: oklch(0.72 0.13 88);
-  --chart-3: oklch(0.55 0.15 35);
-  --chart-4: oklch(0.65 0.1 200);
-  --chart-5: oklch(0.6 0.18 320);
-  --sidebar: oklch(0.985 0.005 165);
-  --sidebar-foreground: oklch(0.21 0.02 170);
-  --sidebar-primary: oklch(0.55 0.13 163);
-  --sidebar-primary-foreground: oklch(0.985 0.01 165);
-  --sidebar-accent: oklch(0.94 0.02 165);
-  --sidebar-accent-foreground: oklch(0.3 0.03 170);
-  --sidebar-border: oklch(0.9 0.01 165);
-  --sidebar-ring: oklch(0.7 0.12 88);
+  --border: oklch(0.9 0.015 300);
+  --input: oklch(0.9 0.015 300);
+  --ring: oklch(0.68 0.13 80);
+  --gold: oklch(0.7 0.12 80);
+  --chart-1: oklch(0.52 0.16 300);
+  --chart-2: oklch(0.7 0.12 80);
+  --chart-3: oklch(0.58 0.18 340);
+  --chart-4: oklch(0.62 0.1 195);
+  --chart-5: oklch(0.62 0.16 45);
+  --sidebar: oklch(0.985 0.006 300);
+  --sidebar-foreground: oklch(0.22 0.025 300);
+  --sidebar-primary: oklch(0.52 0.16 300);
+  --sidebar-primary-foreground: oklch(0.985 0.01 300);
+  --sidebar-accent: oklch(0.94 0.025 300);
+  --sidebar-accent-foreground: oklch(0.3 0.03 300);
+  --sidebar-border: oklch(0.9 0.015 300);
+  --sidebar-ring: oklch(0.68 0.13 80);
 }
 
 .dark {
-  --background: oklch(0.165 0.013 175);
-  --foreground: oklch(0.955 0.006 165);
-  --card: oklch(0.208 0.015 175);
-  --card-foreground: oklch(0.955 0.006 165);
-  --popover: oklch(0.225 0.015 175);
-  --popover-foreground: oklch(0.955 0.006 165);
-  --primary: oklch(0.72 0.145 163);
-  --primary-foreground: oklch(0.16 0.02 170);
-  --secondary: oklch(0.27 0.016 175);
-  --secondary-foreground: oklch(0.955 0.006 165);
-  --muted: oklch(0.27 0.016 175);
-  --muted-foreground: oklch(0.7 0.012 170);
-  --accent: oklch(0.29 0.02 175);
-  --accent-foreground: oklch(0.955 0.006 165);
+  --background: oklch(0.16 0.016 300);
+  --foreground: oklch(0.955 0.008 295);
+  --card: oklch(0.205 0.018 300);
+  --card-foreground: oklch(0.955 0.008 295);
+  --popover: oklch(0.222 0.018 300);
+  --popover-foreground: oklch(0.955 0.008 295);
+  --primary: oklch(0.72 0.15 300);
+  --primary-foreground: oklch(0.17 0.035 300);
+  --secondary: oklch(0.265 0.018 300);
+  --secondary-foreground: oklch(0.955 0.008 295);
+  --muted: oklch(0.265 0.018 300);
+  --muted-foreground: oklch(0.71 0.015 295);
+  --accent: oklch(0.29 0.022 300);
+  --accent-foreground: oklch(0.955 0.008 295);
   --destructive: oklch(0.68 0.19 25);
   --border: oklch(1 0 0 / 9%);
   --input: oklch(1 0 0 / 13%);
-  --ring: oklch(0.82 0.13 88);
-  --gold: oklch(0.82 0.135 88);
-  --chart-1: oklch(0.72 0.145 163);
-  --chart-2: oklch(0.82 0.13 88);
-  --chart-3: oklch(0.7 0.15 35);
-  --chart-4: oklch(0.72 0.1 200);
-  --chart-5: oklch(0.7 0.16 320);
-  --sidebar: oklch(0.208 0.015 175);
-  --sidebar-foreground: oklch(0.955 0.006 165);
-  --sidebar-primary: oklch(0.72 0.145 163);
-  --sidebar-primary-foreground: oklch(0.16 0.02 170);
-  --sidebar-accent: oklch(0.29 0.02 175);
-  --sidebar-accent-foreground: oklch(0.955 0.006 165);
+  --ring: oklch(0.85 0.12 80);
+  --gold: oklch(0.85 0.115 80);
+  --chart-1: oklch(0.72 0.15 300);
+  --chart-2: oklch(0.85 0.115 80);
+  --chart-3: oklch(0.72 0.16 340);
+  --chart-4: oklch(0.75 0.1 195);
+  --chart-5: oklch(0.74 0.14 45);
+  --sidebar: oklch(0.205 0.018 300);
+  --sidebar-foreground: oklch(0.955 0.008 295);
+  --sidebar-primary: oklch(0.72 0.15 300);
+  --sidebar-primary-foreground: oklch(0.17 0.035 300);
+  --sidebar-accent: oklch(0.29 0.022 300);
+  --sidebar-accent-foreground: oklch(0.955 0.008 295);
   --sidebar-border: oklch(1 0 0 / 9%);
-  --sidebar-ring: oklch(0.82 0.13 88);
+  --sidebar-ring: oklch(0.85 0.12 80);
 }
 
 @layer base {
@@ -136,8 +138,34 @@
     @apply bg-background text-foreground;
   }
   ::selection {
-    background: color-mix(in oklab, var(--gold) 32%, transparent);
+    background: color-mix(in oklab, var(--primary) 30%, transparent);
   }
+  h1, h2, h3 {
+    letter-spacing: -0.01em;
+  }
+}
+
+/* ============================================================
+   LEGACY PALETTE REDIRECT — emerald/teal → Amethyst violet
+   Older panes still use raw `emerald-*` utilities. Rather than
+   editing thousands of class names, the palette itself is
+   remapped to the royal-violet family (hue ~300) so every
+   shade + alpha variant follows the theme automatically.
+   ============================================================ */
+@theme {
+  --color-emerald-50: oklch(0.962 0.02 300);
+  --color-emerald-100: oklch(0.935 0.032 300);
+  --color-emerald-200: oklch(0.885 0.06 300);
+  --color-emerald-300: oklch(0.82 0.09 300);
+  --color-emerald-400: oklch(0.74 0.13 300);
+  --color-emerald-500: oklch(0.64 0.17 300);
+  --color-emerald-600: oklch(0.555 0.185 300);
+  --color-emerald-700: oklch(0.49 0.165 300);
+  --color-emerald-800: oklch(0.43 0.14 300);
+  --color-emerald-900: oklch(0.38 0.115 300);
+  --color-teal-50: oklch(0.962 0.02 305);
+  --color-teal-300: oklch(0.82 0.09 305);
+  --color-teal-700: oklch(0.49 0.165 305);
 }
 
 /* ---------- global thin scrollbar ---------- */
@@ -178,24 +206,24 @@
   height: 46rem;
   border-radius: 9999px;
   filter: blur(90px);
-  opacity: 0.55;
+  opacity: 0.5;
   will-change: transform;
 }
 .app-aurora::before {
   top: -18rem;
   inset-inline-start: -12rem;
-  background: radial-gradient(circle at center, oklch(0.6 0.14 163 / 0.5), transparent 65%);
+  background: radial-gradient(circle at center, oklch(0.55 0.18 300 / 0.5), transparent 65%);
   animation: aurora-a 26s ease-in-out infinite alternate;
 }
 .app-aurora::after {
   bottom: -20rem;
   inset-inline-end: -14rem;
-  background: radial-gradient(circle at center, oklch(0.75 0.13 88 / 0.34), transparent 65%);
+  background: radial-gradient(circle at center, oklch(0.8 0.12 80 / 0.3), transparent 65%);
   animation: aurora-b 32s ease-in-out infinite alternate;
 }
 html:not(.dark) .app-aurora::before,
 html:not(.dark) .app-aurora::after {
-  opacity: 0.3;
+  opacity: 0.26;
 }
 @keyframes aurora-a {
   0% { transform: translate3d(0, 0, 0) scale(1); }
@@ -225,31 +253,31 @@ html:not(.dark) .app-aurora::after {
   border: 1px solid var(--border);
 }
 .text-gradient {
-  background: linear-gradient(100deg, oklch(0.75 0.14 163) 15%, oklch(0.85 0.13 95) 85%);
+  background: linear-gradient(100deg, oklch(0.7 0.17 305) 10%, oklch(0.72 0.15 330) 45%, oklch(0.85 0.12 82) 90%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 html:not(.dark) .text-gradient {
-  background: linear-gradient(100deg, oklch(0.5 0.13 163) 15%, oklch(0.55 0.12 80) 85%);
+  background: linear-gradient(100deg, oklch(0.48 0.17 300) 10%, oklch(0.5 0.15 330) 45%, oklch(0.58 0.13 80) 90%);
   -webkit-background-clip: text;
   background-clip: text;
 }
 .logo-glow {
   box-shadow:
     0 0 0 1px oklch(1 0 0 / 18%) inset,
-    0 8px 28px -8px oklch(0.6 0.15 163 / 0.55),
-    0 4px 18px -6px oklch(0.8 0.14 88 / 0.4);
+    0 8px 28px -8px oklch(0.55 0.18 300 / 0.6),
+    0 4px 18px -6px oklch(0.82 0.12 80 / 0.4);
 }
 .btn-primary-grad {
-  background-image: linear-gradient(120deg, oklch(0.62 0.15 163), oklch(0.66 0.13 155));
-  box-shadow: 0 6px 20px -8px oklch(0.6 0.15 163 / 0.6);
+  background-image: linear-gradient(120deg, oklch(0.55 0.17 300), oklch(0.5 0.16 320));
+  box-shadow: 0 6px 20px -8px oklch(0.55 0.18 300 / 0.65);
 }
 .btn-primary-grad:hover {
-  filter: brightness(1.07);
+  filter: brightness(1.09);
 }
 html:not(.dark) .btn-primary-grad {
-  background-image: linear-gradient(120deg, oklch(0.5 0.13 163), oklch(0.54 0.12 155));
+  background-image: linear-gradient(120deg, oklch(0.5 0.16 300), oklch(0.46 0.15 320));
 }
 .card-hover {
   transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
@@ -277,7 +305,7 @@ html:not(.dark) .btn-primary-grad {
 /* Thin custom scrollbar for long OMR answer-key lists */
 .omr-key-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgb(16 185 129 / 0.45) transparent;
+  scrollbar-color: color-mix(in oklab, var(--primary) 45%, transparent) transparent;
 }
 .omr-key-scroll::-webkit-scrollbar {
   width: 8px;
@@ -286,20 +314,21 @@ html:not(.dark) .btn-primary-grad {
   background: transparent;
 }
 .omr-key-scroll::-webkit-scrollbar-thumb {
-  background-color: rgb(16 185 129 / 0.45);
+  background-color: color-mix(in oklab, var(--primary) 45%, transparent);
   border-radius: 8px;
 }
 .omr-key-scroll::-webkit-scrollbar-thumb:hover {
-  background-color: rgb(5 150 105 / 0.65);
+  background-color: color-mix(in oklab, var(--primary) 65%, transparent);
 }
 
 /* ============================================================
    DARK-MODE BRIDGE LAYER
    Most panes hardcode light utility colors (bg-white, text-slate-600,
    bg-emerald-50 …). This layer re-maps those exact utilities under
-   `html.dark` so the WHOLE app inherits the premium dark identity
+   `html.dark` so the WHOLE app inherits the Amethyst Royale identity
    without touching every component. Semantic tokens + inline styles
    (exam paper) are untouched — paper stays white like a real sheet.
+   Hue translations: emerald→violet(300) · slate→plum-grey(295)
    ============================================================ */
 html.dark .bg-white {
   background-color: var(--card);
@@ -314,18 +343,18 @@ html.dark .bg-white\/60 {
 }
 html.dark .bg-slate-50,
 html.dark .hover\:bg-slate-50:hover {
-  background-color: oklch(0.245 0.015 175);
+  background-color: oklch(0.245 0.017 300);
 }
 html.dark .bg-slate-100,
 html.dark .hover\:bg-slate-100:hover {
-  background-color: oklch(0.27 0.016 175);
+  background-color: oklch(0.27 0.018 300);
 }
 html.dark .bg-slate-200,
 html.dark .hover\:bg-slate-200:hover {
-  background-color: oklch(0.32 0.017 175);
+  background-color: oklch(0.32 0.02 300);
 }
 html.dark .hover\:bg-slate-300:hover {
-  background-color: oklch(0.37 0.018 175);
+  background-color: oklch(0.37 0.02 300);
 }
 html.dark .border-slate-100,
 html.dark .border-slate-200,
@@ -334,51 +363,51 @@ html.dark .border-slate-300 {
 }
 html.dark .text-slate-300,
 html.dark .text-slate-400 {
-  color: oklch(0.62 0.012 170);
+  color: oklch(0.62 0.015 295);
 }
 html.dark .text-slate-500 {
-  color: oklch(0.7 0.012 170);
+  color: oklch(0.7 0.015 295);
 }
 html.dark .text-slate-600,
 html.dark .text-slate-700 {
-  color: oklch(0.87 0.008 170);
+  color: oklch(0.87 0.01 295);
 }
 html.dark .text-slate-800,
 html.dark .text-slate-900 {
-  color: oklch(0.96 0.005 165);
+  color: oklch(0.96 0.007 295);
 }
 html.dark .bg-emerald-50,
 html.dark .hover\:bg-emerald-50:hover {
-  background-color: oklch(0.72 0.145 163 / 13%);
+  background-color: oklch(0.72 0.15 300 / 13%);
 }
 html.dark .bg-emerald-100 {
-  background-color: oklch(0.72 0.145 163 / 18%);
+  background-color: oklch(0.72 0.15 300 / 18%);
 }
 html.dark .text-emerald-600,
 html.dark .text-emerald-700 {
-  color: oklch(0.8 0.13 163);
+  color: oklch(0.8 0.14 300);
 }
 html.dark .text-emerald-800,
 html.dark .text-emerald-900 {
-  color: oklch(0.85 0.12 162);
+  color: oklch(0.85 0.12 298);
 }
 html.dark .border-emerald-100,
 html.dark .border-emerald-200 {
-  border-color: oklch(0.72 0.145 163 / 28%);
+  border-color: oklch(0.72 0.15 300 / 28%);
 }
 html.dark .bg-amber-50 {
-  background-color: oklch(0.82 0.13 88 / 12%);
+  background-color: oklch(0.85 0.115 80 / 12%);
 }
 html.dark .bg-amber-100 {
-  background-color: oklch(0.82 0.13 88 / 17%);
+  background-color: oklch(0.85 0.115 80 / 17%);
 }
 html.dark .text-amber-600,
 html.dark .text-amber-700,
 html.dark .text-amber-800 {
-  color: oklch(0.86 0.12 90);
+  color: oklch(0.87 0.11 84);
 }
 html.dark .border-amber-200 {
-  border-color: oklch(0.82 0.13 88 / 28%);
+  border-color: oklch(0.85 0.115 80 / 28%);
 }
 html.dark .bg-red-50,
 html.dark .hover\:bg-red-50:hover {
@@ -399,7 +428,7 @@ html.dark .hover\:text-red-700:hover {
 }
 html.dark .bg-gradient-to-br.from-slate-50,
 html.dark .from-slate-50 {
-  --tw-gradient-from: oklch(0.245 0.015 175);
+  --tw-gradient-from: oklch(0.245 0.017 300);
 }
 
 /* ============================================================
@@ -408,7 +437,7 @@ html.dark .from-slate-50 {
    helper classes are appended here (fonts, scrollbars, paper).
    ============================================================ */
 @theme inline {
-  --font-body: Tajawal, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-body: Cairo, Tajawal, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-serif: Georgia, "Times New Roman", Amiri, serif;
 }
 
@@ -445,7 +474,7 @@ html.dark .from-slate-50 {
 }
 
 /* ============================================================
-   ROYAL EMERALD LUXE — shell, landing & motion extensions
+   AMETHYST ROYALE — shell, landing & motion extensions
    ============================================================ */
 
 /* Brand display serif — single source of truth (replaces inline styles) */
@@ -474,7 +503,7 @@ html.dark .from-slate-50 {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(115deg, transparent 30%, color-mix(in oklab, var(--gold) 14%, transparent) 48%, transparent 62%);
+  background: linear-gradient(115deg, transparent 30%, color-mix(in oklab, var(--primary) 14%, transparent) 48%, transparent 62%);
   transform: translateX(-120%);
   transition: transform 0.9s ease;
   pointer-events: none;
@@ -493,7 +522,7 @@ html.dark .from-slate-50 {
   box-shadow:
     0 30px 80px -30px oklch(0 0 0 / 0.55),
     0 0 0 1px oklch(1 0 0 / 6%) inset,
-    0 20px 60px -30px oklch(0.6 0.15 163 / 0.35);
+    0 20px 60px -30px oklch(0.55 0.18 300 / 0.4);
 }
 
 /* Landing section anchor offset under the sticky glass navbar */
@@ -505,4 +534,21 @@ html.dark .from-slate-50 {
 .stat-number {
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
+}
+
+/* Landing halo — soft violet/gold radial glow behind hero content */
+.hero-halo {
+  background:
+    radial-gradient(ellipse 60% 55% at 50% 0%, oklch(0.55 0.18 300 / 0.16), transparent 70%),
+    radial-gradient(ellipse 45% 40% at 78% 30%, oklch(0.82 0.12 80 / 0.1), transparent 70%);
+}
+html:not(.dark) .hero-halo {
+  background:
+    radial-gradient(ellipse 60% 55% at 50% 0%, oklch(0.5 0.17 300 / 0.1), transparent 70%),
+    radial-gradient(ellipse 45% 40% at 78% 30%, oklch(0.7 0.12 80 / 0.08), transparent 70%);
+}
+
+/* Dotted connector for the "how it works" timeline */
+.timeline-dot {
+  box-shadow: 0 0 0 6px color-mix(in oklab, var(--primary) 15%, transparent);
 }

@@ -294,10 +294,10 @@ export default function Home() {
   if (authState === 'loading') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
-        <div className="logo-glow animate-pop-in flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 font-black text-white brand-serif">
+        <div className="logo-glow animate-pop-in flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-700 font-black text-white brand-serif">
           <span className="text-3xl leading-none">ن</span>
         </div>
-        <Loader2 className="h-5 w-5 animate-spin text-emerald-500" />
+        <Loader2 className="h-5 w-5 animate-spin text-primary" />
       </div>
     );
   }
@@ -318,7 +318,7 @@ export default function Home() {
       {/* ===== desktop sidebar (start side in RTL) ===== */}
       <aside className="glass sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-e lg:flex">
         <div className="flex items-center gap-2.5 border-b px-4 py-3.5">
-          <div className="logo-glow flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 font-black text-white brand-serif">ن</div>
+          <div className="logo-glow flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-700 font-black text-white brand-serif">ن</div>
           <div className="min-w-0">
             <div className="brand-serif text-base font-extrabold leading-tight">النخبة <span className="text-gradient">QB</span></div>
             <div className="truncate text-[9px] text-muted-foreground">{L('منصة الامتحانات المتكاملة', 'All-in-one exam platform')}</div>
@@ -346,12 +346,12 @@ export default function Home() {
           <div className="flex items-center justify-between rounded-lg bg-background/50 px-2.5 py-1.5" title={L('حالة المحركات', 'Engine health')}>
             <span className="text-[9px] text-muted-foreground">{L('المحركات', 'Engines')}</span>
             <span className="flex items-center gap-1.5">
-              <span className={`h-2 w-2 rounded-full ${health?.omrEngine ? 'bg-emerald-500 shadow-[0_0_8px_oklch(0.72_0.15_163)]' : 'bg-red-400'}`} title="محرك OMR" />
-              <span className={`h-2 w-2 rounded-full ${health?.pdf?.running ? 'bg-emerald-500 shadow-[0_0_8px_oklch(0.72_0.15_163)]' : 'bg-amber-400'}`} title="محرك PDF" />
+              <span className={`h-2 w-2 rounded-full ${health?.omrEngine ? 'bg-violet-500 shadow-[0_0_8px_oklch(0.72_0.15_300)]' : 'bg-red-400'}`} title="محرك OMR" />
+              <span className={`h-2 w-2 rounded-full ${health?.pdf?.running ? 'bg-violet-500 shadow-[0_0_8px_oklch(0.72_0.15_300)]' : 'bg-amber-400'}`} title="محرك PDF" />
             </span>
           </div>
           <div className="flex items-center gap-2 rounded-xl bg-background/50 px-2.5 py-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/80 to-emerald-700/80 text-[11px] font-black text-white">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/80 to-fuchsia-700/80 text-[11px] font-black text-white">
               {(user.name || 'أ').trim().charAt(0)}
             </div>
             <div className="min-w-0 leading-tight">
@@ -379,7 +379,7 @@ export default function Home() {
               <SheetContent side="right" className="w-72 overflow-y-auto p-0">
                 <SheetHeader className="border-b px-4 py-3.5 text-start">
                   <SheetTitle className="flex items-center gap-2.5">
-                    <div className="logo-glow flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 text-xs font-black text-white brand-serif">ن</div>
+                    <div className="logo-glow flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-700 text-xs font-black text-white brand-serif">ن</div>
                     <span className="brand-serif text-base font-extrabold">النخبة <span className="text-gradient">QB</span></span>
                   </SheetTitle>
                 </SheetHeader>
@@ -408,7 +408,7 @@ export default function Home() {
                 </nav>
                 <div className="border-t px-3 py-3">
                   <div className="flex items-center gap-2 rounded-xl bg-background/50 px-2.5 py-2">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/80 to-emerald-700/80 text-[11px] font-black text-white">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/80 to-fuchsia-700/80 text-[11px] font-black text-white">
                       {(user.name || 'أ').trim().charAt(0)}
                     </div>
                     <div className="min-w-0 leading-tight">
@@ -422,14 +422,14 @@ export default function Home() {
 
             {/* brand (mobile + tablet — desktop uses the sidebar) */}
             <div className="flex items-center gap-2 lg:hidden">
-              <div className="logo-glow flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 text-xs font-black text-white brand-serif">ن</div>
+              <div className="logo-glow flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-700 text-xs font-black text-white brand-serif">ن</div>
               <div className="brand-serif text-base font-extrabold leading-none">النخبة <span className="text-gradient">QB</span></div>
             </div>
 
             <div className="ms-auto flex items-center gap-2">
               <div className="hidden items-center gap-1.5 rounded-full border border-border bg-background/40 px-2.5 py-1 md:flex" title={L('حالة المحركات', 'Engine health')}>
-                <span className={`h-2 w-2 rounded-full ${health?.omrEngine ? 'bg-emerald-500 shadow-[0_0_8px_oklch(0.72_0.15_163)]' : 'bg-red-400'}`} title="محرك OMR" />
-                <span className={`h-2 w-2 rounded-full ${health?.pdf?.running ? 'bg-emerald-500 shadow-[0_0_8px_oklch(0.72_0.15_163)]' : 'bg-amber-400'}`} title="محرك PDF" />
+                <span className={`h-2 w-2 rounded-full ${health?.omrEngine ? 'bg-violet-500 shadow-[0_0_8px_oklch(0.72_0.15_300)]' : 'bg-red-400'}`} title="محرك OMR" />
+                <span className={`h-2 w-2 rounded-full ${health?.pdf?.running ? 'bg-violet-500 shadow-[0_0_8px_oklch(0.72_0.15_300)]' : 'bg-amber-400'}`} title="محرك PDF" />
               </div>
               <button
                 onClick={toggleTheme}
@@ -447,7 +447,7 @@ export default function Home() {
                 <Languages className="h-3.5 w-3.5" /> {lang === 'ar' ? 'EN' : 'ع'}
               </button>
               <div className="hidden items-center gap-2 md:flex">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/80 to-emerald-700/80 text-[11px] font-black text-white">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/80 to-fuchsia-700/80 text-[11px] font-black text-white">
                   {(user.name || 'أ').trim().charAt(0)}
                 </div>
                 <div className="text-start leading-tight">
@@ -501,7 +501,7 @@ export default function Home() {
         <footer className="glass mt-auto border-t py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-1 px-4 text-[11px] text-slate-400">
             <span className="flex items-center gap-1.5">
-              <Sparkles className="h-3 w-3 text-emerald-500" />
+              <Sparkles className="h-3 w-3 text-primary" />
               النخبة QB — نظام بنك أسئلة متكامل بمخطط امتحاني واحد يغذي المصمم و PDF و OMR
             </span>
             <span>{user.organizationName ?? 'النخبة للتعليم'} • {ROLE_SHORT[user.role] ?? user.role} • محرك OMR: Python + OpenCV</span>
@@ -519,7 +519,7 @@ function SideLink({ active, onClick, icon, children }: { active: boolean; onClic
       aria-current={active ? 'page' : undefined}
       className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-start text-[13px] font-medium transition ${
         active
-          ? 'btn-primary-grad text-white shadow-[0_8px_22px_-10px_oklch(0.6_0.15_163/0.75)]'
+          ? 'btn-primary-grad text-white shadow-[0_8px_22px_-10px_oklch(0.55_0.18_300/0.75)]'
           : 'text-slate-500 hover:bg-accent hover:text-foreground'
       }`}
     >
@@ -600,17 +600,17 @@ function Dashboard({ exams, selectedExamId, health, onOpen, onGo, onChanged }: {
       >
         <div className="flex flex-wrap gap-2">
           <StatChip label="امتحانات" value={exams.length} />
-          <StatChip label="منشورة" value={exams.filter((e) => e.status === 'PUBLISHED').length} tone="emerald" />
+          <StatChip label="منشورة" value={exams.filter((e) => e.status === 'PUBLISHED').length} tone="primary" />
           <StatChip label="مسودات" value={exams.filter((e) => e.status === 'DRAFT').length} tone="amber" />
           <StatChip
             label="محرك OMR"
             value={health.omrEngine ? 'يعمل' : 'متوقف'}
-            tone={health.omrEngine ? 'emerald' : 'red'}
+            tone={health.omrEngine ? 'primary' : 'red'}
           />
           <StatChip
             label="محرك PDF"
             value={health.pdfRunning ? 'يعمل' : 'بارد'}
-            tone={health.pdfRunning ? 'emerald' : 'amber'}
+            tone={health.pdfRunning ? 'primary' : 'amber'}
           />
         </div>
       </PaneHeader>
@@ -626,7 +626,7 @@ function Dashboard({ exams, selectedExamId, health, onOpen, onGo, onChanged }: {
               onClick={() => (a.key === 'create' ? setCreateOpen(true) : a.key === 'omr' && selectedExamId ? onOpen(selectedExamId, 'omr') : onGo(a.key as View))}
               className="card-hover glass flex flex-col items-start gap-2.5 rounded-2xl p-4 text-start disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <span className="logo-glow flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white">
+              <span className="logo-glow flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-700 text-white">
                 <a.icon className="h-4.5 w-4.5" />
               </span>
               <span className="text-xs font-bold">{a.ar}</span>
@@ -679,13 +679,13 @@ function Dashboard({ exams, selectedExamId, health, onOpen, onGo, onChanged }: {
                     <div className="truncate text-sm font-bold">{exam.title}</div>
                     <div className="mt-0.5 text-[11px] text-slate-500">{exam.subject ?? '—'} • {exam.questionCount} سؤال</div>
                   </div>
-                  <Badge className={exam.status === 'PUBLISHED' ? 'bg-emerald-600/15 text-emerald-600' : exam.status === 'ARCHIVED' ? 'bg-slate-500/15 text-slate-500' : 'bg-amber-500/15 text-amber-600'}>
+                  <Badge className={exam.status === 'PUBLISHED' ? 'bg-primary/15 text-primary' : exam.status === 'ARCHIVED' ? 'bg-slate-500/15 text-slate-500' : 'bg-amber-500/15 text-amber-600'}>
                     {exam.status === 'PUBLISHED' ? 'منشور' : exam.status === 'ARCHIVED' ? 'مؤرشف' : 'مسودة'}
                   </Badge>
                 </div>
                 <div className="mt-2 flex gap-1.5 text-[10px] text-slate-400">
                   <span>نسخة {exam.currentVersion}</span>
-                  {exam.omrEnabled && <span className="rounded bg-emerald-600/12 px-1.5 text-emerald-600">OMR مفعّل</span>}
+                  {exam.omrEnabled && <span className="rounded bg-primary/15 px-1.5 text-primary">OMR مفعّل</span>}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-1">
                   <Button size="sm" variant="outline" className="h-7 gap-1 text-[11px]" onClick={() => onOpen(exam.id, 'design')}><PencilRuler className="h-3 w-3" /> تصميم</Button>
@@ -705,9 +705,9 @@ function Dashboard({ exams, selectedExamId, health, onOpen, onGo, onChanged }: {
   );
 }
 
-function StatChip({ label, value, tone = 'neutral' }: { label: string; value: string | number; tone?: 'neutral' | 'emerald' | 'amber' | 'red' }) {
+function StatChip({ label, value, tone = 'neutral' }: { label: string; value: string | number; tone?: 'neutral' | 'primary' | 'amber' | 'red' }) {
   const toneCls =
-    tone === 'emerald' ? 'text-emerald-500' : tone === 'amber' ? 'text-amber-500' : tone === 'red' ? 'text-red-400' : 'text-foreground';
+    tone === 'primary' ? 'text-primary' : tone === 'amber' ? 'text-amber-500' : tone === 'red' ? 'text-red-400' : 'text-foreground';
   return (
     <div className="rounded-xl border border-border bg-background/40 px-3 py-1.5 text-center">
       <div className={`text-sm font-extrabold leading-none ${toneCls}`}>{value}</div>
@@ -914,7 +914,7 @@ function OmrStudio({ examId }: { examId: string }) {
                   <span className="w-8 text-center text-sm font-bold">{copies}</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button size="sm" className="gap-1 bg-emerald-600 hover:bg-emerald-700" disabled={busy !== ''} onClick={() => void download(`/api/versions/${latestVersion?.id}/pdf?type=omr&copies=${copies}`, 'omr-sheets.pdf', 'pdf')}>
+                  <Button size="sm" className="gap-1 bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy !== ''} onClick={() => void download(`/api/versions/${latestVersion?.id}/pdf?type=omr&copies=${copies}`, 'omr-sheets.pdf', 'pdf')}>
                     <FileDown className="h-4 w-4" /> {busy === 'pdf' ? 'جارٍ التوليد…' : `طباعة ${copies} ورقة (PDF)`}
                   </Button>
                   <Button size="sm" variant="outline" className="gap-1" disabled={busy !== ''} onClick={() => void download(`/api/versions/${latestVersion?.id}/omr-png?sheet=0`, 'omr-sheet-300dpi.png', 'png')}>
@@ -935,14 +935,14 @@ function OmrStudio({ examId }: { examId: string }) {
         <CardContent className="space-y-3 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <KeyRound className="h-5 w-5 text-emerald-600" />
+              <KeyRound className="h-5 w-5 text-primary" />
               <div>
                 <div className="text-sm font-semibold">مفتاح التصحيح — دليل الإجابة (Guide Answer)</div>
                 <div className="text-[11px] text-slate-500">اختر الإجابة الصحيحة لكل سؤال؛ يُستخدم المفتاح في التصحيح الآلي عند مسح الأوراق</div>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={missingKey === 0 ? 'default' : 'destructive'} className={missingKey === 0 ? 'bg-emerald-600' : ''}>
+              <Badge variant={missingKey === 0 ? 'default' : 'destructive'} className={missingKey === 0 ? 'bg-primary' : ''}>
                 {setKeyCount} / {mcqQuestions.length} سؤالًا
               </Badge>
               {mcqQuestions.length > 0 && (
@@ -950,7 +950,7 @@ function OmrStudio({ examId }: { examId: string }) {
                   <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" disabled={busy !== '' || setKeyCount === 0} onClick={() => setKeyDraft({})}>
                     <Eraser className="h-3.5 w-3.5" /> مسح الكل
                   </Button>
-                  <Button size="sm" className="h-8 gap-1 bg-emerald-600 text-xs hover:bg-emerald-700" disabled={busy !== '' || mcqQuestions.length === 0} onClick={() => void saveKey()}>
+                  <Button size="sm" className="h-8 gap-1 bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy !== '' || mcqQuestions.length === 0} onClick={() => void saveKey()}>
                     {busy === 'key' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />} حفظ المفتاح
                   </Button>
                 </>
@@ -989,8 +989,8 @@ function OmrStudio({ examId }: { examId: string }) {
                               title={o.text || `الخيار ${o.id}`}
                               className={`h-7 w-7 rounded-full border text-xs font-bold transition ${
                                 active
-                                  ? 'border-emerald-600 bg-emerald-600 text-white shadow-sm'
-                                  : 'border-slate-300 bg-white text-slate-600 hover:border-emerald-400 hover:text-emerald-700'
+                                  ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                                  : 'border-slate-300 bg-white text-slate-600 hover:border-primary/60 hover:text-primary'
                               }`}
                             >
                               {o.id}
@@ -1023,7 +1023,7 @@ function OmrStudio({ examId }: { examId: string }) {
                 <span className="text-[10px] text-amber-700">يُنصح بحفظ مفتاح كامل قبل النشر</span>
               )}
               {(!published || keyDiffers) && (
-                <Button size="sm" className="h-8 gap-1 bg-emerald-600 text-xs hover:bg-emerald-700" disabled={busy !== ''} onClick={() => void republish()}>
+                <Button size="sm" className="h-8 gap-1 bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy !== ''} onClick={() => void republish()}>
                   {busy === 'publish' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="h-3.5 w-3.5" />}
                   {published ? 'إعادة النشر بنسخة جديدة' : 'نشر الامتحان الآن'}
                 </Button>
@@ -1092,7 +1092,7 @@ function StudentsPane() {
         <div><Label className="text-[10px]">الرقم</Label><Input className="h-9 w-32" value={code} onChange={(e) => setCode(e.target.value)} /></div>
         <div><Label className="text-[10px]">الاسم</Label><Input className="h-9 w-48" value={name} onChange={(e) => setName(e.target.value)} /></div>
         <div><Label className="text-[10px]">الفصل</Label><Input className="h-9 w-28" value={classroom} onChange={(e) => setClassroom(e.target.value)} /></div>
-        <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => void add()}><Plus className="h-4 w-4" /> إضافة</Button>
+        <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => void add()}><Plus className="h-4 w-4" /> إضافة</Button>
       </CardContent></Card>
       <Card><CardContent className="p-0">
         <table className="w-full text-sm">
@@ -1173,7 +1173,7 @@ function SettingsPane() {
       <div className="grid gap-4 md:grid-cols-2">
       <Card>
         <CardContent className="space-y-4 p-4">
-          <div className="flex items-center gap-2 text-sm font-semibold"><Activity className="h-4 w-4 text-emerald-600" /> معايرة قارئ OMR</div>
+          <div className="flex items-center gap-2 text-sm font-semibold"><Activity className="h-4 w-4 text-primary" /> معايرة قارئ OMR</div>
           <p className="text-[11px] leading-relaxed text-slate-500">
             العتبات مأخوذة من معايرة فعلية (قلم رصاص/حبر/إضاءة منخفضة) عبر حزمة الاختبار.
             filled: نسبة التظليل لاعتبار الفقاعة معلّمة • empty: أقل من يُعتبر فارغة.
@@ -1189,7 +1189,7 @@ function SettingsPane() {
               <Slider value={[config[key]]} min={min} max={max} step={0.01} onValueChange={([v]) => setConfig({ ...config, [key]: v })} />
             </div>
           ))}
-          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => void save()}>حفظ المعايرة</Button>
+          <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => void save()}>حفظ المعايرة</Button>
         </CardContent>
       </Card>
       <Card>
@@ -1205,7 +1205,7 @@ function SettingsPane() {
               if (f) void testOcr(f);
             }}
           />
-          {ocrBusy && <div className="text-xs text-emerald-600">جارٍ الاستخراج…</div>}
+          {ocrBusy && <div className="text-xs text-primary">جارٍ الاستخراج…</div>}
           <Textarea className="h-40 text-xs" value={ocrText} onChange={(e) => setOcrText(e.target.value)} placeholder="النص المستخرج…" />
         </CardContent>
       </Card>
@@ -1240,12 +1240,12 @@ function HealthTable() {
       {rows.map(([label, ok]) => (
         <div key={label} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
           <span>{label}</span>
-          <Badge className={ok ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}>{ok ? 'يعمل' : 'متوقف'}</Badge>
+          <Badge className={ok ? 'bg-primary/15 text-primary' : 'bg-red-100 text-red-600'}>{ok ? 'يعمل' : 'متوقف'}</Badge>
         </div>
       ))}
       <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
         <span>الذكاء الاصطناعي (الاستخراج الذكي + توليد الأسئلة)</span>
-        <Badge className={aiOk ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}>{aiLabel}</Badge>
+        <Badge className={aiOk ? 'bg-primary/15 text-primary' : 'bg-red-100 text-red-600'}>{aiLabel}</Badge>
       </div>
     </div>
   );

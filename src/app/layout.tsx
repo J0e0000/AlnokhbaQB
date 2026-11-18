@@ -1,22 +1,33 @@
 import type { Metadata, Viewport } from "next";
+import "@fontsource/cairo/arabic-400.css";
+import "@fontsource/cairo/arabic-500.css";
+import "@fontsource/cairo/arabic-600.css";
+import "@fontsource/cairo/arabic-700.css";
+import "@fontsource/cairo/arabic-800.css";
+import "@fontsource/cairo/latin-400.css";
+import "@fontsource/cairo/latin-500.css";
+import "@fontsource/cairo/latin-600.css";
+import "@fontsource/cairo/latin-700.css";
+import "@fontsource/amiri/arabic-400.css";
+import "@fontsource/amiri/arabic-700.css";
+// Tajawal stays loaded for the exam designer canvas & paper previews —
+// PDF rendering embeds Tajawal server-side, so the canvas must match.
 import "@fontsource/tajawal/arabic-400.css";
 import "@fontsource/tajawal/arabic-500.css";
 import "@fontsource/tajawal/arabic-700.css";
 import "@fontsource/tajawal/latin-400.css";
 import "@fontsource/tajawal/latin-700.css";
-import "@fontsource/amiri/arabic-400.css";
-import "@fontsource/amiri/arabic-700.css";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
   title: "النخبة QB — بنك الأسئلة والتصحيح الآلي",
   description:
-    "نظام بنك الأسئلة: مصمم امتحانات، محرك PDF، مولّد أوراق OMR، قارئ ضوئي وتصحيح آلي بنموذج امتحاني واحد.",
+    "منصة النخبة لبنك الأسئلة والامتحانات: ذكاء اصطناعي للاستخراج وتوليد الأسئلة، مصمم امتحانات، تصحيح OMR آلي، امتحانات إلكترونية وواجبات — في نظام واحد متكامل.",
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0b1714",
+  themeColor: "#16121f",
 };
 
 // Applies the saved theme BEFORE first paint (no FOUC). Dark = the default
@@ -33,7 +44,7 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
       </head>
-      <body className="min-h-screen font-sans antialiased text-foreground [font-family:Tajawal,system-ui,sans-serif]">
+      <body className="min-h-screen font-sans antialiased text-foreground [font-family:Cairo,Tajawal,system-ui,sans-serif]">
         <div className="app-aurora" aria-hidden="true" />
         <div className="app-grid" aria-hidden="true" />
         {children}
