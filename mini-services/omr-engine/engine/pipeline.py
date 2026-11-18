@@ -1100,9 +1100,13 @@ def decide_answer(
         cov = covers or {}
         cov1 = float(cov.get(top1_letter, 0.0))
         cov2 = float(cov.get(items[1][0], 0.0)) if len(items) > 1 else 0.0
-        stroke1 = cov1 >= 0.10 and top1 >= 0.04
-        stroke2 = cov2 >= 0.10 and top2 >= 0.04
-        if stroke1 and (stroke2 or margin >= 0.03):
+        stroke1 = cov1 >= 0.12 and top1 >= 0.045
+        stroke2 = cov2 >= 0.12 and top2 >= 0.045
+        # A genuine thin mark stands out from the row BOTH in mean darkness
+        # and in stroke coverage. Warp misalignment leaves ring fragments on
+        # EVERY bubble (similar cover, near-tie ratios) — that noise must
+        # stay unanswered, not flood the review queue.
+        if stroke1 and (stroke2 or (margin >= 0.03 and cov1 - cov2 >= 0.06)):
             # thin intentional mark below the fill threshold — send to review
             return {"detected": None, "status": "unclear", "confidence": 0.3}
         return {"detected": None, "status": "unanswered", "confidence": round(max(0.0, min(1.0, 1.0 - top1 / max(empty, 1e-6))), 3)}

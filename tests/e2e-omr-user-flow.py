@@ -149,6 +149,11 @@ def scan(img_b64, hint=True):
 def main():
     login()
     sheet = download_sheet()
+    # run-nonce: a faint dot in the left margin (outside the frame, far from
+    # markers/QR) so each run's images are unique — the scan API is
+    # idempotent by image hash and would otherwise replay previous results.
+    nonce_x, nonce_y = int(2.5 * sheet.shape[1] / 210), int(random.randint(120, 200) * sheet.shape[0] / 297)
+    cv2.circle(sheet, (nonce_x, nonce_y), 4, (215, 215, 215), -1)
 
     # Student A: 8/10 correct, missed Q6 & Q9 (blank), code 204015
     a_plan = dict(KEY)
@@ -172,7 +177,7 @@ def main():
 
     results = []
     for idx, (name, plan, code, darkness_scale) in enumerate(students):
-        img = sheet.copy()
+        img = sheet.copy()  # nonce already applied
         for q in TEMPLATE["questions"]:
             n = q["number"]
             plan_q = plan.get(n)
