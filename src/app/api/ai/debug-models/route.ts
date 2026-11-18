@@ -38,6 +38,45 @@ async function probe(
   }
 }
 
+export async function POST(request: Request) {
+  const key = process.env.AI_API_KEY?.trim();
+  const base = (process.env.AI_BASE_URL?.trim() || 'https://api.openai.com/v1').replace(/\/+$/, '');
+  if (!key) return NextResponse.json({ error: 'no AI_API_KEY' }, { status: 500 });
+  const body = (await request.json().catch(() => ({}))) as {
+    model?: string;
+    dataUrl?: string;
+    prompt?: string;
+  };
+  const model = body.model ?? 'qwen/qwen3.8-27b';
+  const dataUrl = body.dataUrl ?? TINY_PNG;
+  const prompt = body.prompt ?? 'Transcribe every word of text visible in this image. Output only the text.';
+  try {
+    const res = await fetch(`${base}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: { url: dataUrl } },
+            ],
+          },
+        ],
+        max_tokens: 1000,
+      }),
+    });
+    const text = await res.text();
+    if (!res.ok) return NextResponse.json({ ok: false, model, status: res.status, raw: text.slice(0, 400) });
+    const json = JSON.parse(text) as { choices?: Array<{ message?: { content?: string } }> };
+    return NextResponse.json({ ok: true, model, content: json.choices?.[0]?.message?.content ?? '' });
+  } catch (err) {
+    return NextResponse.json({ ok: false, error: String(err).slice(0, 200) }, { status: 502 });
+  }
+}
+
 export async function GET() {
   const key = process.env.AI_API_KEY?.trim();
   const base = (process.env.AI_BASE_URL?.trim() || 'https://api.openai.com/v1').replace(/\/+$/, '');
