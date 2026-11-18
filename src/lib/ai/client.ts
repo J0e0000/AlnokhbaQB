@@ -34,10 +34,13 @@ export class AiNotConfiguredError extends Error {
 
 export class AiProviderError extends Error {
   readonly status: number;
-  constructor(message: string, status: number) {
+  /** HTTP status returned by the provider itself (undefined for timeouts). */
+  readonly rawStatus?: number;
+  constructor(message: string, status: number, rawStatus?: number) {
     super(message);
     this.name = 'AiProviderError';
     this.status = status;
+    this.rawStatus = rawStatus;
   }
 }
 
@@ -77,7 +80,13 @@ export function aiStatus(): AiStatus {
   return { mode: 'none' };
 }
 
-function assertConfigured(): { baseUrl: string; apiKey: string; visionModel: string; chatModel: string } {
+function assertConfigured(): {
+  baseUrl: string;
+  apiKey: string;
+  visionModel: string;
+  chatModel: string;
+  fallbackModel?: string;
+} {
   const key = process.env.AI_API_KEY?.trim();
   if (key) {
     const baseUrl = trimSlash(process.env.AI_BASE_URL?.trim() || 'https://api.openai.com/v1');
@@ -85,7 +94,8 @@ function assertConfigured(): { baseUrl: string; apiKey: string; visionModel: str
       process.env.AI_VISION_MODEL?.trim() || process.env.AI_MODEL?.trim() || DEFAULT_MODEL;
     const chatModel =
       process.env.AI_CHAT_MODEL?.trim() || process.env.AI_MODEL?.trim() || DEFAULT_MODEL;
-    return { baseUrl, apiKey: key, visionModel, chatModel };
+    const fallbackModel = process.env.AI_FALLBACK_MODEL?.trim() || undefined;
+    return { baseUrl, apiKey: key, visionModel, chatModel, fallbackModel };
   }
   if (ensureZaiConfig()) {
     // z-ai sandbox mode is handled by the SDK paths below
@@ -101,6 +111,59 @@ interface ChatMsg {
   content:
     | string
     | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+}
+
+/**
+ * Google Gemini thinking models burn time (and max_tokens) on hidden
+ * reasoning. Cap it to "low" so extraction/generation finish well inside
+ * the request timeout. Only sent for the Gemini compat endpoint — other
+ * providers may reject the field.
+ */
+function geminiExtras(baseUrl: string): Record<string, unknown> {
+  return baseUrl.includes('generativelanguage.googleapis.com')
+    ? { reasoning_effort: 'low' }
+    : {};
+}
+
+/**
+ * Runs a chat call with resilience:
+ *  1. If the provider rejects `reasoning_effort` (400) → retry once without it.
+ *  2. If the primary model is rate-limited (429) or overloaded (503) and a
+ *     different AI_FALLBACK_MODEL is configured → retry once with it.
+ */
+async function postChatResilient(
+  cfg: { baseUrl: string; apiKey: string; model: string; fallbackModel?: string },
+  buildBody: (model: string, extras: Record<string, unknown>) => Record<string, unknown>,
+  timeoutMs: number
+): Promise<{ text: string; model: string }> {
+  const extras = geminiExtras(cfg.baseUrl);
+  const attempt = (model: string, withExtras: boolean) =>
+    postChat(cfg.baseUrl, cfg.apiKey, buildBody(model, withExtras ? extras : {}), timeoutMs);
+
+  let usedModel = cfg.model;
+  let res: { text: string };
+  try {
+    res = await attempt(cfg.model, true);
+  } catch (err) {
+    if (err instanceof AiProviderError && err.rawStatus === 400 && Object.keys(extras).length) {
+      // provider doesn't understand reasoning_effort → plain retry
+      res = await attempt(cfg.model, false);
+    } else if (
+      err instanceof AiProviderError &&
+      (err.rawStatus === 429 || err.rawStatus === 503) &&
+      cfg.fallbackModel &&
+      cfg.fallbackModel !== cfg.model
+    ) {
+      console.warn(
+        `[ai] ${cfg.model} unavailable (raw ${err.rawStatus}) → falling back to ${cfg.fallbackModel}`
+      );
+      usedModel = cfg.fallbackModel;
+      res = await attempt(cfg.fallbackModel, true);
+    } else {
+      throw err;
+    }
+  }
+  return { text: res.text, model: usedModel };
 }
 
 async function postChat(
@@ -141,7 +204,8 @@ async function postChat(
     }
     throw new AiProviderError(
       `مزود الذكاء الاصطناعي أعاد خطأ ${res.status}${detail ? `: ${detail}` : ''}`,
-      res.status >= 500 ? 502 : 400
+      res.status >= 500 ? 502 : 400,
+      res.status
     );
   }
 
@@ -191,11 +255,10 @@ export async function aiVisionText({
 }: VisionParams): Promise<string> {
   const cfg = assertConfigured();
   if (cfg.apiKey) {
-    const { text } = await postChat(
-      cfg.baseUrl,
-      cfg.apiKey,
-      {
-        model: cfg.visionModel,
+    const { text } = await postChatResilient(
+      { baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.visionModel, fallbackModel: cfg.fallbackModel },
+      (model, extras) => ({
+        model,
         messages: [
           {
             role: 'user',
@@ -206,7 +269,8 @@ export async function aiVisionText({
           },
         ],
         max_tokens: maxTokens,
-      },
+        ...extras,
+      }),
       timeoutMs
     );
     return text;
@@ -243,17 +307,17 @@ export async function aiChatText({
 }: ChatParams): Promise<string> {
   const cfg = assertConfigured();
   if (cfg.apiKey) {
-    const { text } = await postChat(
-      cfg.baseUrl,
-      cfg.apiKey,
-      {
-        model: cfg.chatModel,
+    const { text } = await postChatResilient(
+      { baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.chatModel, fallbackModel: cfg.fallbackModel },
+      (model, extras) => ({
+        model,
         messages: [
           { role: 'system', content: system },
           { role: 'user', content: user },
         ],
         max_tokens: maxTokens,
-      },
+        ...extras,
+      }),
       timeoutMs
     );
     return text;
