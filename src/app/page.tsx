@@ -1020,6 +1020,10 @@ function HealthTable() {
     void fetch('/api/health').then(async (r) => setHealth(await r.json()));
   }, []);
   if (!health) return <div className="py-4 text-center text-xs text-slate-400">…</div>;
+  const aiHealth = health.ai as { mode?: string; model?: string; error?: string } | undefined;
+  const aiMode = aiHealth?.mode ?? 'none';
+  const aiOk = aiMode === 'env' || aiMode === 'zai';
+  const aiLabel = aiMode === 'env' ? `مزود خارجي${aiHealth?.model ? ` (${aiHealth.model})` : ''}` : aiMode === 'zai' ? 'مدمج (بيئة التطوير)' : 'غير مهيأ';
   const rows: [string, boolean][] = [
     ['قاعدة البيانات', Boolean(health.db)],
     ['محرك PDF (Chromium)', Boolean((health.pdf as { ok?: boolean })?.ok ?? (health.pdf as { running?: boolean })?.running)],
@@ -1033,6 +1037,10 @@ function HealthTable() {
           <Badge className={ok ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}>{ok ? 'يعمل' : 'متوقف'}</Badge>
         </div>
       ))}
+      <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+        <span>الذكاء الاصطناعي (الاستخراج الذكي + توليد الأسئلة)</span>
+        <Badge className={aiOk ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}>{aiLabel}</Badge>
+      </div>
     </div>
   );
 }

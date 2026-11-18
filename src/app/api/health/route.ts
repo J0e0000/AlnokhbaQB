@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getBrowserHealth, warmBrowser } from '@/lib/pdf/pool';
 import { engineHealth } from '@/lib/omr/client';
+import { aiStatus } from '@/lib/ai/client';
 import { serverError } from '../_lib/shared';
 
 export const runtime = 'nodejs';
@@ -28,6 +29,7 @@ export async function GET() {
 
     const pdf = getBrowserHealth();
     const omrEngine = await engineHealth(2000);
+    const ai = aiStatus();
 
     return NextResponse.json({
       ok: dbOk,
@@ -36,6 +38,13 @@ export async function GET() {
       omrEngine: {
         ok: omrEngine.ok,
         ...(omrEngine.ok ? {} : { error: omrEngine.error ?? 'OMR engine unreachable' }),
+      },
+      ai: {
+        mode: ai.mode,
+        ...(ai.mode === 'env' ? { baseUrl: ai.baseUrl, model: ai.model } : {}),
+        ...(ai.mode === 'none'
+          ? { error: 'الذكاء الاصطناعي غير مهيأ — أضف AI_API_KEY في إعدادات البيئة' }
+          : {}),
       },
     });
   } catch (err) {

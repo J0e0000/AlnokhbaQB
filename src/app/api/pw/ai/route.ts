@@ -89,57 +89,20 @@ export async function POST(req: Request) {
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
       };
       try {
-        const mod = (await import('z-ai-web-dev-sdk')) as unknown as {
-          default: { create: () => Promise<AiClient> };
-        };
-        const zai = await mod.default.create();
+        const { aiChatText } = await import('@/lib/ai/client');
         send('status', { message: 'Thinking…' });
 
-        let full = '';
-        // Try true streaming first; fall back to one-shot + simulated chunks.
-        try {
-          const completion = await zai.chat.completions.create({
-            messages: [
-              { role: 'assistant', content: system },
-              { role: 'user', content: user },
-            ],
-            stream: true,
-            thinking: { type: 'disabled' },
-          });
-          const iterable = completion as unknown as AsyncIterable<StreamChunk>;
-          const iteratorFn = (iterable as { [Symbol.asyncIterator]?: () => AsyncIterator<StreamChunk> })[
-            Symbol.asyncIterator
-          ];
-          if (typeof iteratorFn === 'function') {
-            for await (const chunk of iterable) {
-              const delta = chunk?.choices?.[0]?.delta?.content ?? '';
-              if (delta) {
-                full += delta;
-                send('delta', { text: delta });
-              }
-            }
-          }
-        } catch {
-          /* fall through to non-streaming */
-        }
+        // One-shot through the unified gateway, then simulated chunks —
+        // identical UX to the old streaming fallback, but provider-agnostic.
+        const full = await aiChatText({ system, user, maxTokens: 8000, timeoutMs: 220_000 });
         if (!full.trim()) {
-          const completion = (await zai.chat.completions.create({
-            messages: [
-              { role: 'assistant', content: system },
-              { role: 'user', content: user },
-            ],
-            thinking: { type: 'disabled' },
-          })) as { choices?: Array<{ message?: { content?: string } }> };
-          full = completion.choices?.[0]?.message?.content ?? '';
+          send('error', { message: 'The model returned an empty response — please retry.' });
+        } else {
           const CHUNK = 96;
           for (let i = 0; i < full.length; i += CHUNK) {
             send('delta', { text: full.slice(i, i + CHUNK) });
             await sleep(15);
           }
-        }
-        if (!full.trim()) {
-          send('error', { message: 'The model returned an empty response — please retry.' });
-        } else {
           if (truncationNote) send('delta', { text: truncationNote });
           send('done', { text: full });
         }
@@ -161,16 +124,4 @@ export async function POST(req: Request) {
       Connection: 'keep-alive',
     },
   });
-}
-
-interface AiClient {
-  chat: {
-    completions: {
-      create: (params: unknown) => Promise<unknown>;
-    };
-  };
-}
-
-interface StreamChunk {
-  choices?: Array<{ delta?: { content?: string } }>;
 }

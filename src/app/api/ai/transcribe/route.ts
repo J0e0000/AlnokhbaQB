@@ -30,39 +30,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'الصورة كبيرة جدًا (الحد 4 ميجابايت)' }, { status: 413 });
     }
 
-    const mod = (await import('z-ai-web-dev-sdk')) as unknown as {
-      default: {
-        create: () => Promise<{
-          chat: {
-            completions: {
-              createVision: (params: unknown) => Promise<{
-                choices?: Array<{ message?: { content?: string } }>;
-              }>;
-            };
-          };
-        }>;
-      };
-    };
-    const zai = await mod.default.create();
-    const completion = await zai.chat.completions.createVision({
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text:
-                'Transcribe ALL text visible in this cropped form region, exactly as written. ' +
-                'It may be handwritten or printed, in Arabic or English. Output ONLY the transcription — ' +
-                'no commentary, no markdown. If nothing is legible, output an empty string.',
-            },
-            { type: 'image_url', image_url: { url: image } },
-          ],
-        },
-      ],
-      thinking: { type: 'disabled' },
-    });
-    const text = (completion.choices?.[0]?.message?.content ?? '').trim();
+    const { aiVisionText } = await import('@/lib/ai/client');
+    const text = (
+      await aiVisionText({
+        prompt:
+          'Transcribe ALL text visible in this cropped form region, exactly as written. ' +
+          'It may be handwritten or printed, in Arabic or English. Output ONLY the transcription — ' +
+          'no commentary, no markdown. If nothing is legible, output an empty string.',
+        dataUrl: image,
+        maxTokens: 2048,
+        timeoutMs: 60_000,
+      })
+    ).trim();
     return NextResponse.json({ text });
   } catch (err) {
     return NextResponse.json(serverError(err), { status: 500 });

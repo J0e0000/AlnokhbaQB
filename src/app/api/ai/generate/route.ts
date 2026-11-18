@@ -141,31 +141,11 @@ export async function POST(req: Request) {
     const p = parsed.data;
 
     const { system, user } = buildPrompt(p);
-    const mod = (await import('z-ai-web-dev-sdk')) as unknown as {
-      default: {
-        create: () => Promise<{
-          chat: {
-            completions: {
-              create: (params: unknown) => Promise<{
-                choices?: Array<{ message?: { content?: string } }>;
-              }>;
-            };
-          };
-        }>;
-      };
-    };
-    const zai = await mod.default.create();
+    const { aiChatText } = await import('@/lib/ai/client');
 
     // LLMs occasionally emit non-JSON prose — ask again once before failing.
     const askOnce = async (): Promise<string> => {
-      const completion = await zai.chat.completions.create({
-        messages: [
-          { role: 'assistant', content: system },
-          { role: 'user', content: user },
-        ],
-        thinking: { type: 'disabled' },
-      });
-      return completion.choices?.[0]?.message?.content ?? '';
+      return aiChatText({ system, user, maxTokens: 4000, timeoutMs: 120_000 });
     };
     let raw = await askOnce();
     let candidates = extractJsonArray(raw);

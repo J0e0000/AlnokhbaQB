@@ -61,39 +61,12 @@ export const vlmProcessor: DocumentProcessor = {
   langs: ['ara', 'eng'],
   async process({ base64, mime }) {
     try {
-      // The SDK reads a .z-ai-config FILE — absent on Vercel unless we
-      // materialize it from ZAI_CONFIG_JSON first (see src/lib/zai-config.ts).
-      const { ensureZaiConfig } = await import('@/lib/zai-config');
-      if (!ensureZaiConfig()) {
-        throw new Error('z-ai config unavailable on this host — set ZAI_CONFIG_JSON');
-      }
-      const mod = (await import('z-ai-web-dev-sdk')) as unknown as {
-        default: {
-          create: () => Promise<{
-            chat: {
-              completions: {
-                createVision: (params: unknown) => Promise<{
-                  choices?: Array<{ message?: { content?: string } }>;
-                }>;
-              };
-            };
-          }>;
-        };
-      };
-      const zai = await mod.default.create();
-      const completion = await zai.chat.completions.createVision({
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: VLM_OCR_PROMPT },
-              { type: 'image_url', image_url: { url: `data:${mime};base64,${base64}` } },
-            ],
-          },
-        ],
-        thinking: { type: 'disabled' },
+      const { aiVisionText } = await import('@/lib/ai/client');
+      const text = await aiVisionText({
+        prompt: VLM_OCR_PROMPT,
+        dataUrl: `data:${mime};base64,${base64}`,
+        maxTokens: 4096,
       });
-      const text = completion.choices?.[0]?.message?.content;
       if (!text || !text.trim()) return null;
       return { engine: 'vlm', text: text.trim(), confidence: null };
     } catch (err) {

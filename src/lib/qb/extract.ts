@@ -5,6 +5,7 @@
 // ============================================================
 
 import { z } from 'zod';
+import { aiVisionText } from '@/lib/ai/client';
 
 // ---------- zod schemas ----------
 
@@ -63,34 +64,11 @@ export async function extractQuestionsFromPage(
         ? 'The document is mainly in English.'
         : 'المستند قد يكون عربيًا أو إنجليزيًا أو مزيجًا — حافظ على لغة كل نص كما هي.';
 
-  const mod = (await import('z-ai-web-dev-sdk')) as unknown as {
-    default: {
-      create: () => Promise<{
-        chat: {
-          completions: {
-            createVision: (params: unknown) => Promise<{
-              choices?: Array<{ message?: { content?: string } }>;
-            }>;
-          };
-        };
-      }>;
-    };
-  };
-  const zai = await mod.default.create();
-  const completion = await zai.chat.completions.createVision({
-    messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: `${SYSTEM_PROMPT}\n${langHint}` },
-          { type: 'image_url', image_url: { url: dataUrl } },
-        ],
-      },
-    ],
-    thinking: { type: 'disabled' },
+  const raw = await aiVisionText({
+    prompt: `${SYSTEM_PROMPT}\n${langHint}`,
+    dataUrl,
+    maxTokens: 4096,
   });
-
-  const raw = completion.choices?.[0]?.message?.content ?? '';
   return { items: parseExtractionJson(raw), rawChars: raw.length };
 }
 

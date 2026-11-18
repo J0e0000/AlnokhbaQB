@@ -29,6 +29,9 @@ const bodySchema = z.object({
 
 const jobListSchema = z.object({ limit: z.coerce.number().int().min(1).max(50).default(20) });
 
+/** Sentinel stored in lastError when the AI backend is simply not configured. */
+const AI_NOT_CONFIGURED_MARKER = 'AI_NOT_CONFIGURED';
+
 export async function GET(req: Request) {
   const g = await requireSession('viewer', req);
   if ('error' in g) return g.error;
@@ -146,8 +149,13 @@ export async function POST(req: Request) {
           })),
         });
       } catch (e) {
-        lastError = e instanceof Error ? e.message : 'فشل غير معروف';
-        console.error('[extract] page failed', p.page, e);
+        if (e instanceof Error && e.name === 'AiNotConfiguredError') {
+          lastError = AI_NOT_CONFIGURED_MARKER;
+          console.error('[extract] AI backend not configured on this host');
+        } else {
+          lastError = e instanceof Error ? e.message : 'فشل غير معروف';
+          console.error('[extract] page failed', p.page, e);
+        }
       }
     }
 
@@ -158,9 +166,16 @@ export async function POST(req: Request) {
         where: { id: job.id },
         data: { status: 'failed', error: lastError ?? 'فشل استخراج جميع الصفحات', updatedAt: new Date() },
       });
+      const unconfigured = lastError === AI_NOT_CONFIGURED_MARKER;
       return NextResponse.json(
-        { error: 'فشل استخراج الصفحات — أعد المحاولة أو استخدم جودة صورة أعلى', jobId: job.id },
-        { status: 502 }
+        {
+          error: unconfigured
+            ? 'خدمة الذكاء الاصطناعي غير مهيأة على الخادم — أضف AI_API_KEY (وAI_BASE_URL) في Vercel → Settings → Environment Variables ثم أعد النشر'
+            : `فشل استخراج الصفحات${lastError ? ` — ${lastError}` : ' — أعد المحاولة أو استخدم جودة صورة أعلى'}`,
+          code: unconfigured ? 'AI_NOT_CONFIGURED' : 'EXTRACT_FAILED',
+          jobId: job.id,
+        },
+        { status: unconfigured ? 503 : 502 }
       );
     }
 
