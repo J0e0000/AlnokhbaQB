@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { EmptyState, PaneHeader } from '@/components/qb/pane-kit';
 import {
   BookOpen, Download, FileJson, FileUp, FolderTree, Loader2, Pencil, Plus,
   Search, Trash2, TriangleAlert, X,
@@ -276,24 +277,26 @@ export default function BankManager() {
 
   return (
     <div className="space-y-4" dir="rtl">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-lg font-extrabold text-slate-800">
-          <BookOpen className="h-5 w-5 text-emerald-600" /> بنك الأسئلة
-          <Badge variant="secondary">{total} سؤال</Badge>
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" className="gap-1" onClick={() => setTaxonomyOpen(true)}><FolderTree className="h-4 w-4 text-emerald-600" /> التصنيفات</Button>
-          <Button size="sm" variant="outline" className="gap-1" onClick={() => void downloadExport('json')}><FileJson className="h-4 w-4" /> تصدير JSON</Button>
-          <Button size="sm" variant="outline" className="gap-1" onClick={() => void downloadExport('csv')}><Download className="h-4 w-4" /> تصدير CSV</Button>
-          <Button size="sm" variant="outline" className="gap-1" onClick={() => importInputRef.current?.click()}><FileUp className="h-4 w-4" /> استيراد JSON</Button>
-          <input ref={importInputRef} type="file" accept=".json,application/json" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void importFile(f); e.target.value = ''; }} />
-          <Button size="sm" className="gap-1 bg-emerald-600 hover:bg-emerald-700" onClick={openCreate}><Plus className="h-4 w-4" /> سؤال جديد</Button>
-        </div>
-      </div>
+      <PaneHeader
+        icon={BookOpen}
+        title="بنك الأسئلة"
+        desc="أضف أسئلتك وصنّفها بالمادة والفصل، وابحث وصفِّها، واستورد أو صدّر بصيغة JSON / CSV"
+        actions={
+          <>
+            <Badge variant="secondary">{total} سؤال</Badge>
+            <Button size="sm" variant="outline" className="gap-1" onClick={() => setTaxonomyOpen(true)}><FolderTree className="h-4 w-4 text-emerald-600" /> التصنيفات</Button>
+            <Button size="sm" variant="outline" className="gap-1" onClick={() => void downloadExport('json')}><FileJson className="h-4 w-4" /> تصدير JSON</Button>
+            <Button size="sm" variant="outline" className="gap-1" onClick={() => void downloadExport('csv')}><Download className="h-4 w-4" /> تصدير CSV</Button>
+            <Button size="sm" variant="outline" className="gap-1" onClick={() => importInputRef.current?.click()}><FileUp className="h-4 w-4" /> استيراد JSON</Button>
+            <input ref={importInputRef} type="file" accept=".json,application/json" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void importFile(f); e.target.value = ''; }} />
+            <Button size="sm" className="btn-primary-grad gap-1 border-0 text-white" onClick={openCreate}><Plus className="h-4 w-4" /> سؤال جديد</Button>
+          </>
+        }
+      />
 
       {/* filters */}
       <Card>
-        <CardContent className="grid grid-cols-2 gap-2 p-3 md:grid-cols-3 lg:grid-cols-6">
+        <CardContent className="grid grid-cols-2 gap-2 p-4 md:grid-cols-3 lg:grid-cols-6">
           <div className="relative col-span-2 md:col-span-3 lg:col-span-2">
             <Search className="absolute right-2.5 top-2.5 h-4 w-4 text-slate-300" />
             <Input className="pr-8 text-xs" placeholder="بحث في نص الأسئلة…" value={q} onChange={(e) => setSearch(e.target.value)} aria-label="بحث" />
@@ -334,17 +337,21 @@ export default function BankManager() {
       </Card>
 
       {/* table */}
-      <Card>
-        <CardContent className="p-0">
-          {loading ? (
+      {loading ? (
+        <Card>
+          <CardContent className="p-0">
             <div className="flex items-center justify-center py-16 text-slate-300"><Loader2 className="h-8 w-8 animate-spin" /></div>
-          ) : rows.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-16 text-center">
-              <BookOpen className="h-10 w-10 text-slate-200" />
-              <p className="text-sm font-bold text-slate-500">لا توجد أسئلة مطابقة</p>
-              <p className="text-xs text-slate-400">أضف سؤالًا يدويًا، أو استورد ملفًا، أو استخدم الاستخراج الذكي من المستندات الممسوحة</p>
-            </div>
-          ) : (
+          </CardContent>
+        </Card>
+      ) : rows.length === 0 ? (
+        <EmptyState
+          icon={BookOpen}
+          title="لا توجد أسئلة مطابقة"
+          hint="أضف سؤالًا يدويًا، أو استورد ملفًا، أو استخدم الاستخراج الذكي من المستندات الممسوحة"
+        />
+      ) : (
+        <Card>
+          <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full text-right text-xs">
                 <thead>
@@ -403,18 +410,18 @@ export default function BankManager() {
                 </tbody>
               </table>
             </div>
-          )}
-          {total > 25 && (
-            <div className="flex items-center justify-between border-t px-3 py-2 text-xs text-slate-500">
-              <span>صفحة {page} من {Math.ceil(total / 25)}</span>
-              <div className="flex gap-1.5">
-                <Button size="sm" variant="outline" className="h-7" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>السابق</Button>
-                <Button size="sm" variant="outline" className="h-7" disabled={page >= Math.ceil(total / 25)} onClick={() => setPage((p) => p + 1)}>التالي</Button>
+            {total > 25 && (
+              <div className="flex items-center justify-between border-t px-3 py-2 text-xs text-slate-500">
+                <span>صفحة {page} من {Math.ceil(total / 25)}</span>
+                <div className="flex gap-1.5">
+                  <Button size="sm" variant="outline" className="h-7" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>السابق</Button>
+                  <Button size="sm" variant="outline" className="h-7" disabled={page >= Math.ceil(total / 25)} onClick={() => setPage((p) => p + 1)}>التالي</Button>
+                </div>
               </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* editor dialog */}
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
@@ -545,7 +552,7 @@ export default function BankManager() {
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setEditorOpen(false)}>إلغاء</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700" disabled={saving} onClick={() => void save()}>
+            <Button className="btn-primary-grad gap-1 border-0 text-white" disabled={saving} onClick={() => void save()}>
               {saving && <Loader2 className="h-4 w-4 animate-spin" />} حفظ في البنك
             </Button>
           </DialogFooter>
@@ -664,7 +671,7 @@ function TaxonomyDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
               <Label className="text-[11px]">الاسم</Label>
               <Input className="h-8 text-xs" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void add()} placeholder="مثال: الرياضيات" />
             </div>
-            <Button size="sm" className="h-8 gap-1 bg-emerald-600 hover:bg-emerald-700" disabled={busy} onClick={() => void add()}>
+            <Button size="sm" className="btn-primary-grad h-8 gap-1 border-0 text-white" disabled={busy} onClick={() => void add()}>
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} إضافة
             </Button>
           </div>

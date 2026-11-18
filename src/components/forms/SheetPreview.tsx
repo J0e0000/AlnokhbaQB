@@ -55,7 +55,7 @@ export function SheetPreview({ lang }: Props) {
             </Badge>
           </div>
         </div>
-        <div className="max-h-[44vh] overflow-auto rounded-xl border bg-slate-500/5 p-2 pw-scroll">
+        <div className="max-h-[44vh] overflow-auto rounded-xl border bg-muted p-2 pw-scroll">
           {canvas ? (
             <canvas ref={canvasRef} className="block h-auto w-full" aria-label={L('معاينة الورقة', 'Sheet preview')} />
           ) : (

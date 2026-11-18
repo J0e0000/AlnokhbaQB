@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { FileInput, ImageIcon, ListPlus, Loader2, ScanText } from 'lucide-react';
+import { PaneHeader } from '@/components/qb/pane-kit';
 
 /** Same rule as the server parser: a numbered line starts a new question. */
 const NUMBERED_LINE_RE = /^[\d\u0660-\u0669]+[\.\)\-]/;
@@ -186,11 +187,17 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
   };
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2" dir="rtl">
+    <div className="space-y-4" dir="rtl">
+      <PaneHeader
+        icon={FileInput}
+        title="استيراد OCR"
+        desc="حوّل صورة أو ملف PDF إلى نص قابل للتعديل، ثم استورده كامتحان مسودة أو أسئلة بحاجة لمراجعة في بنك الأسئلة"
+      />
+      <div className="grid gap-4 lg:grid-cols-2">
       {/* Step 1 — image → text */}
-      <Card>
+      <Card className="rounded-2xl">
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
+          <CardTitle className="flex items-center gap-2 text-sm font-bold">
             <ScanText className="h-5 w-5 text-emerald-600" /> استخراج النص من صورة (OCR)
           </CardTitle>
         </CardHeader>
@@ -213,7 +220,7 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
               if (f) void extract(f);
             }}
             onClick={() => inputRef.current?.click()}
-            className="flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-emerald-300 bg-emerald-50/40 p-5 text-center transition hover:border-emerald-400 hover:bg-emerald-50"
+            className="flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/60 p-5 text-center transition hover:border-emerald-400 hover:bg-emerald-50/40"
           >
             <input
               ref={inputRef}
@@ -227,7 +234,7 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
               }}
             />
             {ocrBusy ? <Loader2 className="h-7 w-7 animate-spin text-emerald-600" /> : <ImageIcon className="h-7 w-7 text-emerald-600" />}
-            <div className="text-sm font-medium text-emerald-800">اختر صورة أو ملف PDF لورقة الأسئلة</div>
+            <div className="text-sm font-bold text-slate-700">اختر صورة أو ملف PDF لورقة الأسئلة</div>
             <div className="text-[11px] text-slate-500">يُقرأ النص المضمّن في PDF، وتُحوّل الصفحات المصوّرة تلقائيًا إلى OCR</div>
           </div>
           {imagePreview && !ocrBusy && (
@@ -242,9 +249,9 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
       </Card>
 
       {/* Step 2 — text → exam draft OR bank review queue */}
-      <Card>
+      <Card className="rounded-2xl">
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
+          <CardTitle className="flex items-center gap-2 text-sm font-bold">
             <FileInput className="h-5 w-5 text-emerald-600" /> تحويل النص إلى أسئلة
           </CardTitle>
         </CardHeader>
@@ -288,7 +295,7 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
             />
           </div>
           <Button
-            className="w-full bg-emerald-600 hover:bg-emerald-700"
+            className="w-full btn-primary-grad border-0 text-white"
             disabled={importBusy || ocrBusy || text.trim().length < 3}
             onClick={() => void importContent()}
           >
@@ -308,6 +315,7 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
           </p>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

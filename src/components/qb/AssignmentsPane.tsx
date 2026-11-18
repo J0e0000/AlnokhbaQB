@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import ExamRunner, { type StartedAttempt } from '@/components/qb/ExamRunner';
+import { EmptyState, PaneHeader } from '@/components/qb/pane-kit';
 import {
   AlarmClock, ClipboardList, FileUp, GraduationCap, Loader2, NotebookPen,
   Paperclip, RefreshCw, Trash2, UserRound, X,
@@ -141,6 +142,11 @@ export default function AssignmentsPane() {
 
   return (
     <div className="space-y-4" dir="rtl">
+      <PaneHeader
+        icon={ClipboardList}
+        title="الواجبات"
+        desc="الطالب يستلم ويُسلّم الواجب أو يبدأ الامتحان الإلكتروني، والمعلم ينشئ الواجبات ويتابع التصحيح"
+      />
       <Tabs defaultValue="student">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="student" className="gap-1.5 text-xs"><UserRound className="h-3.5 w-3.5" /> وضع الطالب</TabsTrigger>
@@ -151,9 +157,7 @@ export default function AssignmentsPane() {
           {loading ? (
             <div className="flex justify-center py-14"><Loader2 className="h-6 w-6 animate-spin text-emerald-600" /></div>
           ) : assignments.length === 0 ? (
-            <div className="rounded-xl border-2 border-dashed border-slate-200 py-14 text-center text-sm text-slate-400">
-              لا توجد واجبات بعد — أنشئ واجبًا من لوحة المعلم
-            </div>
+            <EmptyState icon={ClipboardList} title="لا توجد واجبات بعد" hint="أنشئ واجبًا من لوحة المعلم" />
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               {assignments.map((a) => (
@@ -326,7 +330,7 @@ function StudentAssignmentCard({
             {overdue ? (
               <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-700">انتهى الموعد — يُسمح بالتسليم المتأخر وسيُسجل كمتأخر.</p>
             ) : null}
-            <Button className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={busy} onClick={() => void startGraded()}>
+            <Button className="btn-primary-grad w-full gap-1 border-0 text-white" disabled={busy} onClick={() => void startGraded()}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'بدء / استئناف الحل'}
             </Button>
           </>
@@ -354,7 +358,7 @@ function StudentAssignmentCard({
             {!canSubmit ? (
               <p className="rounded-lg bg-red-50 px-3 py-2 text-[11px] text-red-700">انتهى الموعد ولا يُسمح بالتسليم المتأخر.</p>
             ) : (
-              <Button className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={busy} onClick={() => void submitFile()}>
+              <Button className="btn-primary-grad w-full gap-1 border-0 text-white" disabled={busy} onClick={() => void submitFile()}>
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Paperclip className="h-4 w-4" /> تسليم الواجب</>}
               </Button>
             )}
@@ -383,7 +387,7 @@ function TeacherTab({
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <Button size="sm" className="gap-1.5 bg-emerald-600 text-xs hover:bg-emerald-700" onClick={() => setCreateOpen(true)}>
+        <Button size="sm" className="btn-primary-grad gap-1.5 border-0 text-xs text-white" onClick={() => setCreateOpen(true)}>
           <ClipboardList className="h-4 w-4" /> واجب جديد
         </Button>
         <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={onReload}>
@@ -394,9 +398,7 @@ function TeacherTab({
       {loading ? (
         <div className="flex justify-center py-14"><Loader2 className="h-6 w-6 animate-spin text-emerald-600" /></div>
       ) : assignments.length === 0 ? (
-        <div className="rounded-xl border-2 border-dashed border-slate-200 py-14 text-center text-sm text-slate-400">
-          لا واجبات بعد — أنشئ أول واجب (رفع ملف أو امتحان مصحح آليًا)
-        </div>
+        <EmptyState icon={ClipboardList} title="لا واجبات بعد" hint="أنشئ أول واجب (رفع ملف أو امتحان مصحح آليًا)" />
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {assignments.map((a) => {
@@ -558,7 +560,7 @@ function CreateAssignmentDialog({
               </SelectContent>
             </Select>
           </div>
-          <Button className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={busy} onClick={() => void create()}>
+          <Button className="btn-primary-grad w-full gap-1 border-0 text-white" disabled={busy} onClick={() => void create()}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'إنشاء الواجب'}
           </Button>
           <p className="text-[11px] text-slate-500">الموعد يُحفظ على الخادم ويُطبَّق بساعة الخادم — ساعة الجهاز لا تغيّره.</p>
@@ -691,7 +693,7 @@ function AssignmentDetailDialog({
             <div>
               <div className="mb-2 text-xs font-bold text-slate-600">التسليمات ({submissions.length})</div>
               {submissions.length === 0 ? (
-                <div className="rounded-xl border-2 border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">لا تسليمات بعد</div>
+                <EmptyState icon={NotebookPen} title="لا تسليمات بعد" hint="ستظهر هنا تسليمات الطلاب بعد أن يُسلّموا الواجب" />
               ) : (
                 <div className="max-h-96 space-y-2 overflow-y-auto pl-1">
                   {submissions.map((s) => (
@@ -779,7 +781,7 @@ function SubmissionRowItem({
             <Label className="text-[10px] text-slate-500">ملاحظات</Label>
             <Input className="h-8 text-sm" value={feedback} onChange={(e) => setFeedback(e.target.value)} placeholder="ملاحظة للطالب…" />
           </div>
-          <Button size="sm" className="h-8 gap-1 bg-emerald-600 text-xs hover:bg-emerald-700" disabled={busy} onClick={() => void grade()}>
+          <Button size="sm" className="btn-primary-grad h-8 gap-1 border-0 text-xs text-white" disabled={busy} onClick={() => void grade()}>
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'حفظ'}
           </Button>
         </div>

@@ -443,3 +443,66 @@ html.dark .from-slate-50 {
     radial-gradient(circle at 15% 10%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 40%),
     radial-gradient(circle at 85% 0%, color-mix(in srgb, var(--gold, #b45309) 8%, transparent), transparent 45%);
 }
+
+/* ============================================================
+   ROYAL EMERALD LUXE — shell, landing & motion extensions
+   ============================================================ */
+
+/* Brand display serif — single source of truth (replaces inline styles) */
+.brand-serif {
+  font-family: 'Amiri', Georgia, 'Times New Roman', serif;
+}
+
+/* Floating accent (landing hero mock badges) */
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.animate-float {
+  animation: float-y 5s ease-in-out infinite;
+}
+.animate-float-slow {
+  animation: float-y 7s ease-in-out infinite;
+}
+
+/* Shimmering gradient sweep for landing feature cards */
+.shine {
+  position: relative;
+  overflow: hidden;
+}
+.shine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 30%, color-mix(in oklab, var(--gold) 14%, transparent) 48%, transparent 62%);
+  transform: translateX(-120%);
+  transition: transform 0.9s ease;
+  pointer-events: none;
+}
+[dir="ltr"] .shine::after {
+  transform: translateX(120%);
+}
+.shine:hover::after {
+  transform: translateX(0);
+}
+
+/* Hero mock window (pure CSS app preview on the landing page) */
+.hero-mock {
+  background: color-mix(in oklab, var(--card) 86%, transparent);
+  border: 1px solid var(--border);
+  box-shadow:
+    0 30px 80px -30px oklch(0 0 0 / 0.55),
+    0 0 0 1px oklch(1 0 0 / 6%) inset,
+    0 20px 60px -30px oklch(0.6 0.15 163 / 0.35);
+}
+
+/* Landing section anchor offset under the sticky glass navbar */
+.anchor-scroll {
+  scroll-margin-top: 5.5rem;
+}
+
+/* Count-up-style big numbers on the landing stats band */
+.stat-number {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}

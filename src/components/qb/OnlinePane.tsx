@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ExamRunner, { type StartedAttempt } from '@/components/qb/ExamRunner';
+import { EmptyState, PaneHeader } from '@/components/qb/pane-kit';
 import { Clock, GraduationCap, Loader2, MonitorPlay, RefreshCw, ShieldAlert, UserRound } from 'lucide-react';
 
 interface ExamListItem {
@@ -78,6 +79,11 @@ export default function OnlinePane() {
 
   return (
     <div className="space-y-4" dir="rtl">
+      <PaneHeader
+        icon={GraduationCap}
+        title="الامتحانات الأونلاين"
+        desc="ادخل امتحانك المنشور وحلّه من المتصفح — ويراقب المعلم المحاولات والدرجات والمخالفات لحظة بلحظة"
+      />
       <Tabs defaultValue="student">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="student" className="gap-1.5 text-xs"><UserRound className="h-3.5 w-3.5" /> وضع الطالب</TabsTrigger>
@@ -88,9 +94,11 @@ export default function OnlinePane() {
           {loading ? (
             <div className="flex justify-center py-14"><Loader2 className="h-6 w-6 animate-spin text-emerald-600" /></div>
           ) : exams.length === 0 ? (
-            <div className="rounded-xl border-2 border-dashed border-slate-200 py-14 text-center text-sm text-slate-400">
-              لا توجد امتحانات أونلاين منشورة بعد — أنشئ امتحانًا من بنك الأسئلة أو فعّل الوضع الأونلاين ثم انشر
-            </div>
+            <EmptyState
+              icon={MonitorPlay}
+              title="لا توجد امتحانات أونلاين منشورة بعد"
+              hint="أنشئ امتحانًا من بنك الأسئلة أو فعّل الوضع الأونلاين ثم انشره — سيظهر هنا للطلاب مباشرة"
+            />
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               {exams.map((e) => (
@@ -175,7 +183,7 @@ function StudentExamCard({ exam, onFinished }: { exam: ExamListItem; onFinished:
             <Input className="h-9 text-sm" value={code} onChange={(e) => setCode(e.target.value)} placeholder="مثال: 12" />
           </div>
         </div>
-        <Button className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={busy} onClick={() => void start()}>
+        <Button className="btn-primary-grad w-full border-0 text-white" disabled={busy} onClick={() => void start()}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'بدء / استئناف المحاولة'}
         </Button>
         <p className="text-[11px] leading-relaxed text-slate-500">
@@ -219,7 +227,7 @@ function TeacherMonitor({ exams, onRefreshExams }: { exams: ExamListItem[]; onRe
       <CardHeader className="pb-3">
         <CardTitle className="flex flex-wrap items-center gap-2 text-base">
           <MonitorPlay className="h-5 w-5 text-emerald-600" /> مراقبة المحاولات
-          <div className="mr-auto flex items-center gap-2">
+          <div className="ms-auto flex items-center gap-2">
             <Select value={examId} onValueChange={setExamId}>
               <SelectTrigger className="h-8 w-64 text-xs"><SelectValue placeholder="اختر امتحانًا أونلاين" /></SelectTrigger>
               <SelectContent>
@@ -236,13 +244,13 @@ function TeacherMonitor({ exams, onRefreshExams }: { exams: ExamListItem[]; onRe
       </CardHeader>
       <CardContent>
         {!selected ? (
-          <div className="rounded-xl border-2 border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">
+          <div className="rounded-2xl border-2 border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">
             اختر امتحانًا لعرض محاولات الطلاب والدرجات والمخالفات
           </div>
         ) : attempts.length === 0 ? (
-          <div className="rounded-xl border-2 border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">لا محاولات بعد</div>
+          <div className="rounded-2xl border-2 border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">لا محاولات بعد</div>
         ) : (
-          <div className="max-h-96 space-y-2 overflow-y-auto pl-1">
+          <div className="max-h-96 space-y-2 overflow-y-auto pe-1">
             {attempts.map((a) => {
               const st = STATUS_META[a.status] ?? STATUS_META.submitted;
               return (

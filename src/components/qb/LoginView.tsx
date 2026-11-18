@@ -13,11 +13,13 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
-  BookOpen, Files, Info, Loader2, LogIn, PenTool, ScanLine, ShieldCheck, Sparkles, UserPlus,
+  ArrowRight, BookOpen, Files, Info, Loader2, LogIn, PenTool, ScanLine, ShieldCheck, Sparkles, UserPlus,
 } from 'lucide-react';
 
 interface Props {
   onLoggedIn: () => void;
+  /** Optional: show a "back to landing" affordance (used by the public landing page). */
+  onBack?: () => void;
 }
 
 const FEATURES = [
@@ -27,7 +29,7 @@ const FEATURES = [
   { icon: <BookOpen className="h-4 w-4" />, title: 'بنك أسئلة ذكي', desc: 'استخراج الأسئلة من أي ملف وتنظيمها بالتصنيفات' },
 ];
 
-export default function LoginView({ onLoggedIn }: Props) {
+export default function LoginView({ onLoggedIn, onBack }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -123,12 +125,20 @@ export default function LoginView({ onLoggedIn }: Props) {
 
         {/* ---------- Auth card ---------- */}
         <section className="animate-fade-up mx-auto w-full max-w-md">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="mb-3 flex items-center gap-1.5 text-xs font-medium text-slate-500 transition hover:text-emerald-600"
+            >
+              <ArrowRight className="h-3.5 w-3.5" /> العودة إلى صفحة التعريف
+            </button>
+          )}
           {/* compact brand for mobile */}
           <div className="mb-5 flex flex-col items-center gap-2 text-center lg:hidden">
-            <div className="logo-glow flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 font-black text-white" style={{ fontFamily: 'Amiri, serif' }}>
+            <div className="logo-glow flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 font-black text-white brand-serif">
               <span className="text-2xl leading-none">ن</span>
             </div>
-            <h1 className="text-lg font-extrabold" style={{ fontFamily: 'Amiri, serif' }}>
+            <h1 className="brand-serif text-lg font-extrabold">
               منصة <span className="text-gradient">النخبة QB</span>
             </h1>
             <p className="text-xs text-slate-500">بنك أسئلة • امتحانات PDF و OMR • تصحيح آلي</p>

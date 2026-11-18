@@ -71,7 +71,7 @@ export function GradingPanel({ lang, report, labelsForQuestion }: Props) {
             )}
           </div>
         </div>
-        <div className="max-h-64 space-y-1 overflow-y-auto pw-scroll rounded-lg border p-2 pe-1">
+        <div className="max-h-96 space-y-1 overflow-y-auto pw-scroll rounded-lg border p-2 pe-1">
           {questionsList.map(({ q, labels }) => (
             <div key={q} className="flex items-center gap-2 rounded-lg px-2 py-1">
               <span className="w-8 shrink-0 text-xs font-bold">Q{q}</span>

@@ -79,7 +79,7 @@ export function ReadStep({ lang }: Props) {
               {L('فتح شاشة المراجعة', 'Open the review screen')} →
             </Button>
           )}
-          <div className="rounded-lg bg-slate-500/5 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+          <div className="rounded-lg bg-muted px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
             {L(
               'ملاحظة: الأوراق التي فشلت محاذاة علاماتها تُعلَّم «فشل محاذاة» ولا تُقرأ (ما لم تفعّل المتابعة). عتبة الحساسية قابلة للتعديل من خطوة القالب.',
               'Sheets whose markers failed alignment are flagged and not read unless you enable "continue". Sensitivity is adjustable in the template step.'

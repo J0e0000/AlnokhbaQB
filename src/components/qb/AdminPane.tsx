@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Building2, KeyRound, Loader2, Plus, RefreshCw, ScrollText, ShieldCheck, UserCog, Users,
 } from 'lucide-react';
+import { EmptyState, PaneHeader } from '@/components/qb/pane-kit';
 
 interface AdminUser {
   id: string;
@@ -156,12 +157,14 @@ export default function AdminPane({ sessionRole, sessionOrgId }: { sessionRole: 
 
   return (
     <div className="space-y-4" dir="rtl">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-lg font-extrabold text-slate-800">
-          <ShieldCheck className="h-5 w-5 text-emerald-600" /> الإدارة
+      <PaneHeader
+        icon={ShieldCheck}
+        title="الإدارة"
+        desc="إدارة المستخدمين والأدوار، سجل التدقيق، والمؤسسات"
+        actions={
           <Badge variant="outline" className="text-[10px]">{isSuper ? 'مدير النظام — كل المؤسسات' : 'مدير المؤسسة'}</Badge>
-        </h2>
-      </div>
+        }
+      />
 
       <Tabs defaultValue="users">
         <TabsList>
@@ -172,13 +175,13 @@ export default function AdminPane({ sessionRole, sessionOrgId }: { sessionRole: 
 
         {/* ---- users ---- */}
         <TabsContent value="users">
-          <Card>
+          <Card className="rounded-2xl">
             <CardContent className="p-0">
               <div className="flex items-center justify-between border-b px-4 py-3">
                 <span className="text-xs font-bold text-slate-500">{users.length} مستخدمًا</span>
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => void loadUsers()}><RefreshCw className="h-3.5 w-3.5" /> تحديث</Button>
-                  <Button size="sm" className="h-8 gap-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => setCreateOpen(true)}><Plus className="h-3.5 w-3.5" /> مستخدم جديد</Button>
+                  <Button size="sm" className="h-8 gap-1 btn-primary-grad border-0 text-white" onClick={() => setCreateOpen(true)}><Plus className="h-3.5 w-3.5" /> مستخدم جديد</Button>
                 </div>
               </div>
               {loadingUsers ? (
@@ -234,7 +237,7 @@ export default function AdminPane({ sessionRole, sessionOrgId }: { sessionRole: 
 
         {/* ---- audit ---- */}
         <TabsContent value="audit">
-          <Card>
+          <Card className="rounded-2xl">
             <CardContent className="p-0">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
                 <span className="text-xs font-bold text-slate-500">آخر {entries.length} حدثًا</span>
@@ -252,7 +255,13 @@ export default function AdminPane({ sessionRole, sessionOrgId }: { sessionRole: 
               {loadingAudit ? (
                 <div className="flex justify-center py-14 text-slate-300"><Loader2 className="h-7 w-7 animate-spin" /></div>
               ) : entries.length === 0 ? (
-                <div className="py-14 text-center text-xs text-slate-400">لا توجد أحداث مطابقة</div>
+                <div className="flex flex-col items-center gap-2 py-14 text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500/15 to-amber-400/10 text-emerald-600 dark:text-emerald-400">
+                    <ScrollText className="h-6 w-6" />
+                  </div>
+                  <div className="text-sm font-bold">لا توجد أحداث مطابقة</div>
+                  <p className="text-xs text-muted-foreground">جرّب تغيير نوع الحدث من القائمة أو اضغط تحديث</p>
+                </div>
               ) : (
                 <div className="max-h-[60vh] overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
                   <table className="w-full text-right text-xs">
@@ -292,7 +301,7 @@ export default function AdminPane({ sessionRole, sessionOrgId }: { sessionRole: 
           <TabsContent value="orgs">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {orgs.map((o) => (
-                <Card key={o.id}>
+                <Card key={o.id} className="card-hover rounded-2xl">
                   <CardContent className="flex items-center gap-3 p-4">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"><Building2 className="h-5 w-5" /></div>
                     <div className="min-w-0 flex-1">
@@ -302,7 +311,11 @@ export default function AdminPane({ sessionRole, sessionOrgId }: { sessionRole: 
                   </CardContent>
                 </Card>
               ))}
-              {orgs.length === 0 && <div className="col-span-full py-10 text-center text-xs text-slate-400">لا توجد مؤسسات</div>}
+              {orgs.length === 0 && (
+                <div className="col-span-full">
+                  <EmptyState icon={Building2} title="لا توجد مؤسسات" hint="ستظهر المؤسسات المسجّلة هنا — تُدار من لوحة النظام" />
+                </div>
+              )}
             </div>
           </TabsContent>
         )}
@@ -343,7 +356,7 @@ export default function AdminPane({ sessionRole, sessionOrgId }: { sessionRole: 
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>إلغاء</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700" disabled={saving || !form.name.trim() || !form.email.trim() || form.password.length < 8} onClick={() => void createUser()}>
+            <Button className="btn-primary-grad border-0 text-white" disabled={saving || !form.name.trim() || !form.email.trim() || form.password.length < 8} onClick={() => void createUser()}>
               {saving && <Loader2 className="h-4 w-4 animate-spin" />} إنشاء
             </Button>
           </DialogFooter>

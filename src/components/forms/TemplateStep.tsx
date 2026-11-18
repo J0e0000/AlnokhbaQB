@@ -22,6 +22,7 @@ import { downloadBlob } from '@/lib/pw/blob';
 import { toGray, normalizeContrast } from '@/lib/forms/image';
 import { guessMarkers } from '@/lib/forms/align';
 import { templateToJson } from '@/lib/forms/exporters';
+import { EmptyState } from '@/components/qb/pane-kit';
 
 interface Props {
   lang: 'ar' | 'en';
@@ -342,11 +343,9 @@ export function TemplateStep({ lang, onGenerateSheets }: Props) {
 
   if (!sample) {
     return (
-      <Card dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-        <CardContent className="py-16 text-center text-sm text-muted-foreground">
-          {L('حمّل أوراقًا أولًا', 'Load sheets first')}
-        </CardContent>
-      </Card>
+      <div dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+        <EmptyState icon={Scan} title={L('حمّل أوراقًا أولًا', 'Load sheets first')} hint={L('أضف صورًا أو ملفات PDF من خطوة التحميل لتبدأ رسم المناطق.', 'Add images or PDFs from the load step to start drawing areas.')} />
+      </div>
     );
   }
 
@@ -372,7 +371,7 @@ export function TemplateStep({ lang, onGenerateSheets }: Props) {
               </Button>
             </div>
           </div>
-          <div ref={wrapRef} className="max-h-[64vh] overflow-auto rounded-xl border border-border bg-slate-500/5 p-2 pw-scroll">
+          <div ref={wrapRef} className="max-h-[64vh] overflow-auto rounded-xl border border-border bg-muted p-2 pw-scroll">
             <canvas
               ref={canvasRef}
               className="block h-auto w-full cursor-crosshair touch-none"
@@ -444,7 +443,7 @@ export function TemplateStep({ lang, onGenerateSheets }: Props) {
                   </div>
                 </>
               ) : (
-                <div className="col-span-2 rounded-lg bg-slate-500/5 px-3 py-2 text-[11px] text-muted-foreground">
+                <div className="col-span-2 rounded-lg bg-muted px-3 py-2 text-[11px] text-muted-foreground">
                   {drawType === 'bcr'
                     ? L('سيُقرأ المنطقة كرمز QR ثم كباركودات خطية (Code128/EAN/ITF…) مع إعادة المحاولة بالتدوير.', 'Decoded as QR first, then 1D barcodes (Code128/EAN/ITF…) with rotation retries.')
                     : L('سيُستخرج النص المطبوع (Tesseract داخل المتصفح) أو الخط اليدوي عبر نموذج الرؤية إن فُعّل لاحقًا.', 'Printed text via in-browser Tesseract; handwritten text can go to a vision model when enabled.')}
@@ -513,7 +512,7 @@ export function TemplateStep({ lang, onGenerateSheets }: Props) {
             {!template.areas.length ? (
               <p className="text-xs text-muted-foreground">{L('لا مناطق بعد — اسحب مستطيلًا على الورقة', 'None yet — drag a rectangle on the sheet')}</p>
             ) : (
-              <ul className="max-h-40 space-y-1 overflow-y-auto pw-scroll pe-1">
+              <ul className="max-h-96 space-y-1 overflow-y-auto pw-scroll pe-1">
                 {template.areas.map((a, k) => (
                   <li key={a.id}>
                     <button
@@ -590,7 +589,7 @@ export function TemplateStep({ lang, onGenerateSheets }: Props) {
               }}
             />
             {cloudRows.length > 0 && (
-              <ul className="max-h-32 space-y-1 overflow-y-auto pw-scroll pe-1">
+              <ul className="max-h-96 space-y-1 overflow-y-auto pw-scroll pe-1">
                 {cloudRows.map((row) => (
                   <li key={row.id} className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs">
                     <span className="min-w-0 flex-1 truncate font-medium">{row.name}</span>

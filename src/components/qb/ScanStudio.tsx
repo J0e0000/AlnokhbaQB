@@ -22,6 +22,7 @@ import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { PaneHeader } from '@/components/qb/pane-kit';
 import {
   Camera,
   CameraOff,
@@ -933,18 +934,24 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
 
   return (
     <div className="space-y-4" dir="rtl">
+      <PaneHeader
+        icon={ScanLine}
+        title="مسح وتصحيح"
+        desc="امسح أوراق الإجابة بالكاميرا أو ارفعها كصور وملفات PDF — قراءة QR تلقائية، تصحيح فوري، وربط الأوراق بالطلاب"
+      />
+
       {/* tabs */}
       <div className="flex gap-2">
         <Button
           variant={tab === 'live' ? 'default' : 'outline'}
-          className={tab === 'live' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
+          className={tab === 'live' ? 'btn-primary-grad gap-1 border-0 text-white' : ''}
           onClick={() => setTab('live')}
         >
           <Camera className="ml-1 h-4 w-4" /> كاميرا مباشرة
         </Button>
         <Button
           variant={tab === 'upload' ? 'default' : 'outline'}
-          className={tab === 'upload' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
+          className={tab === 'upload' ? 'btn-primary-grad gap-1 border-0 text-white' : ''}
           onClick={() => setTab('upload')}
         >
           <Upload className="ml-1 h-4 w-4" /> رفع صور / PDF
@@ -953,7 +960,7 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
+          <CardTitle className="flex items-center gap-2 text-sm font-bold">
             <ScanLine className="h-5 w-5 text-emerald-600" />
             {tab === 'live' ? 'مسح مباشر بجوار الكاميرا' : 'رفع ورقة الإجابة'}
           </CardTitle>
@@ -997,7 +1004,7 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
 
               <div className="flex flex-wrap items-center gap-2">
                 {scanState === 'IDLE' || scanState === 'ERROR' ? (
-                  <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => void startCamera()}>
+                  <Button className="btn-primary-grad gap-1 border-0 text-white" onClick={() => void startCamera()}>
                     <Camera className="ml-1 h-4 w-4" /> تشغيل الكاميرا
                   </Button>
                 ) : (
@@ -1022,7 +1029,7 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
                     >
                       <CameraOff className="h-4 w-4" />
                     </Button>
-                    <span className="text-xs text-slate-500">
+                    <span className="text-[11px] text-slate-500">
                       {torchSupported ? '' : 'الفلاش غير متاح على هذا الجهاز — '}
                       الالتقاط تلقائي عند ثبات الورقة
                     </span>
@@ -1073,14 +1080,14 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
                   ? 'جارٍ المعالجة… انتظر انتهاء الرفع الحالي'
                   : 'التقط صورة أو أفلت ملفًا هنا — صور أو PDF متعدد الصفحات'}
               </div>
-              <div className="text-xs text-slate-500">
+              <div className="text-[11px] text-slate-500">
                 يُقرأ رمز QR تلقائيًا لتحديد نسخة الامتحان • ملف PDF يُعالَج صفحة صفحة مع شريط تقدم
               </div>
             </div>
           )}
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="text-xs text-slate-500">النسخة (اختياري عند فشل QR):</span>
+            <span className="text-[11px] text-slate-500">النسخة (اختياري عند فشل QR):</span>
             <Select value={hintVersion} onValueChange={setHintVersion}>
               <SelectTrigger className="h-8 w-64 text-xs">
                 <SelectValue />
@@ -1142,10 +1149,10 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
       {batch && (batch.running || batch.pages.length > 0) && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">معالجة ملف PDF {batch.running ? '…' : '— انتهت'}</CardTitle>
+            <CardTitle className="text-sm font-bold">معالجة ملف PDF {batch.running ? '…' : '— انتهت'}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex items-center justify-between text-xs text-slate-600">
+            <div className="flex items-center justify-between text-[11px] text-slate-600">
               <span>
                 {batch.done} / {batch.total} صفحة
               </span>
@@ -1156,7 +1163,7 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
               </span>
             </div>
             <Progress value={batch.total ? (batch.done / batch.total) * 100 : 0} className="h-2" />
-            <div className="max-h-56 overflow-y-auto rounded-lg border">
+            <div className="max-h-96 overflow-y-auto rounded-lg border">
               <table className="w-full text-right text-xs">
                 <thead className="sticky top-0 bg-slate-50 text-slate-500">
                   <tr>
@@ -1213,7 +1220,7 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
         <div className="grid gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">النتائج</CardTitle>
+              <CardTitle className="text-sm font-bold">النتائج</CardTitle>
             </CardHeader>
             <CardContent>
               {(result.answers ?? []).length === 0 ? (
@@ -1273,7 +1280,7 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
               {Object.keys(overrides).length > 0 && (
                 <Button
                   size="sm"
-                  className="mt-3 bg-emerald-600 hover:bg-emerald-700"
+                  className="mt-3 btn-primary-grad gap-1 border-0 text-white"
                   onClick={() => void applyOverrides()}
                 >
                   تطبيق التصحيحات وإعادة الاحتساب
@@ -1286,7 +1293,7 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
             {result.grade && (
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">الدرجة</CardTitle>
+                  <CardTitle className="text-sm font-bold">الدرجة</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="text-center">
@@ -1322,7 +1329,7 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
             {/* identity / review */}
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-base">
+                <CardTitle className="flex items-center gap-2 text-sm font-bold">
                   <UserCheck className="h-4 w-4 text-emerald-600" /> هوية الطالب
                 </CardTitle>
               </CardHeader>
@@ -1352,7 +1359,7 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
                     inputMode="numeric"
                     className="h-8 flex-1 text-sm"
                   />
-                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" disabled={linking || !linkCode.trim()} onClick={() => void linkStudent()}>
+                  <Button size="sm" className="btn-primary-grad gap-1 border-0 text-white" disabled={linking || !linkCode.trim()} onClick={() => void linkStudent()}>
                     {linking ? <Loader2 className="h-4 w-4 animate-spin" /> : 'ربط'}
                   </Button>
                 </div>
@@ -1370,7 +1377,7 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
 
             <Card>
               <CardContent className="pt-4">
-                <div className="mb-2 flex items-center justify-between text-xs text-slate-500">
+                <div className="mb-2 flex items-center justify-between text-[11px] text-slate-500">
                   <span>الثقة العامة</span>
                   <span className="font-bold text-slate-700">{Math.round((result.overallConfidence ?? 0) * 100)}%</span>
                 </div>
@@ -1413,7 +1420,7 @@ function ScanDiagnostics({ result }: { result: ScanResult }) {
   };
   return (
     <div className="space-y-3" dir="rtl">
-      <div className="grid grid-cols-3 gap-2 text-xs">
+      <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
         {Object.entries(stageLabels).map(([k, label]) => (
           <div
             key={k}

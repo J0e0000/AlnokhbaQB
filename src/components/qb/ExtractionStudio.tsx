@@ -23,6 +23,7 @@ import {
   BadgeCheck, CheckCheck, FileText, Image as ImageIcon, Loader2, RefreshCw,
   ScanText, Sparkles, ThumbsDown, ThumbsUp, TriangleAlert, UploadCloud, X,
 } from 'lucide-react';
+import { EmptyState, PaneHeader } from '@/components/qb/pane-kit';
 
 interface SourcePage {
   page: number;
@@ -311,20 +312,19 @@ export default function ExtractionStudio({ onGoToBank }: { onGoToBank?: () => vo
   return (
     <div className="space-y-5" dir="rtl">
       {/* header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-lg font-extrabold text-slate-800">
-            <ScanText className="h-5 w-5 text-emerald-600" /> الاستخراج الذكي للأسئلة
-          </h2>
-          <p className="text-xs text-slate-500">ارفع ملف PDF أو صورة ممسوحة → الذكاء الاصطناعي يستخرج الأسئلة → راجعها وعدّلها ثم استوردها للبنك</p>
-        </div>
-        <Badge variant="outline" className="gap-1 border-emerald-300 bg-emerald-50 text-emerald-700">
-          <Sparkles className="h-3 w-3" /> نموذج رؤية VLM — عربي/إنجليزي
-        </Badge>
-      </div>
+      <PaneHeader
+        icon={ScanText}
+        title="الاستخراج الذكي للأسئلة"
+        desc="ارفع ملف PDF أو صورة ممسوحة → الذكاء الاصطناعي يستخرج الأسئلة → راجعها وعدّلها ثم استوردها للبنك"
+        actions={
+          <Badge variant="outline" className="gap-1 border-emerald-300 bg-emerald-50 text-emerald-700">
+            <Sparkles className="h-3 w-3" /> نموذج رؤية VLM — عربي/إنجليزي
+          </Badge>
+        }
+      />
 
       {/* step 1: source */}
-      <Card>
+      <Card className="rounded-2xl">
         <CardContent className="space-y-4 p-4">
           <div
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -395,7 +395,7 @@ export default function ExtractionStudio({ onGoToBank }: { onGoToBank?: () => vo
                     </SelectContent>
                   </Select>
                 </div>
-                <Button className="bg-emerald-600 hover:bg-emerald-700" disabled={extracting || preparing} onClick={() => void extract()}>
+                <Button className="btn-primary-grad gap-1 border-0 text-white" disabled={extracting || preparing} onClick={() => void extract()}>
                   {extracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanText className="h-4 w-4" />}
                   {extracting ? 'جارٍ الاستخراج…' : 'بدء الاستخراج الذكي'}
                 </Button>
@@ -408,10 +408,10 @@ export default function ExtractionStudio({ onGoToBank }: { onGoToBank?: () => vo
 
       {/* step 2: review */}
       {(job || loadingJob) && (
-        <Card>
+        <Card className="rounded-2xl">
           <CardContent className="space-y-4 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="flex items-center gap-2 text-sm font-extrabold text-slate-700">
+              <h3 className="flex items-center gap-2 text-sm font-bold text-slate-700">
                 <BadgeCheck className="h-4 w-4 text-emerald-600" /> مراجعة الأسئلة المستخرجة
                 {job && <Badge variant="secondary" className="text-[10px]">{candidates.length} مرشح</Badge>}
                 {needsReview > 0 && (
@@ -449,7 +449,7 @@ export default function ExtractionStudio({ onGoToBank }: { onGoToBank?: () => vo
                 لم يُعثر على أسئلة في الصفحات المحددة — جرّب جودة صورة أعلى أو صفحات أخرى
               </div>
             ) : (
-              <div className="max-h-[32rem] space-y-3 overflow-y-auto pl-1" style={{ scrollbarWidth: 'thin' }}>
+              <div className="max-h-96 space-y-3 overflow-y-auto pe-1" style={{ scrollbarWidth: 'thin' }}>
                 {candidates.map((c, idx) => (
                   <CandidateCard
                     key={c.id}
@@ -475,7 +475,7 @@ export default function ExtractionStudio({ onGoToBank }: { onGoToBank?: () => vo
                   >
                     <CheckCheck className="h-4 w-4 text-emerald-600" /> قبول الكل
                   </Button>
-                  <Button className="gap-1 bg-emerald-600 hover:bg-emerald-700" disabled={importing || pending.length === 0} onClick={() => void importSelected()}>
+                  <Button className="btn-primary-grad gap-1 border-0 text-white" disabled={importing || pending.length === 0} onClick={() => void importSelected()}>
                     {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <BadgeCheck className="h-4 w-4" />}
                     استيراد {pending.length} إلى بنك الأسئلة
                   </Button>
@@ -488,9 +488,9 @@ export default function ExtractionStudio({ onGoToBank }: { onGoToBank?: () => vo
 
       {/* step 3: history */}
       {jobsHistory.length > 0 && (
-        <Card>
+        <Card className="rounded-2xl">
           <CardContent className="p-4">
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-extrabold text-slate-700"><RefreshCw className="h-4 w-4 text-emerald-600" /> مهام سابقة</h3>
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-700"><RefreshCw className="h-4 w-4 text-emerald-600" /> مهام سابقة</h3>
             <div className="max-h-52 space-y-2 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
               {jobsHistory.map((j) => (
                 <button key={j.id} onClick={() => void openJob(j.id)} className="flex w-full flex-wrap items-center gap-2 rounded-lg border border-slate-100 px-3 py-2 text-right text-xs transition hover:bg-slate-50">
@@ -499,7 +499,7 @@ export default function ExtractionStudio({ onGoToBank }: { onGoToBank?: () => vo
                   </Badge>
                   <span className="max-w-[200px] truncate font-medium text-slate-600">{j.document?.filename ?? 'بدون ملف'}</span>
                   <span className="text-slate-400">{j.questionCount} سؤال</span>
-                  <span className="mr-auto text-[10px] text-slate-300">{new Date(j.createdAt).toLocaleString('ar')}</span>
+                  <span className="ms-auto text-[10px] text-slate-300">{new Date(j.createdAt).toLocaleString('ar')}</span>
                 </button>
               ))}
             </div>
@@ -509,16 +509,11 @@ export default function ExtractionStudio({ onGoToBank }: { onGoToBank?: () => vo
 
       {/* empty state */}
       {!source && !job && jobsHistory.length === 0 && (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
-            <ScanText className="h-10 w-10 text-slate-200" />
-            <p className="text-sm font-bold text-slate-500">ابدأ برفع ورقة امتحان أو ملزمة ممسوحة ضوئيًا</p>
-            <p className="max-w-md text-xs text-slate-400">
-              يدعم النظام الأسئلة الاختيارية من متعدد وصح/خطأ والأسئلة المقالية، مع مؤشر ثقة لكل سؤال —
-              لا يُضاف أي سؤال للبنك دون مراجعتك وتأكيدك.
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={ScanText}
+          title="ابدأ برفع ورقة امتحان أو ملزمة ممسوحة ضوئيًا"
+          hint="يدعم النظام الأسئلة الاختيارية من متعدد وصح/خطأ والأسئلة المقالية، مع مؤشر ثقة لكل سؤال — لا يُضاف أي سؤال للبنك دون مراجعتك وتأكيدك."
+        />
       )}
     </div>
   );
@@ -562,7 +557,7 @@ function CandidateCard({
         {dirty && <Badge className="bg-emerald-600 text-[10px]">معدّل</Badge>}
         {c.questionId && <Badge variant="outline" className="text-[10px] text-emerald-600">مستورد ✓</Badge>}
 
-        <div className="mr-auto flex items-center gap-1">
+        <div className="ms-auto flex items-center gap-1">
           <Button size="sm" variant="outline" className="h-7 gap-1 text-[11px]" disabled={disabled || rejected} onClick={() => void onPatch(c.id, { status: 'accepted' })}>
             <ThumbsUp className="h-3 w-3 text-emerald-600" /> قبول
           </Button>
@@ -587,7 +582,7 @@ function CandidateCard({
       </div>
 
       <Textarea
-        className="mb-2 min-h-[60px] resize-y bg-white text-sm"
+        className="mb-2 min-h-[60px] resize-y bg-card text-sm"
         value={prompt}
         disabled={rejected}
         onChange={(e) => setPrompt(e.target.value)}
@@ -598,7 +593,7 @@ function CandidateCard({
       {c.type === 'mcq' && options.length > 0 && (
         <div className="mb-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
           {options.map((o) => (
-            <div key={o.id} className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 ${correct === o.id ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+            <div key={o.id} className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 ${correct === o.id ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 bg-card'}`}>
               <button
                 className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-black transition ${correct === o.id ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
                 title="تعيين كإجابة صحيحة"

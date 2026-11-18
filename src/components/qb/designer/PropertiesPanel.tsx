@@ -44,7 +44,7 @@ export default function PropertiesPanel() {
   );
 
   return (
-    <div className="flex h-full flex-col gap-4 overflow-y-auto p-3" dir="rtl">
+    <div className="flex h-full flex-col gap-4 overflow-y-auto p-4" dir="rtl">
       {el ? (
         <>
           <div>
@@ -145,7 +145,7 @@ export default function PropertiesPanel() {
                 </div>
                 {/* ---- guide answer (correct answer) selector ---- */}
                 {linkedQuestion && linkedQuestion.type === 'mcq' && linkedQuestion.options.length >= 2 && (
-                  <div className="mt-3 rounded-lg border bg-emerald-50/50 p-2">
+                  <div className="mt-3 rounded-xl border bg-emerald-50/50 p-2">
                     <Label className="text-[10px] font-semibold text-emerald-800">الإجابة الصحيحة (دليل التصحيح)</Label>
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
                       {linkedQuestion.options.map((o) => {
@@ -193,7 +193,7 @@ export default function PropertiesPanel() {
         </>
       ) : (
         <>
-          <div className="text-xs font-semibold text-slate-500">إعدادات الامتحان</div>
+          <div className="text-sm font-bold text-slate-500">إعدادات الامتحان</div>
           <div className="space-y-2">
             <div><Label className="text-[10px]">اسم المدرسة</Label><Input className="h-8" value={document.branding.institution} onChange={(e) => updateBranding({ institution: e.target.value })} /></div>
             <div><Label className="text-[10px]">العام الدراسي</Label><Input className="h-8" value={document.branding.academicYear ?? ''} onChange={(e) => updateBranding({ academicYear: e.target.value })} /></div>
@@ -212,7 +212,7 @@ export default function PropertiesPanel() {
             </div>
           </div>
           <Separator />
-          <div className="text-xs font-semibold text-slate-500">تصميم الورقة</div>
+          <div className="text-sm font-bold text-slate-500">تصميم الورقة</div>
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <Label className="text-[10px]">لون التمييز</Label>
@@ -249,7 +249,7 @@ export default function PropertiesPanel() {
             </div>
           </div>
           <Separator />
-          <div className="text-xs font-semibold text-slate-500">التصحيح</div>
+          <div className="text-sm font-bold text-slate-500">التصحيح</div>
           <label className="flex items-center gap-2 text-xs">
             <Switch
               checked={(document.grading?.negativeMarking ?? 0) > 0}
@@ -258,7 +258,7 @@ export default function PropertiesPanel() {
             خصم 0.25 لكل إجابة خاطئة
           </label>
           <Separator />
-          <div className="text-xs font-semibold text-slate-500">OMR</div>
+          <div className="text-sm font-bold text-slate-500">OMR</div>
           <label className="flex items-center gap-2 text-xs">
             <Switch checked={document.omr.enabled} onCheckedChange={(v) => updateOmr({ enabled: v })} /> تفعيل التصحيح الآلي
           </label>
@@ -268,7 +268,7 @@ export default function PropertiesPanel() {
               <div><Label className="text-[10px]">أرقام الطالب</Label><Input type="number" min={4} max={10} className="h-8" value={document.omr.studentIdDigits} onChange={(e) => updateOmr({ studentIdDigits: parseInt(e.target.value) || 6 })} /></div>
             </div>
           )}
-          <div className="mt-auto rounded-lg bg-emerald-50 p-3 text-[11px] leading-relaxed text-emerald-800">
+          <div className="mt-auto rounded-xl bg-emerald-50 p-3 text-[11px] leading-relaxed text-emerald-800">
             حدّد عنصرًا من الصفحة لتعديل خصائصه، أو أضف عناصر من اللوحة اليمنى.
           </div>
         </>

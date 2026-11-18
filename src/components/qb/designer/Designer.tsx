@@ -239,7 +239,7 @@ export default function Designer({ examId }: DesignerProps) {
           </div>
         )}
         {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-1.5 rounded-xl border bg-white p-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-1.5 rounded-2xl border bg-white p-2 shadow-sm">
           <Button variant="ghost" size="icon" onClick={() => store.undo()} className="h-8 w-8"><Undo2 className="h-4 w-4" /></Button>
           <Button variant="ghost" size="icon" onClick={() => store.redo()} className="h-8 w-8"><Redo2 className="h-4 w-4" /></Button>
           <div className="mx-1 h-6 w-px bg-slate-200" />
@@ -264,12 +264,12 @@ export default function Designer({ examId }: DesignerProps) {
           )}
           <div className="mx-1 h-6 w-px bg-slate-200" />
           <QuestionBankDialog open={bankOpen} onOpenChange={setBankOpen} />
-          <div className="mr-auto flex items-center gap-2">
+          <div className="ms-auto flex items-center gap-2">
             {dirty && <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" title="تغييرات غير محفوظة" />}
             {lastSavedAt && !dirty && <span className="text-[10px] text-slate-400">محفوظ</span>}
             <Button
               size="sm"
-              className="h-8 gap-1 bg-emerald-600 hover:bg-emerald-700"
+              className="btn-primary-grad h-8 gap-1 border-0 text-white"
               disabled={saving}
               onClick={async () => {
                 const res = await store.save();
@@ -286,7 +286,7 @@ export default function Designer({ examId }: DesignerProps) {
 
         <div className="flex min-h-0 flex-1 gap-2">
           {/* Add-elements panel */}
-          <div className="w-40 shrink-0 space-y-1 overflow-y-auto rounded-xl border bg-white p-2 shadow-sm">
+          <div className="w-40 shrink-0 space-y-1 overflow-y-auto rounded-2xl border bg-white p-2 shadow-sm">
             <div className="px-1 pb-1 text-[11px] font-semibold text-slate-400">إضافة عنصر</div>
             <AddBtn icon={<Type className="h-4 w-4" />} label="نص" onClick={addText} />
             <AddBtn icon={<Heading1 className="h-4 w-4" />} label="عنوان" onClick={addHeader} />
@@ -306,7 +306,7 @@ export default function Designer({ examId }: DesignerProps) {
           </div>
 
           {/* Properties */}
-          <div className="w-64 shrink-0 overflow-hidden rounded-xl border bg-white shadow-sm">
+          <div className="w-64 shrink-0 overflow-hidden rounded-2xl border bg-white shadow-sm">
             <PropertiesPanel />
           </div>
         </div>
@@ -373,7 +373,7 @@ function QuestionBankDialog({ open, onOpenChange }: { open: boolean; onOpenChang
           <DialogTitle className="text-right">بنك الأسئلة ({doc.questions.length})</DialogTitle>
           <DialogDescription className="text-right">أسئلة هذا الامتحان — أضفها إلى الصفحات أو عدّلها.</DialogDescription>
         </DialogHeader>
-        <div className="max-h-[50vh] space-y-2 overflow-y-auto pl-1">
+        <div className="max-h-[50vh] space-y-2 overflow-y-auto pe-1">
           {doc.questions.map((q) => (
             <div key={q.id} className="rounded-lg border p-3">
               <div className="flex items-start justify-between gap-2">
@@ -432,13 +432,13 @@ function QuestionBankDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                 <Label className="text-[10px] text-slate-500">اختر الإجابة الصحيحة بعد الحفظ من القائمة</Label>
                 <div className="flex gap-2">
                   <Button size="sm" variant="ghost" onClick={() => setDraft(null)}>إلغاء</Button>
-                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={commit}>إضافة السؤال</Button>
+                  <Button size="sm" className="btn-primary-grad border-0 text-white" onClick={commit}>إضافة السؤال</Button>
                 </div>
               </div>
             </div>
           ) : (
             <div className="space-y-2">
-              <Button size="sm" variant="outline" className="w-full" onClick={startNew}><FilePlus2 className="mr-1 h-4 w-4" /> سؤال جديد</Button>
+              <Button size="sm" variant="outline" className="w-full" onClick={startNew}><FilePlus2 className="me-1 h-4 w-4" /> سؤال جديد</Button>
               <BankImportButton />
             </div>
           )}

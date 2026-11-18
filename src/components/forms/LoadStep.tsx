@@ -72,7 +72,7 @@ export function LoadStep({ lang, onGenerateDemo, demoBusy }: Props) {
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click();
             }}
-            className={`flex h-40 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed text-sm transition ${
+            className={`flex h-40 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed text-sm transition ${
               dragOver ? 'border-emerald-500 bg-emerald-500/10' : 'border-border hover:border-emerald-500/60 hover:bg-accent'
             }`}
           >
@@ -137,7 +137,7 @@ export function LoadStep({ lang, onGenerateDemo, demoBusy }: Props) {
           {!sheets.length ? (
             <p className="py-8 text-center text-xs text-muted-foreground">{L('لا شيء بعد', 'Nothing yet')}</p>
           ) : (
-            <ul className="max-h-72 space-y-1.5 overflow-y-auto pw-scroll pe-1">
+            <ul className="max-h-96 space-y-1.5 overflow-y-auto pw-scroll pe-1">
               {sheets.map((s, i) => (
                 <li key={s.id} className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs">
                   <span className="w-6 text-center font-bold text-emerald-600">{i === 0 ? '★' : i + 1}</span>
@@ -159,7 +159,7 @@ export function LoadStep({ lang, onGenerateDemo, demoBusy }: Props) {
               ))}
             </ul>
           )}
-          <p className="mt-3 rounded-lg bg-slate-500/5 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+          <p className="mt-3 rounded-lg bg-muted px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
             <FileDown className="me-1 inline h-3 w-3" />
             {L(
               'الورقة الأولى (★) تُستخدم لرسم مناطق القالب بإحداثيات معيارية 0–1، فتعمل مع أي دقة مسح.',

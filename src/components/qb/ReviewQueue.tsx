@@ -41,6 +41,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { QBAnswerStatus, QBScanGrade, QBScannedAnswer } from '@/lib/qb/types';
+import { EmptyState, PaneHeader } from '@/components/qb/pane-kit';
 
 // ---- types ----
 
@@ -221,41 +222,41 @@ export default function ReviewQueue() {
 
   return (
     <div className="space-y-4" dir="rtl">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="flex items-center gap-2 text-lg font-extrabold">
-            <ClipboardCheck className="h-5 w-5 text-emerald-600" />
-            قائمة المراجعة
-          </h2>
-          <p className="text-xs text-slate-500">
-            الأوراق التي يحتاج قراءتها تدخل بشري: إجابات ملتبسة، هوية غير مؤكدة، أو ثقة منخفضة —
-            صحّح ثم اعتمد لتثبيت الدرجة.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="gap-1 border-amber-300 bg-amber-50 text-amber-800">
-            <FileSearch className="h-3.5 w-3.5" /> {items.length} ورقة معلّقة
-          </Badge>
-          <Button variant="outline" size="sm" onClick={() => void loadQueue()} disabled={loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            تحديث
-          </Button>
-        </div>
-      </div>
+      <PaneHeader
+        icon={ClipboardCheck}
+        title="قائمة المراجعة"
+        desc="الأوراق التي يحتاج قراءتها تدخل بشري: إجابات ملتبسة، هوية غير مؤكدة، أو ثقة منخفضة — صحّح ثم اعتمد لتثبيت الدرجة."
+        actions={
+          <>
+            <Badge variant="outline" className="gap-1 border-amber-300 bg-amber-50 text-amber-800">
+              <FileSearch className="h-3.5 w-3.5" /> {items.length} ورقة معلّقة
+            </Badge>
+            <Button variant="outline" size="sm" onClick={() => void loadQueue()} disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              تحديث
+            </Button>
+          </>
+        }
+      />
 
-      <Card>
-        <CardContent className="p-0">
-          {loading ? (
+      {loading ? (
+        <Card className="rounded-2xl">
+          <CardContent className="p-0">
             <div className="flex items-center justify-center gap-2 p-10 text-sm text-slate-500">
               <Loader2 className="h-5 w-5 animate-spin" /> جارٍ التحميل…
             </div>
-          ) : items.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 p-10 text-center text-sm text-slate-500">
-              <BadgeCheck className="h-8 w-8 text-emerald-500" />
-              لا توجد أوراق تنتظر المراجعة — كل القراءات معتمدة.
-            </div>
-          ) : (
-            <div className="max-h-[28rem] overflow-y-auto">
+          </CardContent>
+        </Card>
+      ) : items.length === 0 ? (
+        <EmptyState
+          icon={BadgeCheck}
+          title="لا توجد أوراق تنتظر المراجعة"
+          hint="كل القراءات معتمدة — الأوراق ذات الإجابات الملتبسة أو الهوية غير المؤكدة أو الثقة المنخفضة ستظهر هنا تلقائيًا."
+        />
+      ) : (
+        <Card className="overflow-hidden rounded-2xl">
+          <CardContent className="p-0">
+            <div className="max-h-96 overflow-y-auto">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-muted/95 text-[11px] text-slate-500 backdrop-blur">
                   <tr>
@@ -327,9 +328,9 @@ export default function ReviewQueue() {
                 </tbody>
               </table>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ---- detail dialog ---- */}
       <Dialog open={openId !== null} onOpenChange={(v) => !v && setOpenId(null)}>
@@ -419,7 +420,7 @@ export default function ReviewQueue() {
                     لا توجد إجابات مقروءة لهذه الورقة.
                   </div>
                 ) : (
-                  <div className="max-h-72 space-y-1.5 overflow-y-auto pl-1">
+                  <div className="max-h-72 space-y-1.5 overflow-y-auto pe-1">
                     {detail.answers.map((a) => {
                       const override = overrides[String(a.number)];
                       const isCorrect = detail.grade?.correct.includes(a.number);
@@ -535,7 +536,7 @@ export default function ReviewQueue() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                    className="flex-1 btn-primary-grad border-0 text-white"
                     disabled={saving !== null}
                     onClick={() => void approve(true)}
                   >

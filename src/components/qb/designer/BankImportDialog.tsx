@@ -124,15 +124,15 @@ function BankImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
           <DialogDescription className="text-right">ابحث في بنك الأسئلة واختر الأسئلة لاستيرادها إلى الامتحان.</DialogDescription>
         </DialogHeader>
         <div className="relative">
-          <Search className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input className="h-9 pr-8 text-sm" placeholder="بحث…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Search className="absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input className="h-9 ps-8 text-sm" placeholder="بحث…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         {loading ? (
           <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-emerald-600" /></div>
         ) : questions.length === 0 ? (
           <div className="py-8 text-center text-sm text-slate-400">البنك فارغ — أضف أسئلة من صفحة «بنك الأسئلة»</div>
         ) : (
-          <div className="max-h-80 space-y-2 overflow-y-auto pl-1">
+          <div className="max-h-80 space-y-2 overflow-y-auto pe-1">
             {questions.map((b) => (
               <label key={b.id} className="flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 hover:bg-slate-50">
                 <Checkbox className="mt-1" checked={selected.has(b.id)} onCheckedChange={() => toggle(b.id)} />
@@ -148,7 +148,7 @@ function BankImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
             ))}
           </div>
         )}
-        <Button className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={busy || selected.size === 0} onClick={importSelected}>
+        <Button className="btn-primary-grad w-full border-0 text-white" disabled={busy || selected.size === 0} onClick={importSelected}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : `إضافة ${selected.size || ''} إلى الامتحان`}
         </Button>
       </DialogContent>

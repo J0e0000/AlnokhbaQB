@@ -26,6 +26,7 @@ import {
   Minus,
   MoveUpRight,
   Pencil,
+  PenTool,
   Pipette,
   Redo2,
   Square,
@@ -34,6 +35,7 @@ import {
   Undo2,
   type LucideIcon,
 } from 'lucide-react';
+import { PaneHeader } from '@/components/qb/pane-kit';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -867,7 +869,12 @@ export default function Whiteboard() {
   const toolLabel = tool === 'shape' ? `أشكال — ${SHAPES.find((s) => s.kind === shapeKind)?.label ?? ''}` : TOOL_AR[tool];
 
   return (
-    <div className="w-full">
+    <div className="w-full space-y-4">
+      <PaneHeader
+        icon={PenTool}
+        title="السبورة التفاعلية"
+        desc="لوحة رسم للمعلم — قلم وتظليل وأشكال ونص عربي وصور، مع تراجع/إعادة وتصدير PNG / PDF"
+      />
       <div className="rounded-2xl border border-slate-200 bg-slate-100 p-2 shadow-sm sm:p-3" dir="rtl">
         {/* ————— شريط الأدوات ————— */}
         <div className="flex flex-wrap items-center gap-1.5" role="toolbar" aria-label="أدوات السبورة">

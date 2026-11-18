@@ -19,11 +19,11 @@ function ToolCard({ tool, onOpen }: { tool: ToolDef; onOpen: (id: string) => voi
     <button
       type="button"
       onClick={() => onOpen(tool.id)}
-      className="group flex h-full flex-col gap-3 rounded-xl border border-border bg-card p-4 text-start shadow-sm transition hover:border-primary hover:shadow-md focus-visible:outline-2 focus-visible:outline-ring"
+      className="group flex h-full flex-col gap-3 rounded-2xl border border-border bg-card p-4 text-start shadow-sm transition hover:border-primary hover:shadow-md focus-visible:outline-2 focus-visible:outline-ring"
       aria-label={`Open tool: ${tool.name}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
           <ToolIcon name={tool.icon} className="h-5 w-5" />
         </span>
         <span className="flex gap-1">
@@ -104,7 +104,7 @@ export function HomeGrid({ onOpen }: { onOpen: (id: string) => void }) {
       </div>
 
       {grouped.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
+        <p className="rounded-2xl border border-dashed border-border p-8 text-center text-muted-foreground">
           No tools match “{query}”. Try another search term.
         </p>
       ) : (

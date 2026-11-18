@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import ScanStudio from '@/components/qb/ScanStudio';
 import PdfToolsPane from '@/components/qb/PdfToolsPane';
 import FormsStudio from '@/components/forms/FormsStudio';
@@ -25,7 +26,8 @@ import OnlinePane from '@/components/qb/OnlinePane';
 import ReviewQueue from '@/components/qb/ReviewQueue';
 import AssignmentsPane from '@/components/qb/AssignmentsPane';
 import Designer from '@/components/qb/designer/Designer';
-import LoginView from '@/components/qb/LoginView';
+import LandingView from '@/components/qb/LandingView';
+import { EmptyState, PaneHeader, StatCard } from '@/components/qb/pane-kit';
 import ExtractionStudio from '@/components/qb/ExtractionStudio';
 import BankManager from '@/components/qb/BankManager';
 import PdfWorkspace from '@/components/qb/PdfWorkspace';
@@ -35,8 +37,9 @@ import type { QBQuestion } from '@/lib/qb/types';
 import { keyFingerprint } from '@/lib/qb/key-fingerprint';
 import {
   Activity, Archive, BookOpen, ClipboardCheck, ClipboardList, Eraser, Eye, FileDown, FileInput, FileStack, Files, GraduationCap, KeyRound, LayoutDashboard,
-  Languages, Loader2, LogOut, Moon, PenTool, PencilRuler, Plus, RefreshCcw, ScanLine, ScanSearch, ScanText, Settings2, ShieldCheck, Sparkles, Sun, Users,
+  Languages, Loader2, LogOut, Menu, Moon, PenTool, PencilRuler, Plus, RefreshCcw, ScanLine, ScanSearch, ScanText, Settings2, ShieldCheck, Sparkles, Sun, Users,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 interface ExamRow {
   id: string;
@@ -124,6 +127,72 @@ const ROLE_SHORT: Record<string, string> = {
   teacher: 'معلم',
   viewer: 'مشاهد',
 };
+
+// ---------- grouped navigation (sidebar + mobile drawer share it) ----------
+
+interface NavItem {
+  key: View;
+  ar: string;
+  en: string;
+  icon: LucideIcon;
+  needsExam?: boolean;
+  adminOnly?: boolean;
+}
+
+const NAV_GROUPS: Array<{ ar: string; en: string; items: NavItem[] }> = [
+  {
+    ar: 'الرئيسية',
+    en: 'Home',
+    items: [{ key: 'dashboard', ar: 'لوحة التحكم', en: 'Dashboard', icon: LayoutDashboard }],
+  },
+  {
+    ar: 'بنك الأسئلة',
+    en: 'Question Bank',
+    items: [
+      { key: 'bank', ar: 'بنك الأسئلة', en: 'Bank', icon: BookOpen },
+      { key: 'extract', ar: 'استخراج ذكي', en: 'Smart Extract', icon: ScanText },
+      { key: 'ocr', ar: 'استيراد OCR', en: 'OCR Import', icon: FileInput },
+    ],
+  },
+  {
+    ar: 'الامتحانات',
+    en: 'Exams',
+    items: [
+      { key: 'design', ar: 'المصمم', en: 'Designer', icon: PencilRuler, needsExam: true },
+      { key: 'preview', ar: 'معاينة و PDF', en: 'Preview & PDF', icon: Eye, needsExam: true },
+      { key: 'omr', ar: 'أوراق OMR', en: 'OMR Sheets', icon: Files, needsExam: true },
+      { key: 'online', ar: 'أونلاين', en: 'Online', icon: GraduationCap },
+    ],
+  },
+  {
+    ar: 'التصحيح والمتابعة',
+    en: 'Grading',
+    items: [
+      { key: 'scan', ar: 'مسح وتصحيح', en: 'Scanning', icon: ScanLine },
+      { key: 'review', ar: 'قائمة المراجعة', en: 'Review Queue', icon: ClipboardCheck },
+      { key: 'assignments', ar: 'الواجبات', en: 'Assignments', icon: ClipboardList },
+      { key: 'students', ar: 'الطلاب', en: 'Students', icon: Users },
+    ],
+  },
+  {
+    ar: 'الأدوات',
+    en: 'Tools',
+    items: [
+      { key: 'pdf', ar: 'مساحة PDF', en: 'PDF Workspace', icon: FileStack },
+      { key: 'pdftools', ar: 'أدوات PDF', en: 'PDF Tools', icon: ScanSearch },
+      { key: 'forms', ar: 'قارئ النماذج', en: 'Forms Scanner', icon: ClipboardList },
+      { key: 'whiteboard', ar: 'السبورة', en: 'Whiteboard', icon: PenTool },
+    ],
+  },
+  {
+    ar: 'النظام',
+    en: 'System',
+    items: [
+      { key: 'admin', ar: 'الإدارة', en: 'Admin', icon: ShieldCheck, adminOnly: true },
+      { key: 'settings', ar: 'الإعدادات', en: 'Settings', icon: Settings2 },
+    ],
+  },
+];
 
 export default function Home() {
   const [view, setView] = useState<View>('dashboard');
@@ -225,7 +294,7 @@ export default function Home() {
   if (authState === 'loading') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
-        <div className="logo-glow animate-pop-in flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 font-black text-white" style={{ fontFamily: 'Amiri, serif' }}>
+        <div className="logo-glow animate-pop-in flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 font-black text-white brand-serif">
           <span className="text-3xl leading-none">ن</span>
         </div>
         <Loader2 className="h-5 w-5 animate-spin text-emerald-500" />
@@ -234,7 +303,7 @@ export default function Home() {
   }
 
   if (!user) {
-    return <LoginView onLoggedIn={() => void fetchMe()} />;
+    return <LandingView onLoggedIn={() => void fetchMe()} />;
   }
 
   const isAdmin = user.role === 'org_admin' || user.role === 'super_admin';
@@ -245,137 +314,224 @@ export default function Home() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col">
-      {/* Header — glass with brand gradient identity */}
-      <header className="glass sticky top-0 z-40 border-b shadow-[0_10px_40px_-24px_oklch(0_0_0/0.55)]">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5">
-          <div className="logo-glow flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 font-black text-white" style={{ fontFamily: 'Amiri, serif' }}>ن</div>
-          <div>
-            <div className="text-sm font-extrabold leading-tight" style={{ fontFamily: 'Amiri, serif' }}>النخبة <span className="text-gradient">QB</span></div>
-            <div className="text-[10px] text-slate-500">بنك أسئلة • PDF • OMR • تصحيح آلي</div>
+    <div className="flex min-h-dvh">
+      {/* ===== desktop sidebar (start side in RTL) ===== */}
+      <aside className="glass sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-e lg:flex">
+        <div className="flex items-center gap-2.5 border-b px-4 py-3.5">
+          <div className="logo-glow flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 font-black text-white brand-serif">ن</div>
+          <div className="min-w-0">
+            <div className="brand-serif text-base font-extrabold leading-tight">النخبة <span className="text-gradient">QB</span></div>
+            <div className="truncate text-[9px] text-muted-foreground">{L('منصة الامتحانات المتكاملة', 'All-in-one exam platform')}</div>
           </div>
-          <nav className="order-last flex w-full items-center gap-1 overflow-x-auto pb-1 sm:order-none sm:mr-auto sm:w-auto sm:pb-0">
-            <NavBtn active={view === 'dashboard'} onClick={() => setView('dashboard')} icon={<LayoutDashboard className="h-4 w-4" />}>{L('الرئيسية', 'Home')}</NavBtn>
-            <NavBtn active={view === 'bank'} onClick={() => setView('bank')} icon={<BookOpen className="h-4 w-4" />}>{L('بنك الأسئلة', 'Bank')}</NavBtn>
-            <NavBtn active={view === 'extract'} onClick={() => setView('extract')} icon={<ScanText className="h-4 w-4" />}>{L('استخراج ذكي', 'Extract')}</NavBtn>
-            <NavBtn active={view === 'design'} onClick={() => selectedExamId && setView('design')} disabled={!selectedExamId} icon={<PencilRuler className="h-4 w-4" />}>{L('المصمم', 'Designer')}</NavBtn>
-            <NavBtn active={view === 'preview'} onClick={() => selectedExamId && setView('preview')} disabled={!selectedExamId} icon={<Eye className="h-4 w-4" />}>{L('معاينة', 'Preview')}</NavBtn>
-            <NavBtn active={view === 'omr'} onClick={() => selectedExamId && setView('omr')} disabled={!selectedExamId} icon={<Files className="h-4 w-4" />}>{L('أوراق OMR', 'OMR')}</NavBtn>
-            <NavBtn active={view === 'scan'} onClick={() => setView('scan')} icon={<ScanLine className="h-4 w-4" />}>{L('مسح وتصحيح', 'Scanning')}</NavBtn>
-            <NavBtn active={view === 'review'} onClick={() => setView('review')} icon={<ClipboardCheck className="h-4 w-4" />}>{L('قائمة المراجعة', 'Review')}</NavBtn>
-            <NavBtn active={view === 'ocr'} onClick={() => setView('ocr')} icon={<FileInput className="h-4 w-4" />}>{L('استيراد OCR', 'OCR Import')}</NavBtn>
-            <NavBtn active={view === 'pdf'} onClick={() => setView('pdf')} icon={<FileStack className="h-4 w-4" />}>{L('مساحة PDF', 'PDF Workspace')}</NavBtn>
-            <NavBtn active={view === 'pdftools'} onClick={() => setView('pdftools')} icon={<Files className="h-4 w-4" />}>{L('أدوات PDF', 'PDF Tools')}</NavBtn>
-            <NavBtn active={view === 'forms'} onClick={() => setView('forms')} icon={<ScanSearch className="h-4 w-4" />}>{L('قارئ النماذج', 'Forms Scanner')}</NavBtn>
-            <NavBtn active={view === 'whiteboard'} onClick={() => setView('whiteboard')} icon={<PenTool className="h-4 w-4" />}>{L('السبورة', 'Whiteboard')}</NavBtn>
-            <NavBtn active={view === 'online'} onClick={() => setView('online')} icon={<GraduationCap className="h-4 w-4" />}>{L('أونلاين', 'Online')}</NavBtn>
-            <NavBtn active={view === 'assignments'} onClick={() => setView('assignments')} icon={<ClipboardList className="h-4 w-4" />}>{L('الواجبات', 'Assignments')}</NavBtn>
-            <NavBtn active={view === 'students'} onClick={() => setView('students')} icon={<Users className="h-4 w-4" />}>{L('الطلاب', 'Students')}</NavBtn>
-            <NavBtn active={view === 'admin'} onClick={() => isAdmin && setView('admin')} disabled={!isAdmin} icon={<ShieldCheck className="h-4 w-4" />}>{L('الإدارة', 'Admin')}</NavBtn>
-            <NavBtn active={view === 'settings'} onClick={() => setView('settings')} icon={<Settings2 className="h-4 w-4" />}>{L('الإعدادات', 'Settings')}</NavBtn>
-          </nav>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 rounded-full border border-border bg-background/40 px-2.5 py-1" title={L("حالة المحركات", 'Engine health')}>
+        </div>
+        <nav className="flex-1 space-y-4 overflow-y-auto px-2.5 py-3" aria-label={L('التنقل الرئيسي', 'Main navigation')}>
+          {NAV_GROUPS.map((g) => {
+            const items = g.items.filter((it) => (!it.adminOnly || isAdmin) && (!it.needsExam || selectedExamId));
+            if (items.length === 0) return null;
+            return (
+              <div key={g.en}>
+                <div className="mb-1 px-2 text-[9px] font-bold uppercase tracking-widest text-slate-400">{L(g.ar, g.en)}</div>
+                <div className="space-y-0.5">
+                  {items.map((it) => (
+                    <SideLink key={it.key} active={view === it.key} onClick={() => setView(it.key)} icon={<it.icon className="h-4 w-4" />}>
+                      {L(it.ar, it.en)}
+                    </SideLink>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </nav>
+        <div className="space-y-2 border-t px-3 py-3">
+          <div className="flex items-center justify-between rounded-lg bg-background/50 px-2.5 py-1.5" title={L('حالة المحركات', 'Engine health')}>
+            <span className="text-[9px] text-muted-foreground">{L('المحركات', 'Engines')}</span>
+            <span className="flex items-center gap-1.5">
               <span className={`h-2 w-2 rounded-full ${health?.omrEngine ? 'bg-emerald-500 shadow-[0_0_8px_oklch(0.72_0.15_163)]' : 'bg-red-400'}`} title="محرك OMR" />
               <span className={`h-2 w-2 rounded-full ${health?.pdf?.running ? 'bg-emerald-500 shadow-[0_0_8px_oklch(0.72_0.15_163)]' : 'bg-amber-400'}`} title="محرك PDF" />
+            </span>
+          </div>
+          <div className="flex items-center gap-2 rounded-xl bg-background/50 px-2.5 py-2">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/80 to-emerald-700/80 text-[11px] font-black text-white">
+              {(user.name || 'أ').trim().charAt(0)}
             </div>
-            <button
-              onClick={toggleTheme}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-slate-500 transition hover:bg-accent hover:text-foreground"
-              title={theme === 'dark' ? L('الوضع النهاري', 'Light mode') : L('الوضع الليلي', 'Dark mode')}
-              aria-label={theme === 'dark' ? L('الوضع النهاري', 'Light mode') : L('الوضع الليلي', 'Dark mode')}
-            >
-              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </button>
-            <button
-              onClick={() => setLang((v) => (v === 'ar' ? 'en' : 'ar'))}
-              className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[10px] font-bold text-slate-500 transition hover:bg-accent hover:text-foreground"
-              title={L('تبديل اللغة', 'Toggle language')}
-            >
-              <Languages className="h-3.5 w-3.5" /> {lang === 'ar' ? 'EN' : 'ع'}
-            </button>
-            <div className="hidden items-center gap-2 md:flex">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/80 to-emerald-700/80 text-[11px] font-black text-white">
-                {(user.name || 'أ').trim().charAt(0)}
-              </div>
-              <div className="text-right leading-tight">
-                <div className="text-[11px] font-bold">{user.name}</div>
-                <div className="text-[9px] text-slate-500">{ROLE_SHORT[user.role] ?? user.role}{user.organizationName ? ` • ${user.organizationName}` : ''}</div>
-              </div>
+            <div className="min-w-0 leading-tight">
+              <div className="truncate text-[11px] font-bold">{user.name}</div>
+              <div className="truncate text-[9px] text-muted-foreground">{ROLE_SHORT[user.role] ?? user.role}{user.organizationName ? ` • ${user.organizationName}` : ''}</div>
             </div>
-            <button
-              onClick={() => void logout()}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-500/10 hover:text-red-500"
-              title={L('تسجيل الخروج', 'Log out')}
-              aria-label={L('تسجيل الخروج', 'Log out')}
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
           </div>
         </div>
-      </header>
+      </aside>
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-5">
-        {view === 'dashboard' && (
-          <Dashboard
-            exams={exams}
-            health={{ omrEngine: health?.omrEngine, pdfRunning: health?.pdf?.running }}
-            onOpen={openExam}
-            onChanged={() => { void refreshExams(); setReloadKey((k) => k + 1); }}
-          />
-        )}
-        {view === 'bank' && <BankManager />}
-        {view === 'extract' && <ExtractionStudio onGoToBank={() => setView('bank')} />}
-        {view === 'design' && selectedExamId && <Designer key={selectedExamId} examId={selectedExamId} />}
-        {view === 'preview' && selectedExamId && <PreviewPane examId={selectedExamId} />}
-        {view === 'omr' && selectedExamId && <OmrStudio examId={selectedExamId} />}
-        {view === 'scan' && <ScanStudio onScanned={() => setReloadKey((k) => k + 1)} />}
-        {view === 'review' && <ReviewQueue />}
-        {view === 'ocr' && <OcrImport onCreated={(examId) => { void refreshExams(); setSelectedExamId(examId); setView('design'); }} />}
-        {view === 'pdf' && <PdfWorkspace onExtractPages={() => { setView('extract'); toast.info('انتقل إلى الاستخراج الذكي وارفع الملف لاستخراج الأسئلة'); }} />}
-        {view === 'pdftools' && <PdfToolsPane lang={lang} />}
-        {view === 'forms' && <FormsStudio lang={lang} />}
-        {view === 'whiteboard' && <Whiteboard />}
-        {view === 'online' && <OnlinePane />}
-        {view === 'assignments' && <AssignmentsPane />}
-        {view === 'students' && <StudentsPane />}
-        {view === 'admin' && isAdmin && <AdminPane sessionRole={user.role} sessionOrgId={user.organizationId} />}
-        {view === 'settings' && <SettingsPane />}
-      </main>
+      {/* ===== main column ===== */}
+      <div className="flex min-h-dvh w-full min-w-0 flex-1 flex-col">
+        <header className="glass sticky top-0 z-40 border-b shadow-[0_10px_40px_-24px_oklch(0_0_0/0.55)]">
+          <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-2.5">
+            {/* mobile drawer trigger */}
+            <Sheet>
+              <SheetTrigger asChild>
+                <button
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border text-slate-500 transition hover:bg-accent hover:text-foreground lg:hidden"
+                  aria-label={L('القائمة', 'Menu')}
+                >
+                  <Menu className="h-4 w-4" />
+                </button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-72 overflow-y-auto p-0">
+                <SheetHeader className="border-b px-4 py-3.5 text-start">
+                  <SheetTitle className="flex items-center gap-2.5">
+                    <div className="logo-glow flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 text-xs font-black text-white brand-serif">ن</div>
+                    <span className="brand-serif text-base font-extrabold">النخبة <span className="text-gradient">QB</span></span>
+                  </SheetTitle>
+                </SheetHeader>
+                <nav className="space-y-4 px-3 py-3" aria-label={L('التنقل الرئيسي', 'Main navigation')}>
+                  {NAV_GROUPS.map((g) => {
+                    const items = g.items.filter((it) => (!it.adminOnly || isAdmin) && (!it.needsExam || selectedExamId));
+                    if (items.length === 0) return null;
+                    return (
+                      <div key={g.en}>
+                        <div className="mb-1 px-2 text-[9px] font-bold uppercase tracking-widest text-slate-400">{L(g.ar, g.en)}</div>
+                        <div className="space-y-0.5">
+                          {items.map((it) => (
+                            <SideLink
+                              key={it.key}
+                              active={view === it.key}
+                              onClick={() => setView(it.key)}
+                              icon={<it.icon className="h-4 w-4" />}
+                            >
+                              {L(it.ar, it.en)}
+                            </SideLink>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </nav>
+                <div className="border-t px-3 py-3">
+                  <div className="flex items-center gap-2 rounded-xl bg-background/50 px-2.5 py-2">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/80 to-emerald-700/80 text-[11px] font-black text-white">
+                      {(user.name || 'أ').trim().charAt(0)}
+                    </div>
+                    <div className="min-w-0 leading-tight">
+                      <div className="truncate text-[11px] font-bold">{user.name}</div>
+                      <div className="truncate text-[9px] text-muted-foreground">{ROLE_SHORT[user.role] ?? user.role}</div>
+                    </div>
+                  </div>
+                </div>
+              </SheetContent>
+            </Sheet>
 
-      {/* Sticky footer */}
-      <footer className="glass mt-auto border-t py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-1 px-4 text-[11px] text-slate-400">
-          <span className="flex items-center gap-1.5">
-            <Sparkles className="h-3 w-3 text-emerald-500" />
-            النخبة QB — نظام بنك أسئلة متكامل بمخطط امتحاني واحد يغذي المصمم و PDF و OMR
-          </span>
-          <span>{user.organizationName ?? 'النخبة للتعليم'} • {ROLE_SHORT[user.role] ?? user.role} • محرك OMR: Python + OpenCV</span>
-        </div>
-      </footer>
+            {/* brand (mobile + tablet — desktop uses the sidebar) */}
+            <div className="flex items-center gap-2 lg:hidden">
+              <div className="logo-glow flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 text-xs font-black text-white brand-serif">ن</div>
+              <div className="brand-serif text-base font-extrabold leading-none">النخبة <span className="text-gradient">QB</span></div>
+            </div>
+
+            <div className="ms-auto flex items-center gap-2">
+              <div className="hidden items-center gap-1.5 rounded-full border border-border bg-background/40 px-2.5 py-1 md:flex" title={L('حالة المحركات', 'Engine health')}>
+                <span className={`h-2 w-2 rounded-full ${health?.omrEngine ? 'bg-emerald-500 shadow-[0_0_8px_oklch(0.72_0.15_163)]' : 'bg-red-400'}`} title="محرك OMR" />
+                <span className={`h-2 w-2 rounded-full ${health?.pdf?.running ? 'bg-emerald-500 shadow-[0_0_8px_oklch(0.72_0.15_163)]' : 'bg-amber-400'}`} title="محرك PDF" />
+              </div>
+              <button
+                onClick={toggleTheme}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-slate-500 transition hover:bg-accent hover:text-foreground"
+                title={theme === 'dark' ? L('الوضع النهاري', 'Light mode') : L('الوضع الليلي', 'Dark mode')}
+                aria-label={theme === 'dark' ? L('الوضع النهاري', 'Light mode') : L('الوضع الليلي', 'Dark mode')}
+              >
+                {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </button>
+              <button
+                onClick={() => setLang((v) => (v === 'ar' ? 'en' : 'ar'))}
+                className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[10px] font-bold text-slate-500 transition hover:bg-accent hover:text-foreground"
+                title={L('تبديل اللغة', 'Toggle language')}
+              >
+                <Languages className="h-3.5 w-3.5" /> {lang === 'ar' ? 'EN' : 'ع'}
+              </button>
+              <div className="hidden items-center gap-2 md:flex">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/80 to-emerald-700/80 text-[11px] font-black text-white">
+                  {(user.name || 'أ').trim().charAt(0)}
+                </div>
+                <div className="text-start leading-tight">
+                  <div className="text-[11px] font-bold">{user.name}</div>
+                  <div className="text-[9px] text-slate-500">{ROLE_SHORT[user.role] ?? user.role}</div>
+                </div>
+              </div>
+              <button
+                onClick={() => void logout()}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-500/10 hover:text-red-500"
+                title={L('تسجيل الخروج', 'Log out')}
+                aria-label={L('تسجيل الخروج', 'Log out')}
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 lg:px-6">
+          {view === 'dashboard' && (
+            <Dashboard
+              exams={exams}
+              selectedExamId={selectedExamId}
+              health={{ omrEngine: health?.omrEngine, pdfRunning: health?.pdf?.running }}
+              onOpen={openExam}
+              onGo={setView}
+              onChanged={() => { void refreshExams(); setReloadKey((k) => k + 1); }}
+            />
+          )}
+          {view === 'bank' && <BankManager />}
+          {view === 'extract' && <ExtractionStudio onGoToBank={() => setView('bank')} />}
+          {view === 'design' && selectedExamId && <Designer key={selectedExamId} examId={selectedExamId} />}
+          {view === 'preview' && selectedExamId && <PreviewPane examId={selectedExamId} />}
+          {view === 'omr' && selectedExamId && <OmrStudio examId={selectedExamId} />}
+          {view === 'scan' && <ScanStudio onScanned={() => setReloadKey((k) => k + 1)} />}
+          {view === 'review' && <ReviewQueue />}
+          {view === 'ocr' && <OcrImport onCreated={(examId) => { void refreshExams(); setSelectedExamId(examId); setView('design'); }} />}
+          {view === 'pdf' && <PdfWorkspace onExtractPages={() => { setView('extract'); toast.info('انتقل إلى الاستخراج الذكي وارفع الملف لاستخراج الأسئلة'); }} />}
+          {view === 'pdftools' && <PdfToolsPane lang={lang} />}
+          {view === 'forms' && <FormsStudio lang={lang} />}
+          {view === 'whiteboard' && <Whiteboard />}
+          {view === 'online' && <OnlinePane />}
+          {view === 'assignments' && <AssignmentsPane />}
+          {view === 'students' && <StudentsPane />}
+          {view === 'admin' && isAdmin && <AdminPane sessionRole={user.role} sessionOrgId={user.organizationId} />}
+          {view === 'settings' && <SettingsPane />}
+        </main>
+
+        {/* Sticky footer */}
+        <footer className="glass mt-auto border-t py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-1 px-4 text-[11px] text-slate-400">
+            <span className="flex items-center gap-1.5">
+              <Sparkles className="h-3 w-3 text-emerald-500" />
+              النخبة QB — نظام بنك أسئلة متكامل بمخطط امتحاني واحد يغذي المصمم و PDF و OMR
+            </span>
+            <span>{user.organizationName ?? 'النخبة للتعليم'} • {ROLE_SHORT[user.role] ?? user.role} • محرك OMR: Python + OpenCV</span>
+          </div>
+        </footer>
+      </div>
     </div>
   );
 }
 
-function NavBtn({ active, onClick, disabled, icon, children }: { active: boolean; onClick: () => void; disabled?: boolean; icon: React.ReactNode; children: React.ReactNode }) {
+function SideLink({ active, onClick, icon, children }: { active: boolean; onClick: () => void; icon: React.ReactNode; children: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
-      disabled={disabled}
-      className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+      aria-current={active ? 'page' : undefined}
+      className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-start text-[13px] font-medium transition ${
         active
-          ? 'btn-primary-grad text-white'
+          ? 'btn-primary-grad text-white shadow-[0_8px_22px_-10px_oklch(0.6_0.15_163/0.75)]'
           : 'text-slate-500 hover:bg-accent hover:text-foreground'
-      } disabled:cursor-not-allowed disabled:opacity-40`}
+      }`}
     >
-      {icon} {children}
+      {icon}
+      <span className="truncate">{children}</span>
     </button>
   );
 }
 
 // ---------------- Dashboard ----------------
 
-function Dashboard({ exams, health, onOpen, onChanged }: { exams: ExamRow[]; health: { omrEngine?: boolean; pdfRunning?: boolean }; onOpen: (id: string, v: View) => void; onChanged: () => void }) {
+function Dashboard({ exams, selectedExamId, health, onOpen, onGo, onChanged }: { exams: ExamRow[]; selectedExamId: string | null; health: { omrEngine?: boolean; pdfRunning?: boolean }; onOpen: (id: string, v: View) => void; onGo: (v: View) => void; onChanged: () => void }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [subject, setSubject] = useState('');
@@ -420,70 +576,99 @@ function Dashboard({ exams, health, onOpen, onChanged }: { exams: ExamRow[]; hea
     }
   };
 
+  const QUICK_ACTIONS: Array<{ key: View | 'create'; ar: string; icon: LucideIcon; needsExam?: boolean }> = [
+    { key: 'create', ar: 'امتحان جديد', icon: Plus },
+    { key: 'bank', ar: 'بنك الأسئلة', icon: BookOpen },
+    { key: 'extract', ar: 'استخراج ذكي', icon: ScanText },
+    { key: 'scan', ar: 'مسح وتصحيح', icon: ScanLine },
+    { key: 'omr', ar: 'أوراق OMR', icon: Files, needsExam: true },
+    { key: 'pdf', ar: 'مساحة PDF', icon: FileStack },
+  ];
+
   return (
-    <div className="animate-fade-up space-y-4" dir="rtl">
-      {/* Workspace hero strip */}
-      <div className="glass relative overflow-hidden rounded-2xl p-5">
-        <div className="pointer-events-none absolute -top-24 left-1/4 h-56 w-56 rounded-full bg-emerald-500/15 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 left-1/2 h-56 w-56 rounded-full bg-amber-400/10 blur-3xl" />
-        <div className="relative flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-[11px] font-bold text-emerald-500">
-              <Sparkles className="h-3.5 w-3.5" />
-              مساحة العمل
-            </div>
-            <h1 className="mt-1 text-xl font-extrabold" style={{ fontFamily: 'Amiri, serif' }}>الامتحانات</h1>
-            <p className="mt-0.5 text-xs text-slate-500">أنشئ امتحانًا، صمّمه، ولّد أوراق OMR، وامسح الإجابات بنقرة واحدة</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <StatChip label="امتحانات" value={exams.length} />
-            <StatChip label="منشورة" value={exams.filter((e) => e.status === 'PUBLISHED').length} tone="emerald" />
-            <StatChip label="مسودات" value={exams.filter((e) => e.status === 'DRAFT').length} tone="amber" />
-            <StatChip
-              label="محرك OMR"
-              value={health.omrEngine ? 'يعمل' : 'متوقف'}
-              tone={health.omrEngine ? 'emerald' : 'red'}
-            />
-            <StatChip
-              label="محرك PDF"
-              value={health.pdfRunning ? 'يعمل' : 'بارد'}
-              tone={health.pdfRunning ? 'emerald' : 'amber'}
-            />
-          </div>
+    <div className="animate-fade-up space-y-5" dir="rtl">
+      {/* Workspace banner */}
+      <PaneHeader
+        icon={LayoutDashboard}
+        title="مساحة العمل — الامتحانات"
+        desc="أنشئ امتحانًا، صمّمه، ولّد أوراق OMR، وامسح الإجابات بنقرة واحدة"
+        actions={
+          <Button className="btn-primary-grad gap-1 border-0 text-white" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4" /> امتحان جديد
+          </Button>
+        }
+      >
+        <div className="flex flex-wrap gap-2">
+          <StatChip label="امتحانات" value={exams.length} />
+          <StatChip label="منشورة" value={exams.filter((e) => e.status === 'PUBLISHED').length} tone="emerald" />
+          <StatChip label="مسودات" value={exams.filter((e) => e.status === 'DRAFT').length} tone="amber" />
+          <StatChip
+            label="محرك OMR"
+            value={health.omrEngine ? 'يعمل' : 'متوقف'}
+            tone={health.omrEngine ? 'emerald' : 'red'}
+          />
+          <StatChip
+            label="محرك PDF"
+            value={health.pdfRunning ? 'يعمل' : 'بارد'}
+            tone={health.pdfRunning ? 'emerald' : 'amber'}
+          />
         </div>
+      </PaneHeader>
+
+      {/* Quick actions */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {QUICK_ACTIONS.map((a) => {
+          const disabled = !!a.needsExam && !selectedExamId;
+          return (
+            <button
+              key={a.key}
+              disabled={disabled}
+              onClick={() => (a.key === 'create' ? setCreateOpen(true) : a.key === 'omr' && selectedExamId ? onOpen(selectedExamId, 'omr') : onGo(a.key as View))}
+              className="card-hover glass flex flex-col items-start gap-2.5 rounded-2xl p-4 text-start disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <span className="logo-glow flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white">
+                <a.icon className="h-4.5 w-4.5" />
+              </span>
+              <span className="text-xs font-bold">{a.ar}</span>
+            </button>
+          );
+        })}
       </div>
 
-      <div className="flex items-center justify-between">
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger asChild>
-            <Button className="btn-primary-grad gap-1 border-0 text-white"><Plus className="h-4 w-4" /> امتحان جديد</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md" dir="rtl">
-            <DialogHeader>
-              <DialogTitle className="text-right">إنشاء امتحان</DialogTitle>
-              <DialogDescription className="text-right">أنشئ امتحانًا جديدًا بعنوان ومادة وصف دراسي، ثم افتح المصمم لإضافة الأسئلة.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div><Label>عنوان الامتحان</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="امتحان الرياضيات — أكتوبر" /></div>
-              <div><Label>المادة</Label><Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="رياضيات" /></div>
-              <div>
-                <Label>اتجاه الورقة</Label>
-                <Select value={direction} onValueChange={(v) => setDirection(v as 'rtl' | 'ltr')}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="rtl">عربي (يمين ← يسار)</SelectItem>
-                    <SelectItem value="ltr">English (left → right)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button className="btn-primary-grad w-full border-0 text-white" onClick={() => void create()}>إنشاء والانتقال للمصمم</Button>
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-right">إنشاء امتحان</DialogTitle>
+            <DialogDescription className="text-right">أنشئ امتحانًا جديدًا بعنوان ومادة وصف دراسي، ثم افتح المصمم لإضافة الأسئلة.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div><Label>عنوان الامتحان</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="امتحان الرياضيات — أكتوبر" /></div>
+            <div><Label>المادة</Label><Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="رياضيات" /></div>
+            <div>
+              <Label>اتجاه الورقة</Label>
+              <Select value={direction} onValueChange={(v) => setDirection(v as 'rtl' | 'ltr')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="rtl">عربي (يمين ← يسار)</SelectItem>
+                  <SelectItem value="ltr">English (left → right)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+            <Button className="btn-primary-grad w-full border-0 text-white" onClick={() => void create()}>إنشاء والانتقال للمصمم</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {exams.length === 0 ? (
-        <Card><CardContent className="py-16 text-center text-sm text-slate-400">لا توجد امتحانات — أنشئ أول امتحان</CardContent></Card>
+        <EmptyState
+          icon={BookOpen}
+          title="لا توجد امتحانات بعد"
+          hint="ابدأ بإنشاء أول امتحان، أو استورد أسئلتك من صور وملفات قديمة عبر الاستخراج الذكي ثم أحِلها إلى امتحان"
+        >
+          <Button size="sm" className="btn-primary-grad gap-1 border-0 text-white" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-3.5 w-3.5" /> إنشاء أول امتحان
+          </Button>
+        </EmptyState>
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {exams.map((exam) => (
@@ -569,15 +754,21 @@ function PreviewPane({ examId }: { examId: string }) {
 
   return (
     <div className="space-y-3" dir="rtl">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold">معاينة الامتحان — مطابقة ١:١ مع PDF</h1>
-        <Button size="sm" className="gap-1 bg-emerald-600 hover:bg-emerald-700" disabled={pdfBusy} onClick={() => void downloadPdf()}><FileDown className="h-4 w-4" /> {pdfBusy ? 'جارٍ التوليد…' : 'تنزيل PDF'}</Button>
-      </div>
+      <PaneHeader
+        icon={Eye}
+        title="معاينة الامتحان"
+        desc="مطابقة ١:١ مع ملف PDF النهائي — ما تراه هنا هو ما يُطبع"
+        actions={
+          <Button size="sm" className="btn-primary-grad gap-1 border-0 text-white" disabled={pdfBusy} onClick={() => void downloadPdf()}>
+            <FileDown className="h-4 w-4" /> {pdfBusy ? 'جارٍ التوليد…' : 'تنزيل PDF'}
+          </Button>
+        }
+      />
       <Card className="overflow-hidden">
         {busy ? (
           <CardContent className="py-20 text-center text-sm text-slate-400">جارٍ الرسم…</CardContent>
         ) : (
-          <iframe title="exam-preview" srcDoc={html} className="h-[calc(100vh-14rem)] w-full bg-slate-200" />
+          <iframe title="exam-preview" srcDoc={html} className="h-[calc(100vh-16rem)] w-full bg-slate-200" />
         )}
       </Card>
     </div>
@@ -675,7 +866,7 @@ function OmrStudio({ examId }: { examId: string }) {
     }
   };
 
-  if (!detail) return <div className="py-20 text-center text-sm text-slate-400">جارٍ التحميل…</div>;
+  if (!detail) return <EmptyState icon={Files} title="جارٍ التحميل…" hint="يتم جلب تفاصيل الامتحان ومفتاح التصحيح من الخادم" />;
   const published = detail.exam.status === 'PUBLISHED' && detail.versions.length > 0;
   const latestVersion = detail.versions[0]; // versions are ordered desc (newest first)
   const frozenCount = latestVersion?.answerKeyCount ?? -1;
@@ -687,7 +878,11 @@ function OmrStudio({ examId }: { examId: string }) {
 
   return (
     <div className="space-y-4" dir="rtl">
-      <h1 className="text-lg font-bold">استوديو أوراق OMR</h1>
+      <PaneHeader
+        icon={Files}
+        title="استوديو أوراق OMR"
+        desc="ورقة إجابة بفقاعات و QR — فعّل OMR، حدّد مفتاح التصحيح، انشر، ثم اطبع وامسح"
+      />
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardContent className="space-y-3 p-4">
@@ -888,7 +1083,11 @@ function StudentsPane() {
 
   return (
     <div className="space-y-4" dir="rtl">
-      <h1 className="text-lg font-bold">الطلاب</h1>
+      <PaneHeader
+        icon={Users}
+        title="الطلاب"
+        desc="سجل الطلاب وأكوادهم وفصولهم — يُستخدم في الأونلاين والواجبات وورق OMR"
+      />
       <Card><CardContent className="flex flex-wrap items-end gap-3 p-4">
         <div><Label className="text-[10px]">الرقم</Label><Input className="h-9 w-32" value={code} onChange={(e) => setCode(e.target.value)} /></div>
         <div><Label className="text-[10px]">الاسم</Label><Input className="h-9 w-48" value={name} onChange={(e) => setName(e.target.value)} /></div>
@@ -962,10 +1161,16 @@ function SettingsPane() {
     }
   };
 
-  if (!config) return <div className="py-20 text-center text-sm text-slate-400">جارٍ التحميل…</div>;
+  if (!config) return <EmptyState icon={Activity} title="جارٍ التحميل…" hint="يتم تحميل إعدادات المعايرة من الخادم" />;
 
   return (
-    <div className="grid gap-4 md:grid-cols-2" dir="rtl">
+    <div className="space-y-4" dir="rtl">
+      <PaneHeader
+        icon={Settings2}
+        title="الإعدادات"
+        desc="معايرة قارئ OMR، اختبار OCR، وصحة الأنظمة"
+      />
+      <div className="grid gap-4 md:grid-cols-2">
       <Card>
         <CardContent className="space-y-4 p-4">
           <div className="flex items-center gap-2 text-sm font-semibold"><Activity className="h-4 w-4 text-emerald-600" /> معايرة قارئ OMR</div>
@@ -1010,6 +1215,7 @@ function SettingsPane() {
           <HealthTable />
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

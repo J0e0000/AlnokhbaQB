@@ -16,7 +16,9 @@ import {
   ChevronRight,
   Eraser,
   FileDown,
+  FileStack,
   FileUp,
+  FileX,
   FolderOpen,
   Hand,
   Highlighter,
@@ -55,6 +57,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { EmptyState, PaneHeader } from '@/components/qb/pane-kit';
 
 // ------------------------------------------------------------
 // Types
@@ -930,6 +933,12 @@ export default function PdfWorkspace({ onExtractPages }: PdfWorkspaceProps) {
       }}
       onDrop={onDrop}
     >
+      <PaneHeader
+        icon={FileStack}
+        title="مساحة PDF"
+        desc="افتح PDF وعلّق عليه، رتّب ودوّر الصفحات، ثم استخرجها للذكاء الاصطناعي أو صدّرها — معالجة محلية بالكامل داخل متصفحك"
+      />
+
       <input
         ref={fileInputRef}
         type="file"
@@ -944,7 +953,7 @@ export default function PdfWorkspace({ onExtractPages }: PdfWorkspaceProps) {
       {error && (
         <div
           role="alert"
-          className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+          className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
         >
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
           <span className="flex-1 leading-relaxed">{error}</span>
@@ -979,7 +988,7 @@ export default function PdfWorkspace({ onExtractPages }: PdfWorkspaceProps) {
             </>
           ) : (
             <>
-              <span className="flex size-16 items-center justify-center rounded-full bg-emerald-100">
+              <span className="flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500/15 to-amber-400/10 text-emerald-600 dark:text-emerald-400">
                 <FileUp className="h-8 w-8 text-emerald-600" />
               </span>
               <span className="text-lg font-bold text-slate-800">افتح ملف PDF لبدء العمل</span>
@@ -1000,7 +1009,7 @@ export default function PdfWorkspace({ onExtractPages }: PdfWorkspaceProps) {
       ) : (
         <>
           {/* ---------------- toolbar ---------------- */}
-          <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-white p-2 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-white p-2 shadow-sm">
             <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={busyLock}>
               <FolderOpen className="h-4 w-4" />
               فتح ملف آخر
@@ -1103,7 +1112,7 @@ export default function PdfWorkspace({ onExtractPages }: PdfWorkspaceProps) {
 
             {/* annotation tools */}
             <TabsContent value="annotate" className="mt-2">
-              <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-white p-2 shadow-sm">
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-white p-2 shadow-sm">
                 {TOOLS.map((t) => (
                   <Button
                     key={t.id}
@@ -1112,7 +1121,7 @@ export default function PdfWorkspace({ onExtractPages }: PdfWorkspaceProps) {
                     disabled={busyLock}
                     aria-pressed={tool === t.id}
                     aria-label={`أداة: ${t.label}`}
-                    className={cn('min-w-9 gap-1.5', tool === t.id && 'bg-emerald-600 text-white hover:bg-emerald-700')}
+                    className={cn('min-w-9 gap-1.5', tool === t.id && 'btn-primary-grad border-0 text-white')}
                   >
                     <t.icon className="h-4 w-4" />
                     {t.label}
@@ -1142,7 +1151,7 @@ export default function PdfWorkspace({ onExtractPages }: PdfWorkspaceProps) {
 
                 <span className="mx-1 h-6 w-px bg-slate-200" aria-hidden />
 
-                <label className="flex items-center gap-2 text-xs text-slate-500">
+                <label className="flex items-center gap-2 text-[11px] text-slate-500">
                   السماكة
                   <Slider
                     value={[annSize]}
@@ -1166,17 +1175,17 @@ export default function PdfWorkspace({ onExtractPages }: PdfWorkspaceProps) {
                   مسح تعليقات الصفحة
                 </Button>
                 {tool === 'eraser' && (
-                  <span className="text-xs text-slate-500">اضغط على أي تعليق لحذفه بالكامل</span>
+                  <span className="text-[11px] text-slate-500">اضغط على أي تعليق لحذفه بالكامل</span>
                 )}
                 {tool === 'text' && (
-                  <span className="text-xs text-slate-500">اضغط على الصفحة لتحديد موضع النص</span>
+                  <span className="text-[11px] text-slate-500">اضغط على الصفحة لتحديد موضع النص</span>
                 )}
               </div>
             </TabsContent>
 
             {/* page operations */}
             <TabsContent value="pages" className="mt-2">
-              <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-white p-2 shadow-sm">
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-white p-2 shadow-sm">
                 <Button variant="outline" onClick={rotateCurrent} disabled={busyLock}>
                   <RotateCw className="h-4 w-4" />
                   تدوير الصفحة ٩٠°
@@ -1231,7 +1240,7 @@ export default function PdfWorkspace({ onExtractPages }: PdfWorkspaceProps) {
 
             {/* extract & export */}
             <TabsContent value="export" className="mt-2">
-              <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-white p-2 shadow-sm">
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-white p-2 shadow-sm">
                 <span className="text-sm text-slate-600">
                   المحدد للاستخراج: <strong className="text-emerald-700">{ar(selected.size)}</strong> صفحة
                   <span className="ms-1 text-[10px] text-slate-400">select pages from the sidebar</span>
@@ -1243,7 +1252,7 @@ export default function PdfWorkspace({ onExtractPages }: PdfWorkspaceProps) {
                   إلغاء التحديد
                 </Button>
                 <Button
-                  className="bg-emerald-600 hover:bg-emerald-700"
+                  className="btn-primary-grad gap-1 border-0 text-white"
                   onClick={() => void extractSelected()}
                   disabled={busyLock || selected.size === 0}
                 >
@@ -1270,7 +1279,7 @@ export default function PdfWorkspace({ onExtractPages }: PdfWorkspaceProps) {
 
           {/* ---------------- page-ops plan chips ---------------- */}
           {planDirty && (
-            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-2">
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50/70 px-3 py-2">
               <span className="text-xs font-semibold text-emerald-800">خطة تعديل الصفحات:</span>
               {planChips.map((c, i) => (
                 <Badge key={`${c}-${i}`} variant="outline" className="border-emerald-300 bg-white text-emerald-800">
@@ -1301,9 +1310,7 @@ export default function PdfWorkspace({ onExtractPages }: PdfWorkspaceProps) {
             <ScrollArea className="min-w-0 flex-1">
               <div ref={areaRef} className="relative max-h-[75vh] min-h-[320px]">
                 {order.length === 0 ? (
-                  <div className="flex min-h-[320px] items-center justify-center rounded-xl border bg-slate-50 text-sm text-slate-500">
-                    لا توجد صفحات — جرّب «تراجع عن تعديلات الصفحات»
-                  </div>
+                  <EmptyState icon={FileX} title="لا توجد صفحات" hint="جرّب «تراجع عن تعديلات الصفحات» للعودة إلى الحالة الأصلية" />
                 ) : (
                   <div className="flex justify-center p-4">
                     <div className="relative w-fit shadow-lg ring-1 ring-slate-300">
@@ -1367,10 +1374,10 @@ export default function PdfWorkspace({ onExtractPages }: PdfWorkspaceProps) {
             {/* thumbnails sidebar */}
             <aside className="w-28 shrink-0 sm:w-40">
               <div className="mb-1 flex items-center justify-between px-1">
-                <span className="text-xs font-medium text-slate-500">الصفحات</span>
+                <span className="text-[11px] font-medium text-slate-500">الصفحات</span>
                 <span className="text-[10px] text-slate-400">Thumbs</span>
               </div>
-              <ScrollArea className="max-h-[70vh] rounded-xl border bg-white">
+              <ScrollArea className="max-h-[70vh] rounded-2xl border bg-white">
                 <div className="flex flex-col gap-2 p-2">
                   {order.map((orig, i) => {
                     const dp = i + 1;

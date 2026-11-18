@@ -248,7 +248,7 @@ export default function ExamRunner({ attempt, onExit }: { attempt: StartedAttemp
   return (
     <div className="mx-auto max-w-3xl space-y-3" dir="rtl">
       {/* sticky status bar */}
-      <div className="sticky top-16 z-30 rounded-xl border bg-white/95 p-3 shadow-sm backdrop-blur">
+      <div className="sticky top-16 z-30 rounded-2xl border bg-white/95 p-4 shadow-sm backdrop-blur">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <div className="truncate text-sm font-bold">{attempt.examTitle}</div>
@@ -272,7 +272,7 @@ export default function ExamRunner({ attempt, onExit }: { attempt: StartedAttemp
 
       {/* question card */}
       {question && (
-        <div className="rounded-xl border bg-white p-4">
+        <div className="rounded-2xl border bg-white p-4">
           <div className="mb-3 flex items-center justify-between">
             <Badge className="bg-emerald-600">سؤال {question.number} من {attempt.questions.length}</Badge>
             <Badge variant="outline">{question.marks} درجة</Badge>
@@ -312,7 +312,7 @@ export default function ExamRunner({ attempt, onExit }: { attempt: StartedAttemp
             التالي <ChevronLeft className="h-4 w-4" />
           </Button>
         ) : (
-          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setConfirmOpen(true)}>
+          <Button size="sm" className="btn-primary-grad gap-1 border-0 text-white" onClick={() => setConfirmOpen(true)}>
             <Send className="h-4 w-4" /> تسليم
           </Button>
         )}
@@ -334,7 +334,7 @@ export default function ExamRunner({ attempt, onExit }: { attempt: StartedAttemp
             بعد التسليم لا يمكن التعديل.
           </p>
           <div className="flex gap-2">
-            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" disabled={submitBusy} onClick={() => { setConfirmOpen(false); void doSubmit(false); }}>
+            <Button className="btn-primary-grad flex-1 border-0 text-white" disabled={submitBusy} onClick={() => { setConfirmOpen(false); void doSubmit(false); }}>
               {submitBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'تسليم نهائي'}
             </Button>
             <Button variant="outline" onClick={() => setConfirmOpen(false)}>متابعة الحل</Button>
@@ -376,7 +376,7 @@ function ResultScreen({ result, attempt, onExit }: { result: SubmitResult; attem
       {result.review && Object.keys(result.review).length > 0 && (
         <div className="rounded-2xl border bg-white p-4">
           <div className="mb-2 text-sm font-bold">مراجعة الإجابات</div>
-          <div className="max-h-96 space-y-2 overflow-y-auto pl-1">
+          <div className="max-h-96 space-y-2 overflow-y-auto pe-1">
             {attempt.questions.map((q) => {
               const mine = result.answers[String(q.number)];
               const key = result.review[String(q.number)];

@@ -12,6 +12,7 @@ import { gradeResults, type GradeReport } from '@/lib/forms/grading';
 import { GradingPanel } from './GradingPanel';
 import { ExportBar } from './ExportBar';
 import { SheetPreview } from './SheetPreview';
+import { EmptyState } from '@/components/qb/pane-kit';
 
 interface Props {
   lang: 'ar' | 'en';
@@ -126,14 +127,13 @@ export function ReviewStep({ lang }: Props) {
 
   if (!results.length) {
     return (
-      <Card dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-        <CardContent className="space-y-3 py-14 text-center">
-          <p className="text-sm text-muted-foreground">{L('لم تُقرأ أي ورقة بعد', 'No sheets have been read yet')}</p>
+      <div dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+        <EmptyState icon={Table2} title={L('لم تُقرأ أي ورقة بعد', 'No sheets have been read yet')} hint={L('شغّل القراءة من خطوة «القراءة» ثم عد إلى هنا لمراجعة النتائج وتصديرها.', 'Run the reader from the Read step, then come back here to review and export the results.')}>
           <Button size="sm" variant="outline" onClick={() => setStep('read')}>
             {L('الذهاب إلى القراءة', 'Go to reading')}
           </Button>
-        </CardContent>
-      </Card>
+        </EmptyState>
+      </div>
     );
   }
 
