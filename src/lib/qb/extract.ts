@@ -79,6 +79,9 @@ export async function extractQuestionsFromPage(
     // full-content extraction (questions + passages) needs more headroom
     // than the old questions-only pass — 8192 covers dense A4 pages
     maxTokens: 8192,
+    // thinking vision models (Gemini 3.x) can easily run past 2 minutes on
+    // a dense page — the route's maxDuration is 300s, so budget 200s here
+    timeoutMs: 200_000,
   });
   return { items: parseExtractionJson(raw), rawChars: raw.length };
 }
