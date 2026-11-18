@@ -48,6 +48,7 @@ interface Candidate {
   confidence: number;
   status: string;
   questionId?: string | null;
+  tags?: string[];
 }
 
 interface JobInfo {
@@ -219,7 +220,7 @@ export default function ExtractionStudio({ onGoToBank }: { onGoToBank?: () => vo
         return;
       }
       setProgress(100);
-      toast.success(`اكتمل الاستخراج — ${data.questionCount} سؤالًا مرشحًا بانتظار المراجعة`);
+      toast.success(`اكتمل الاستخراج — ${data.questionCount} عنصرًا (أسئلة ونصوص) بانتظار المراجعة`);
       await openJob(data.jobId);
       void loadHistory();
     } catch {
@@ -315,7 +316,7 @@ export default function ExtractionStudio({ onGoToBank }: { onGoToBank?: () => vo
       <PaneHeader
         icon={ScanText}
         title="الاستخراج الذكي للأسئلة"
-        desc="ارفع ملف PDF أو صورة ممسوحة → الذكاء الاصطناعي يستخرج الأسئلة → راجعها وعدّلها ثم استوردها للبنك"
+        desc="ارفع ملف PDF أو صورة ممسوحة → الذكاء الاصطناعي يستخرج كل النص (الأسئلة والنصوص غير السؤالية) → راجعها وعدّلها ثم استوردها للبنك"
         actions={
           <Badge variant="outline" className="gap-1 border-emerald-300 bg-emerald-50 text-emerald-700">
             <Sparkles className="h-3 w-3" /> نموذج رؤية VLM — عربي/إنجليزي
@@ -553,7 +554,15 @@ function CandidateCard({
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-[11px] font-black text-slate-500">{index + 1}</span>
         <Badge variant="outline" className={confBadge.cls}>{confBadge.label}</Badge>
         {c.page != null && <Badge variant="secondary" className="text-[10px]">صفحة {c.page}</Badge>}
-        <Badge variant="secondary" className="text-[10px]">{c.type === 'mcq' ? 'اختيار متعدد' : c.type === 'truefalse' ? 'صح/خطأ' : 'مقالي'}</Badge>
+        <Badge variant="secondary" className="text-[10px]">
+          {c.tags?.includes('text')
+            ? 'نص غير سؤال'
+            : c.type === 'mcq'
+              ? 'اختيار متعدد'
+              : c.type === 'truefalse'
+                ? 'صح/خطأ'
+                : 'مقالي'}
+        </Badge>
         {dirty && <Badge className="bg-emerald-600 text-[10px]">معدّل</Badge>}
         {c.questionId && <Badge variant="outline" className="text-[10px] text-emerald-600">مستورد ✓</Badge>}
 

@@ -143,7 +143,9 @@ export async function POST(req: Request) {
             explanation: it.explanation ?? null,
             difficulty: it.difficulty,
             marks: it.marks,
-            tagsJson: '[]',
+            // non-question text blocks carry the "text" tag so the review UI
+            // (and the bank after import) can tell them apart from questions
+            tagsJson: it.kind === 'text' ? '["text"]' : '[]',
             confidence: it.confidence,
             status: 'pending',
           })),

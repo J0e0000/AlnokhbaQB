@@ -11,6 +11,10 @@ import { aiVisionText } from '@/lib/ai/client';
 
 export const extractedItemSchema = z.object({
   type: z.enum(['mcq', 'truefalse', 'short']).catch('short'),
+  /** question = real exam question; text = any other content block (passage,
+   *  definition, instructions, notes…). Non-question text is extracted too,
+   *  in the SAME format — the teacher filters it during review. */
+  kind: z.enum(['question', 'text']).default('question').catch('question'),
   prompt: z.string().min(1).max(5000),
   options: z
     .array(z.object({ id: z.string().min(1).max(4), text: z.string().max(2000) }))
@@ -30,21 +34,25 @@ export type ExtractLanguage = (typeof EXTRACT_LANGUAGES)[number];
 
 // ---------- VLM prompt ----------
 
-const SYSTEM_PROMPT = `أنت نظام خبير في قراءة المستندات التعليمية الممسوحة ضوئيًا واستخراج الأسئلة Exam-question extraction.
-Extract EVERY exam question visible in the image into structured JSON.
+const SYSTEM_PROMPT = `أنت نظام خبير في قراءة المستندات التعليمية الممسوحة ضوئيًا واستخراج محتواها بالكامل. Exam-content extraction.
+Extract EVERY text block visible in the image, in reading order, into structured JSON — real exam questions AND non-question text alike. NOTHING that carries content may be dropped.
 Rules:
 - Output ONLY valid JSON. No markdown fences, no commentary: {"questions":[...]}
-- Each question: {"type":"mcq"|"truefalse"|"short","prompt":"...","options":[{"id":"A","text":"..."}],"correctAnswer":"A"|null,"explanation":null,"difficulty":"easy"|"medium"|"hard","marks":1,"confidence":0.0}
-- mcq: 2–6 options with ids A,B,C…
-- truefalse: options exactly [{"id":"A","text":"صح"},{"id":"B","text":"خطأ"}] (or "True"/"False" if the paper is English) and correctAnswer "A" or "B" when the paper marks it.
-- short/essay: options [] and correctAnswer null.
+- Every item: {"type":"mcq"|"truefalse"|"short","kind":"question"|"text","prompt":"...","options":[{"id":"A","text":"..."}],"correctAnswer":"A"|null,"explanation":null,"difficulty":"easy"|"medium"|"hard","marks":1,"confidence":0.0}
+- Real exam questions: kind "question".
+  - mcq: 2–6 options with ids A,B,C…
+  - truefalse: options exactly [{"id":"A","text":"صح"},{"id":"B","text":"خطأ"}] (or "True"/"False" if the paper is English) and correctAnswer "A" or "B" when the paper marks it.
+  - short/essay: options [] and correctAnswer null.
+- Text that is NOT a question — reading passages, definitions, rules, notes, explanations, solved examples, instructions, exam headers with real content, table captions, essay prompts without options: kind "text", type "short", options [], correctAnswer null — copy the FULL original text into "prompt". Never drop, summarize or paraphrase it.
+- Keep items in the SAME ORDER as on the page (top → bottom; for Arabic right → left).
 - Preserve the ORIGINAL language of the text exactly — Arabic stays Arabic, English stays English. Never translate.
 - Copy mathematical equations in plain text using unicode (× ÷ √ π ² ³ ≤ ≥ ∠ △ ≈ ≠). Copy tables as lines with | separators.
 - If the paper marks the correct answer (✓, underline, "الإجابة", key list), set correctAnswer accordingly; otherwise null.
-- marks: read from the paper when printed, otherwise 1.
-- confidence: your reading certainty for THIS question (0–1). Use low values for blurry/small/handwritten text.
-- Ignore headers, institution names, logos, page numbers and generic instructions that are not questions.
-- If no questions are visible, output {"questions":[]}`;
+- marks: read from the paper when printed (questions only), otherwise 1.
+- confidence: your reading certainty for THIS item (0–1). Use low values for blurry/small/handwritten text.
+- Skip ONLY pure page furniture: logos, watermarks and bare page numbers with no other content.
+- If a single text block exceeds ~4000 characters, split it into consecutive text items at natural paragraph boundaries.
+- If the page is completely blank, output {"questions":[]}`;
 
 // ---------- VLM call ----------
 
@@ -67,7 +75,9 @@ export async function extractQuestionsFromPage(
   const raw = await aiVisionText({
     prompt: `${SYSTEM_PROMPT}\n${langHint}`,
     dataUrl,
-    maxTokens: 4096,
+    // full-content extraction (questions + passages) needs more headroom
+    // than the old questions-only pass — 8192 covers dense A4 pages
+    maxTokens: 8192,
   });
   return { items: parseExtractionJson(raw), rawChars: raw.length };
 }
