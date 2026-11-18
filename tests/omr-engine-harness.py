@@ -75,15 +75,19 @@ def encode64(img: np.ndarray, quality: Optional[int] = None) -> str:
 # ------------------------------------------------ degradation
 
 def perspective(img: np.ndarray, max_frac: float = 0.07) -> np.ndarray:
+    """Realistic oblique photo: the sheet stays FULLY inside the capture
+    (corners displaced inward only) — outward displacement would simulate
+    a sheet partially outside the frame, which real scans never contain."""
     h, w = img.shape[:2]
-    d = lambda: PYR.uniform(-max_frac, max_frac)  # noqa: E731
+    dx, dy = w * max_frac, h * max_frac
+    d = lambda: abs(PYR.uniform(-1, 1))  # noqa: E731
     src = np.float32([[0, 0], [w, 0], [w, h], [0, h]])
     dst = np.float32(
         [
-            [d() * w, d() * h],
-            [w + d() * w, d() * h],
-            [w + d() * w, h + d() * h],
-            [d() * w, h + d() * h],
+            [d() * dx, d() * dy],
+            [w - d() * dx, d() * dy],
+            [w - d() * dx, h - d() * dy],
+            [d() * dx, h - d() * dy],
         ]
     )
     M = cv2.getPerspectiveTransform(src, dst)
@@ -107,6 +111,40 @@ def lighting(img: np.ndarray, strength: float = 0.55) -> np.ndarray:
     grad = np.minimum.outer(gy, gx)  # (h, w) in [strength, 1]
     out = img.astype(np.float32) * grad[:, :, None]
     return np.clip(out, 0, 255).astype(np.uint8)
+
+
+def photocopy(img: np.ndarray, fade: float = 0.5) -> np.ndarray:
+    """Low-contrast photocopy: white stays white, black becomes gray."""
+    out = 255.0 - (255.0 - img.astype(np.float32)) * fade
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
+def side_shadow(img: np.ndarray, strength: float = 0.45, from_left: bool = True) -> np.ndarray:
+    """Hard illumination gradient from one side only (hand/lamp shadow)."""
+    h, w = img.shape[:2]
+    gx = np.linspace(1.0, strength, w, dtype=np.float32)
+    if from_left:
+        gx = gx[::-1]
+    out = img.astype(np.float32) * gx[None, :, None]
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
+def stray_marks(img: np.ndarray, count: int = 14) -> np.ndarray:
+    """Random pen dots/scribbles BETWEEN bubbles (not covering any bubble)."""
+    rng = random.Random(777)
+    for _ in range(count):
+        q = rng.choice(TEMPLATE["questions"])
+        letter = rng.choice(list(q["options"].keys()))
+        p = q["options"][letter]
+        # a dot 2.6-3.4r away from a bubble center — in the gutter between bubbles
+        ang = rng.uniform(0, 2 * math.pi)
+        d_mm = q["radiusMm"] * rng.uniform(2.6, 3.4)
+        x = p["x"] + math.cos(ang) * d_mm
+        y = p["y"] + math.sin(ang) * d_mm
+        cx, cy = int(round(x * PX_PER_MM)), int(round(y * PX_PER_MM))
+        r = max(2, int(0.09 * PX_PER_MM))  # ~0.9mm dot
+        cv2.circle(img, (cx, cy), r, (70, 70, 70), -1, cv2.LINE_AA)
+    return img
 
 
 def phone_camera(img: np.ndarray, out_width: int, jpeg_q: int) -> np.ndarray:
@@ -396,6 +434,75 @@ def main() -> None:
     acc, _ = check_answers(res, KEY) if res.get("ok") else (0, [])
     record("18. manual template w/o QR", res.get("ok") and acc >= 0.9 and res.get("templateSource") == "manual",
            f"acc={acc:.0%} src={res.get('templateSource')} rot={res.get('diagnostics', {}).get('rotationDeg')}")
+
+    # ---------- 19. photocopy (low contrast, gray print) ≥85%
+    img = photocopy(build_sheet(KEY, "pencil"), 0.45)
+    res = run(img)
+    acc, problems = check_answers(res, KEY)
+    record("19. photocopy low contrast", acc >= 0.85 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
+
+    # ---------- 20. hard side shadow + slight rotation ≥85%
+    img = rotate(side_shadow(build_sheet(KEY, "pencil"), 0.40, from_left=False), 4)
+    res = run(img)
+    acc, problems = check_answers(res, KEY)
+    record("20. side shadow + rotation", acc >= 0.85 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
+
+    # ---------- 21. severe perspective + jpeg ≥85%
+    img = perspective(build_sheet(KEY, "pen"), 0.12)
+    res = run(img, jpeg=55)
+    acc, problems = check_answers(res, KEY)
+    record("21. severe perspective", acc >= 0.85 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
+
+    # ---------- 22. camera blur + small image ≥85%
+    img = cv2.GaussianBlur(build_sheet(KEY, "pencil"), (5, 5), 1.4)
+    scale = 1000 / img.shape[1]
+    img = cv2.resize(img, (1000, int(img.shape[0] * scale)), interpolation=cv2.INTER_AREA)
+    res = run(img, jpeg=70)
+    acc, problems = check_answers(res, KEY)
+    record("22. blur + 1000px", acc >= 0.85 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
+
+    # ---------- 23. off-center marks (sloppy student) ≥90%
+    img = BLANK.copy()
+    for n, l in KEY.items():
+        q = next(qq for qq in TEMPLATE["questions"] if qq["number"] == n)
+        p = q["options"][l]
+        jx = PYR.uniform(-0.35, 0.35) * q["radiusMm"]
+        jy = PYR.uniform(-0.35, 0.35) * q["radiusMm"]
+        fill_bubble(img, p["x"] + jx, p["y"] + jy, q["radiusMm"] * 0.9, 0.62)
+    res = run(img)
+    acc, problems = check_answers(res, KEY)
+    record("23. off-center marks", acc >= 0.9 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
+
+    # ---------- 24. stray marks between bubbles → never confidently wrong
+    img = stray_marks(build_sheet(KEY, "pencil"))
+    res = run(img)
+    acc, problems = check_answers(res, KEY)
+    wrong_conf = [a for a in res.get("answers", []) if a["status"] == "selected" and a["detected"] != KEY[a["number"]] and a["confidence"] > 0.8]
+    record("24. stray marks", acc >= 0.9 and len(wrong_conf) == 0 and res["ok"], f"accuracy={acc:.0%} wrongConf={len(wrong_conf)}", {"problems": problems[:5]})
+
+    # ---------- 25. mixed instruments (pencil + pen same sheet) ≥90%
+    plan = {n: l for n, l in KEY.items()}
+    mixed = BLANK.copy()
+    for i, (n, l) in enumerate(plan.items()):
+        q = next(qq for qq in TEMPLATE["questions"] if qq["number"] == n)
+        p = q["options"][l]
+        fill_bubble(mixed, p["x"], p["y"], q["radiusMm"], 0.48 if i % 2 else 0.85)
+    res = run(mixed)
+    acc, problems = check_answers(res, KEY)
+    record("25. mixed pencil+pen", acc >= 0.9 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
+
+    # ---------- 26. faint photocopy of light pencil → correct or unclear, ≥70% read
+    img = photocopy(build_sheet(KEY, "pencil"), 0.30)
+    res = run(img)
+    acc, problems = check_answers(res, KEY, allow_unclear_as={n: l for n, l in KEY.items()})
+    unclear_or_ok = [a for a in res.get("answers", []) if a["detected"] == KEY[a["number"]] or a["status"] == "unclear"]
+    record("26. faint photocopy pencil", len(unclear_or_ok) >= 7 and res["ok"], f"okOrUnclear={len(unclear_or_ok)}/10 acc={acc:.0%}", {"problems": problems[:5]})
+
+    # ---------- 27. phone camera + photocopy combo ≥80%
+    img = phone_camera(photocopy(build_sheet(KEY, "pencil"), 0.55), 1300, 70)
+    res = run(img)
+    acc, problems = check_answers(res, KEY)
+    record("27. photocopied phone photo", acc >= 0.80 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
 
     # ---------- recommended thresholds
     rec = {

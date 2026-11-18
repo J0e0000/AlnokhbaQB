@@ -209,19 +209,20 @@ export async function generateSheetsPdf(opts: GeneratorOptions): Promise<{ blob:
           const j = across ? qIn : o;
           const cx = bx + (j + 0.5) * cellW;
           const cy = byTop + (i + 0.5) * cellH;
-          const bw = Math.min(15, cellW * 0.62);
-          const bh = Math.min(13, cellH * 0.58);
-          page.drawRectangle({
-            x: cx - bw / 2,
-            y: H - cy - bh / 2,
-            width: bw,
-            height: bh,
+          // circular bubbles — larger of the cell-fitting dims, centered
+          const r = Math.min(9, Math.min(cellW, cellH) * 0.34);
+          page.drawEllipse({
+            x: cx,
+            y: H - cy,
+            xScale: r,
+            yScale: r,
             borderColor: rgb(0.1, 0.1, 0.1),
             borderWidth: 1,
             borderOpacity: 0.85,
           });
           const lw = reg.widthOfTextAtSize(lb, 7);
-          page.drawText(lb, { x: cx - lw / 2, y: H - cy + 2.5, size: 7, font: reg, color: rgb(0.42, 0.42, 0.42) });
+          // baseline ≈ cap-height/2 below the circle center → visually centered
+          page.drawText(lb, { x: cx - lw / 2, y: H - cy - 2.4, size: 7, font: reg, color: rgb(0.42, 0.42, 0.42) });
         });
       }
       qNumber += count;

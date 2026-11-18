@@ -16,7 +16,10 @@ import type {
 
 export const OMR_DEFAULT_THRESHOLDS = {
   filled: 0.45,
-  empty: 0.17,
+  // Metric-consistent: the engine measures fill relative to local paper, so
+  // paper noise tops out ~0.18 while the lightest real marks start ~0.25.
+  // The engine also enforces this as a floor (EMPTY_FLOOR) at scan time.
+  empty: 0.2,
   ambiguousMargin: 0.1,
   minAbsoluteFill: 0.08,
 };

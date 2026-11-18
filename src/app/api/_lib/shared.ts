@@ -131,8 +131,8 @@ export function defaultCalibrationConfig(): CalibrationConfig {
     ...pencil,
     presets: {
       pencil,
-      pen: { filled: 0.5, empty: 0.2, ambiguousMargin: 0.1, minAbsoluteFill: 0.08 },
-      light: { filled: 0.38, empty: 0.15, ambiguousMargin: 0.1, minAbsoluteFill: 0.08 },
+      pen: { filled: 0.5, empty: 0.22, ambiguousMargin: 0.1, minAbsoluteFill: 0.08 },
+      light: { filled: 0.38, empty: 0.2, ambiguousMargin: 0.1, minAbsoluteFill: 0.08 },
     },
   };
 }

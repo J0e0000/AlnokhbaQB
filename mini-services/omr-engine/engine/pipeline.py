@@ -213,15 +213,18 @@ def find_corner_markers(gray: np.ndarray) -> Optional[List[Tuple[float, float, f
     # area-based scale estimate — orientation-independent (works for rotated
     # landscape captures of a portrait A4 sheet)
     px_per_mm_est = (w * h / (210.0 * 297.0)) ** 0.5
-    # smallest real marker is 5mm; QR finder rings (~3.5mm) must stay excluded
+    # smallest real marker is 5mm; QR finder rings (~3.5mm) must stay excluded.
+    # Upper bound has headroom for oblique photos where the NEAR marker appears
+    # up to ~1.3x larger than its printed size.
     min_sz = 4.2 * px_per_mm_est
-    max_sz = 9.5 * px_per_mm_est
+    max_sz = 11.0 * px_per_mm_est
     thr = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
     thr = cv2.morphologyEx(thr, cv2.MORPH_CLOSE, kernel)
-    # PERF: one full-image INV threshold, hoisted out of the contour loop
-    # (was re-thresholding the whole frame for EVERY candidate blob).
-    thr_fill = cv2.threshold(gray, 110, 255, cv2.THRESH_BINARY_INV)[1]
+    # Solid-fill check: Otsu-based (same ink/paper split as the contour pass).
+    # A fixed low threshold (110) rejected markers on faint photocopies where
+    # solid black prints as gray ~120 — Otsu adapts to the page's ink level.
+    thr_fill = thr
     contours = _find_contours(thr, cv2.RETR_EXTERNAL)
     candidates = []
     for c in contours:
@@ -886,89 +889,228 @@ def pdf_pages(pdf_b64: str, dpi: int = 200, from_page: int = 0, max_pages: int =
 
 
 # ---------------- Stage 8: bubble fill analysis ----------------
+# Normalized mean-darkness measurement (aligned with the strongest open
+# implementations: OMRChecker mean-intensity + largest-gap thresholding,
+# open-mcr inward-cropped circular masks, Loke 2018 background-context
+# marks). For every template bubble:
+#
+#   bg      = median gray of an annulus r*1.15..r*1.45 (local paper level)
+#   mean_in = mean gray inside disc r*0.82 (inward of the printed ring)
+#   ratio   = (bg - mean_in) / max(bg - ink_ref, 60)   clipped to 0..1.15
+#
+# ink_ref is a per-sheet blackness estimate (15th percentile of Otsu-dark
+# pixels, clamped 35..60). Because the metric is RELATIVE to the paper
+# level around each bubble, it is insensitive to illumination gradients,
+# shadows, low-light shots, gray photocopies and JPEG exposure shifts —
+# the failure modes of binary dark-pixel counting. Physical calibration:
+# empty ~0.02-0.10, light pencil ~0.25-0.35, HB pencil ~0.45-0.70,
+# black pen ~0.80-1.00, erased ghost ~0.04-0.10.
 
-def _adaptive(warped: np.ndarray, px_per_mm: float) -> np.ndarray:
-    # blockSize must exceed the bubble diameter (~4mm) so the local mean stays
-    # dominated by paper even at the center of a SOLID fill (else solid marks
-    # self-normalize and vanish). 81px@300dpi ≈ 6.9mm window.
-    scale = px_per_mm / (300 / 25.4)
-    block = max(41, int(81 * scale) | 1)
-    return cv2.adaptiveThreshold(warped, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, block, 15)
+CROP_PAD_MM = 2.2          # crop half-width beyond the annulus (mm)
+MASK_FACTOR = 0.82         # measurement disc radius = r * MASK_FACTOR
+ANN_IN, ANN_OUT = 1.15, 1.45  # local paper reference annulus (multiples of r)
+INK_REF_MIN, INK_REF_MAX = 35.0, 160.0  # upper bound lets faint photocopies keep scale
+EMPTY_FLOOR = 0.20         # metric-consistent minimum for the `empty` threshold
+
+
+def estimate_ink_ref(warped: np.ndarray) -> float:
+    """Per-sheet ink blackness estimate (gray level of true print)."""
+    small = cv2.resize(warped, None, fx=0.25, fy=0.25, interpolation=cv2.INTER_AREA)
+    t, _ = cv2.threshold(small, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    dark = small[small < t]
+    if dark.size > 500:
+        return float(np.clip(np.percentile(dark, 15), INK_REF_MIN, INK_REF_MAX))
+    return 45.0
 
 
 def bubble_fill_ratios(
-    binary: np.ndarray,
     warped: np.ndarray,
     bubbles_mm: List[Tuple[float, float, float]],  # (x, y, r) mm
     px_per_mm: float,
-) -> List[Tuple[float, float]]:
-    """Deterministic template-driven fill analysis. Returns [(fillRatio, meanIntensity)].
+    ink_ref: Optional[float] = None,
+) -> List[Tuple[float, float, float]]:
+    """Normalized fill measurement. Returns [(fillRatio, meanIntensity, strokeCover)].
 
-    PERF: all bubbles share the printed radius, so the circular acceptance mask
-    is built ONCE per distinct radius (as relative offsets) and sliced per
-    bubble — replaces the previous per-bubble np.mgrid allocation (~500 grids)."""
-    out: List[Tuple[float, float]] = []
-    H, W = binary.shape[:2]
-    mask_cache: Dict[float, Tuple[np.ndarray, int]] = {}
-    for (xmm, ymm, rmm) in bubbles_mm:
-        cx = int(round(xmm * px_per_mm))
-        cy = int(round(ymm * px_per_mm))
-        r = rmm * px_per_mm
-        r_in = max(2.0, r * 0.9)
-        key = round(float(r_in), 3)
-        entry = mask_cache.get(key)
-        if entry is None:
-            D = int(math.ceil(r_in)) + 2  # relative-offset margin
-            rng = np.arange(-D, D + 1)
-            disc = (rng[None, :] ** 2 + rng[:, None] ** 2) <= r_in**2
-            entry = (disc, D)
-            mask_cache[key] = entry
-        disc, D = entry
-        x0, y0 = max(0, int(cx - r_in)), max(0, int(cy - r_in))
-        x1, y1 = min(W, int(cx + r_in) + 1), min(H, int(cy + r_in) + 1)
-        if x1 <= x0 or y1 <= y0:
-            out.append((0.0, 255.0))
-            continue
-        mask = disc[(y0 - cy + D) : (y1 - cy + D), (x0 - cx + D) : (x1 - cx + D)]
-        crop = binary[y0:y1, x0:x1]
-        gray_crop = warped[y0:y1, x0:x1]
-        total = int(mask.sum())
-        if total == 0:
-            out.append((0.0, 255.0))
-            continue
-        dark = int(np.count_nonzero(crop & mask if crop.dtype == np.uint8 else (crop > 0) & mask))
-        mean_i = float(gray_crop[mask].mean()) if gray_crop.size else 255.0
-        out.append((dark / total, mean_i))
-    return out
+    strokeCover = fraction of the disc at least 35% as dark as ink vs local
+    paper — near-zero for broad faint fills (eraser ghosts), meaningful for
+    thin intentional strokes (cross-outs, ticks) that dilute in mean
+    darkness. Used by decide_answer to rescue such marks into review.
+
+    PERF: bubbles sharing a radius share the crop geometry, so crops are
+    stacked per radius group and measured vectorized (one np.mgrid per
+    group instead of per bubble)."""
+    n = len(bubbles_mm)
+    if n == 0:
+        return []
+    if ink_ref is None:
+        ink_ref = estimate_ink_ref(warped)
+
+    WH, WW = warped.shape[:2]
+    by_r: Dict[float, List[int]] = {}
+    for i, (xmm, ymm, rmm) in enumerate(bubbles_mm):
+        by_r.setdefault(round(float(rmm), 3), []).append(i)
+
+    r_max_mm = max(rmm for _, _, rmm in bubbles_mm)
+    pad = max(3, int(math.ceil(CROP_PAD_MM + ANN_OUT * r_max_mm) * px_per_mm))
+    work = cv2.copyMakeBorder(warped, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=255)
+
+    out: List[Optional[Tuple[float, float]]] = [None] * n
+    for r_mm, idxs in by_r.items():
+        r_px = r_mm * px_per_mm
+        half = int(math.ceil(ANN_OUT * r_px)) + 2
+        size = 2 * half + 1
+        stack = np.empty((len(idxs), size, size), dtype=np.float32)
+        for row, i in enumerate(idxs):
+            xmm, ymm, _ = bubbles_mm[i]
+            cx = int(round(xmm * px_per_mm)) + pad
+            cy = int(round(ymm * px_per_mm)) + pad
+            crop = work[max(0, cy - half) : min(WH + 2 * pad, cy + half + 1),
+                        max(0, cx - half) : min(WW + 2 * pad, cx + half + 1)]
+            if crop.shape != (size, size):
+                # bubble near/over the page edge (deformed warp) — pad the
+                # missing border with paper white instead of crashing
+                crop = cv2.copyMakeBorder(
+                    crop,
+                    max(0, half - (cy - max(0, cy - half))),
+                    max(0, (cy + half + 1) - min(WH + 2 * pad, cy + half + 1)),
+                    max(0, half - (cx - max(0, cx - half))),
+                    max(0, (cx + half + 1) - min(WW + 2 * pad, cx + half + 1)),
+                    cv2.BORDER_CONSTANT, value=255,
+                )
+                if crop.shape != (size, size):
+                    # still clipped (bubble center beyond the padded edge):
+                    # treat as clean paper so the vectorized pass stays sane
+                    stack[row] = 255.0
+                    continue
+            stack[row] = crop
+
+        yy, xx = np.mgrid[-half : half + 1, -half : half + 1]
+        dist = np.sqrt((xx * xx + yy * yy).astype(np.float32))
+        inner = (dist <= MASK_FACTOR * r_px).astype(np.float32)
+        ann = (dist >= ANN_IN * r_px) & (dist <= ANN_OUT * r_px)
+        inner_sum = float(inner.sum())
+
+        if ann.any():
+            masked = np.where(ann[None, :, :], stack, np.nan)
+            with np.errstate(all="ignore"):
+                bg = np.nanmedian(masked.reshape(len(idxs), -1), axis=1)
+            bg = np.nan_to_num(bg, nan=255.0)
+        else:
+            bg = np.full(len(idxs), 255.0)
+        bg = np.clip(bg, 40.0, 255.0)
+
+        mean_in = (stack * inner[None, :, :]).sum(axis=(1, 2)) / max(inner_sum, 1.0)
+        denom = np.maximum(bg - ink_ref, 60.0)
+        ratio = np.clip((bg - mean_in) / denom, 0.0, 1.15)
+        stroke_t = (bg - 0.35 * (bg - ink_ref))[:, None, None]
+        cover = ((stack < stroke_t) * inner[None, :, :]).sum(axis=(1, 2)) / max(inner_sum, 1.0)
+
+        for row, i in enumerate(idxs):
+            out[i] = (float(ratio[row]), float(mean_in[row]), float(min(1.0, cover[row])))
+
+    return [(o if o is not None else (0.0, 255.0, 0.0)) for o in out]
+
+
+def calibrate_thresholds(
+    all_ratios: List[float], th: Dict[str, float]
+) -> Tuple[Dict[str, float], Optional[Dict[str, Any]]]:
+    """Page-adaptive threshold calibration (OMRChecker largest-gap method).
+
+    The template/request thresholds remain the fallback rails. When the
+    page's bubble ratios are clearly bimodal (paper cluster vs ink cluster)
+    we place empty/filled INSIDE the largest separating gap, preferring a
+    gap whose low side looks like paper (p95 <= 0.20) and whose high side
+    looks like ink (>= 0.30). This rescues faint photocopies, light pens
+    and varying exposures that absolute
+    thresholds misread — while degenerate sheets (blank, fully-marked,
+    smeared) naturally fail the gap test and keep the base thresholds."""
+    vals = np.sort(np.asarray(all_ratios, dtype=np.float64))
+    n = int(vals.size)
+    if n < 20:
+        return th, None
+    min_left = max(4, int(n * 0.15))
+    min_right = max(1, int(n * 0.05))
+    candidates = []
+    for i in range(min_left, n - min_right):
+        gap = float(vals[i + 1] - vals[i])
+        if gap >= 0.09:
+            low_p95 = float(vals[int(i * 0.95) - 1]) if i >= 2 else float(vals[0])
+            candidates.append((i, gap, low_p95))
+    if not candidates:
+        return th, None
+    # The low cluster must look like paper (p95 <= 0.20) and the high side
+    # must look like real ink (>= 0.30 in the normalized metric — even light
+    # photocopy marks measure >= 0.30). This rejects noise "gaps" inside
+    # uniform populations (blank sheets, erased ghosts, smeared pages).
+    paper_like = [c for c in candidates if c[2] <= 0.20 and float(vals[c[0] + 1]) >= 0.30]
+    pool = paper_like if paper_like else [c for c in candidates if float(vals[c[0] + 1]) >= 0.30]
+    if not pool:
+        return th, None
+    i, gap, _ = max(pool, key=lambda c: (c[1], c[0]))
+    low_v, high_v = float(vals[i]), float(vals[i + 1])
+    filled_t = float(np.clip(low_v + 0.72 * gap, 0.28, 0.70))
+    empty_t = float(np.clip(low_v + 0.28 * gap, 0.06, 0.30))
+    if filled_t - empty_t < 0.10:
+        return th, None
+    new_th = dict(th)
+    new_th["filled"] = round(filled_t, 3)
+    new_th["empty"] = round(empty_t, 3)
+    info = {
+        "applied": True,
+        "gap": round(gap, 3),
+        "paperLevel": round(low_v, 3),
+        "inkLevel": round(high_v, 3),
+        "filled": new_th["filled"],
+        "empty": new_th["empty"],
+    }
+    return new_th, info
 
 
 def decide_answer(
     ratios: Dict[str, float],
     th: Dict[str, float],
+    covers: Optional[Dict[str, float]] = None,
 ) -> Dict[str, Any]:
     """Answer determination with calibrated thresholds.
     States: selected / unanswered / multiple / unclear — never force ambiguity.
 
-    BOUNDARY ZONE: fills straddling the `filled` threshold (±0.03) are marked
-    `unclear` — the same physical ink measures ±0.02 differently across input
-    resolutions/illuminations, so a near-threshold mark is genuinely
-    ambiguous and MUST go to human review instead of being guessed
-    (verified: two borderline fills measured 0.457-0.476 across 1240→4712px
-    of the SAME sheet; every real fill is ≥0.49 and every empty ≤0.054, so
-    the zone only catches true boundary cases)."""
+    Rules (in order):
+    1. top1 < empty -> unanswered, UNLESS a thin intentional stroke is
+       present (stroke-cover high while mean darkness is low — cross-outs,
+       ticks): then unclear for human review instead of a silent blank.
+    2. top1 & top2 both >= filled           -> multiple
+    3. near-tie at the top (top2 within
+       ambiguousMargin of filled and top1
+       within ambiguousMargin of top2)      -> unclear (human review)
+    4. top1 straddles the filled threshold
+       (±borderZone)                        -> unclear (human review)
+    5. top1 >= filled                      -> selected, confidence from
+       the margin over the runner-up."""
     filled = th["filled"]
     empty = th["empty"]
     min_abs = th.get("minAbsoluteFill", 0.08)
-    border = float(th.get("borderZone", 0.03))
+    amb = float(th.get("ambiguousMargin", 0.10))
+    border = float(th.get("borderZone", 0.02))
     items = sorted(ratios.items(), key=lambda kv: -kv[1])
     top1_letter, top1 = items[0]
     top2 = items[1][1] if len(items) > 1 else 0.0
     margin = top1 - top2
 
     if top1 < empty:
-        return {"detected": None, "status": "unanswered", "confidence": max(0.0, min(1.0, 1.0 - top1 / max(empty, 1e-6)))}
+        cov = covers or {}
+        cov1 = float(cov.get(top1_letter, 0.0))
+        cov2 = float(cov.get(items[1][0], 0.0)) if len(items) > 1 else 0.0
+        stroke1 = cov1 >= 0.10 and top1 >= 0.04
+        stroke2 = cov2 >= 0.10 and top2 >= 0.04
+        if stroke1 and (stroke2 or margin >= 0.03):
+            # thin intentional mark below the fill threshold — send to review
+            return {"detected": None, "status": "unclear", "confidence": 0.3}
+        return {"detected": None, "status": "unanswered", "confidence": round(max(0.0, min(1.0, 1.0 - top1 / max(empty, 1e-6))), 3)}
     if top1 >= filled and top2 >= filled:
-        return {"detected": None, "status": "multiple", "confidence": max(0.0, min(1.0, 0.2 + margin / filled * 0.3))}
+        return {"detected": None, "status": "multiple", "confidence": round(max(0.5, min(1.0, 0.5 + margin / 0.4)), 3)}
+    if top1 >= filled and margin < amb and top2 >= filled - amb:
+        # near-tie single mark — genuinely ambiguous, never force a letter
+        return {"detected": None, "status": "unclear", "confidence": round(float(np.clip(0.5 - margin / max(amb, 1e-6) * 0.25, 0.25, 0.5)), 3)}
     if abs(top1 - filled) <= border:
         return {"detected": None, "status": "unclear", "confidence": 0.35}
     if top1 >= filled:
@@ -985,11 +1127,11 @@ def decide_answer(
 # ---------------- Student ID ----------------
 
 def analyze_student_id(
-    binary: np.ndarray,
     warped: np.ndarray,
     sid: Optional[Dict[str, Any]],
     th: Dict[str, float],
     px_per_mm: float,
+    ink_ref: Optional[float] = None,
 ) -> Optional[Dict[str, Any]]:
     if not sid:
         return None
@@ -997,15 +1139,17 @@ def analyze_student_id(
     for x in sid["digitColumnXs"]:
         for y in sid["valueYs"]:
             bubbles.append((x, y, sid["bubbleRMm"]))
-    ratios = bubble_fill_ratios(binary, warped, bubbles, px_per_mm)
+    ratios = bubble_fill_ratios(warped, bubbles, px_per_mm, ink_ref)
     per_digit = []
     digits = ""
     confs = []
     for d, x in enumerate(sid["digitColumnXs"]):
         col = {}
+        cov_col = {}
         for v, y in enumerate(sid["valueYs"]):
             col[str(v)] = ratios[d * len(sid["valueYs"]) + v][0]
-        dec = decide_answer(col, th)
+            cov_col[str(v)] = ratios[d * len(sid["valueYs"]) + v][2]
+        dec = decide_answer(col, th, cov_col)
         status = dec["status"]
         if status == "unanswered":
             value = ""  # nothing marked in this column
@@ -1116,6 +1260,10 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
     req_th = payload.get("thresholds")
     if req_th:
         th.update({k: float(v) for k, v in req_th.items() if v is not None})
+    # Metric-consistency floor: in the normalized mean-darkness metric paper
+    # noise tops out ~0.18 while the lightest real marks start ~0.25 — keep
+    # `empty` at least EMPTY_FLOOR so erased ghosts never read as answers.
+    th["empty"] = max(float(th.get("empty", 0.17)), EMPTY_FLOOR)
     debug = bool(payload.get("debug", False))
     warnings: List[str] = []
     errors: List[str] = []
@@ -1312,6 +1460,19 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
     warped = warp_with(gray, M, size_px) if M is not None else cv2.resize(gray, (int(size_px[0]), int(size_px[1])))
     stages["perspectiveCorrected"] = True
 
+    # Aspect guard: a 90°-off quad/marker matching warps the page landscape
+    # (or portrait where landscape was expected). If the warped aspect
+    # contradicts the template page, rotate losslessly before measurement —
+    # else every bubble coordinate would be out of page bounds.
+    if template:
+        pg = template.get("page") or A4
+        pw_mm, ph_mm = float(pg.get("widthMm") or 210), float(pg.get("heightMm") or 297)
+        w_h, w_w = warped.shape[:2]
+        if (w_w > w_h) != (pw_mm > ph_mm):
+            warped = np.rot90(warped).copy()
+            diag["aspectRot90"] = True
+            warnings.append("تم تدوير الورقة المصححة هندسيًا لتطابق اتجاه القالب")
+
     if manual_markers:
         # Trust the user's clicks: no self-heal (it would override their exact
         # points) and no orientation guessing — the frame is upright by design.
@@ -1408,7 +1569,6 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
     sheet_questions = [q for q in all_q if q.get("sheet", 0) == sheet]
     if not sheet_questions:
         return fail("bubblesLoaded", f"no questions found for sheet {sheet}")
-    binary = _adaptive(warped, px_per_mm)
     stages["bubblesLoaded"] = True
 
     # Question bubbles
@@ -1418,16 +1578,31 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
         for letter, pos in q["options"].items():
             bubbles.append((pos["x"], pos["y"], q["radiusMm"]))
             idx_map.append((q["number"], letter))
-    ratios = bubble_fill_ratios(binary, warped, bubbles, px_per_mm)
+    ink_ref = estimate_ink_ref(warped)
+    diag["inkRef"] = round(float(ink_ref), 1)
+    ratios = bubble_fill_ratios(warped, bubbles, px_per_mm, ink_ref)
 
     per_q: Dict[int, Dict[str, float]] = {}
-    for (num, letter), (r, mean_i) in zip(idx_map, ratios):
+    per_cov: Dict[int, Dict[str, float]] = {}
+    for (num, letter), (r, _mean, cov_v) in zip(idx_map, ratios):
         per_q.setdefault(num, {})[letter] = r
+        per_cov.setdefault(num, {})[letter] = cov_v
+
+    # Page-adaptive threshold calibration (largest bimodal gap) — falls back
+    # to the template/request rails on degenerate sheets.
+    if payload.get("pageCalibration") is not False:
+        th, cal = calibrate_thresholds([r for r, _m, _c in ratios], th)
+        if cal:
+            diag["pageCalibration"] = cal
+            warnings.append(
+                f"تمت معايرة العتبات تلقائيًا لهذه الورقة (filled={cal['filled']}, empty={cal['empty']})"
+            )
+    diag["thresholdsUsed"] = th
 
     answers = []
     confs = []
     for num in sorted(per_q.keys()):
-        dec = decide_answer(per_q[num], th)
+        dec = decide_answer(per_q[num], th, per_cov.get(num))
         answers.append({
             "number": num,
             "ratios": {k: round(v, 4) for k, v in per_q[num].items()},
@@ -1439,7 +1614,7 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
             confs.append(dec["confidence"])
 
     # Global sanity
-    all_ratios = [r for r, _ in ratios]
+    all_ratios = [r for r, _m, _c in ratios]
     median_fill = float(np.median(all_ratios)) if all_ratios else 0.0
     p95 = float(np.percentile(all_ratios, 95)) if all_ratios else 0.0
     diag["fillStats"] = {"medianEmpty": round(median_fill, 4), "p95Empty": round(p95, 4)}
@@ -1454,7 +1629,7 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
     # Student ID (sheet 0 only)
     student_id = None
     if sheet == 0:
-        student_id = analyze_student_id(binary, warped, template.get("studentId"), th, px_per_mm)
+        student_id = analyze_student_id(warped, template.get("studentId"), th, px_per_mm, ink_ref)
 
     # Grade
     answer_key = payload.get("answerKey")

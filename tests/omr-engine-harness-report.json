@@ -1,33 +1,33 @@
 {
-  "passed": 24,
-  "total": 24,
+  "passed": 33,
+  "total": 33,
   "allPassed": true,
   "recommendedThresholds": {
-    "filled": 0.6,
+    "filled": 0.457,
     "empty": 0.16,
     "ambiguousMargin": 0.1,
     "minAbsoluteFill": 0.06
   },
   "ratioStats": {
     "empty": {
-      "median": 0.0171,
-      "p99": 0.026
+      "median": 0.0,
+      "p99": 0.0
     },
     "pencil": {
-      "median": 0.7691,
-      "p99": 0.7802
+      "median": 0.5573,
+      "p99": 0.5586
     },
     "pen": {
-      "median": 0.9572,
-      "p99": 0.9714
+      "median": 0.9514,
+      "p99": 0.9537
     },
     "blue": {
-      "median": 0.8453,
-      "p99": 0.8525
+      "median": 0.6026,
+      "p99": 0.604
     },
     "light": {
-      "median": 0.0204,
-      "p99": 0.0308
+      "median": 0.3035,
+      "p99": 0.3043
     }
   },
   "cases": [
@@ -37,7 +37,7 @@
       "detail": "accuracy=100%",
       "extra": {
         "problems": [],
-        "ms": 688
+        "ms": 914
       }
     },
     {
@@ -155,7 +155,7 @@
     {
       "case": "11. erased ghosts",
       "passed": true,
-      "detail": "statuses={'unanswered'} medianEmpty=0.0172",
+      "detail": "statuses={'unanswered'} medianEmpty=0.0",
       "extra": {}
     },
     {
@@ -179,7 +179,7 @@
     {
       "case": "15. student ID",
       "passed": true,
-      "detail": "digits=314?59 conf=0.867",
+      "detail": "digits=314?59 conf=0.917",
       "extra": {}
     },
     {
@@ -199,7 +199,79 @@
       "passed": true,
       "detail": "acc=100% src=manual rot=0",
       "extra": {}
+    },
+    {
+      "case": "19. photocopy low contrast",
+      "passed": true,
+      "detail": "accuracy=100%",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "20. side shadow + rotation",
+      "passed": true,
+      "detail": "accuracy=100%",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "21. severe perspective",
+      "passed": true,
+      "detail": "accuracy=100%",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "22. blur + 1000px",
+      "passed": true,
+      "detail": "accuracy=100%",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "23. off-center marks",
+      "passed": true,
+      "detail": "accuracy=100%",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "24. stray marks",
+      "passed": true,
+      "detail": "accuracy=100% wrongConf=0",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "25. mixed pencil+pen",
+      "passed": true,
+      "detail": "accuracy=100%",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "26. faint photocopy pencil",
+      "passed": true,
+      "detail": "okOrUnclear=10/10 acc=100%",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "27. photocopied phone photo",
+      "passed": true,
+      "detail": "accuracy=100%",
+      "extra": {
+        "problems": []
+      }
     }
   ],
-  "totalMs": 36905
+  "totalMs": 63713
 }

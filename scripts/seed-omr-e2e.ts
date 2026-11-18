@@ -32,12 +32,14 @@ async function main() {
       answerKeyJson,
       omrEnabled: true,
       currentVersion: 1,
+      organizationId: 'cmwm76gh80000v8enwnpytj8m',
     },
     update: {
       documentJson,
       answerKeyJson,
       omrEnabled: true,
       currentVersion: 1,
+      organizationId: 'cmwm76gh80000v8enwnpytj8m',
     },
   });
 

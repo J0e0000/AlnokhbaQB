@@ -13,6 +13,17 @@ H = importlib.util.module_from_spec(_spec)
 _loader.exec_module(H)
 import numpy as np, cv2, urllib.request  # noqa: E402
 
+# login first — the scan API requires a session
+import http.cookiejar  # noqa: E402
+_cj = http.cookiejar.CookieJar()
+_opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(_cj))
+_login = urllib.request.Request(
+    'http://localhost:3000/api/auth/login',
+    data=json.dumps({'email': 'teacher@alnokhba.qb', 'password': 'Teacher@2025'}).encode(),
+    headers={'Content-Type': 'application/json'},
+)
+_opener.open(_login, timeout=30)
+
 plan = {n: l for n, l in H.KEY.items()}
 plan[7] = 'D'  # one wrong answer on purpose
 img = H.build_sheet(plan, 'pencil')
@@ -27,7 +38,7 @@ req = urllib.request.Request(
     headers={'Content-Type': 'application/json'},
 )
 try:
-    res = json.loads(urllib.request.urlopen(req, timeout=120).read())
+    res = json.loads(_opener.open(req, timeout=120).read())
 except urllib.error.HTTPError as e:
     print('HTTP error', e.code, e.read()[:800])
     raise SystemExit(1)
