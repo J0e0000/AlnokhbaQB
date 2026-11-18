@@ -1,6 +1,6 @@
 {
-  "passed": 33,
-  "total": 33,
+  "passed": 41,
+  "total": 41,
   "allPassed": true,
   "recommendedThresholds": {
     "filled": 0.457,
@@ -37,7 +37,7 @@
       "detail": "accuracy=100%",
       "extra": {
         "problems": [],
-        "ms": 1176
+        "ms": 553
       }
     },
     {
@@ -271,7 +271,153 @@
       "extra": {
         "problems": []
       }
+    },
+    {
+      "case": "28. rotation 270°",
+      "passed": true,
+      "detail": "accuracy=100% rotationFixed=0",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "29. extreme jpeg q45",
+      "passed": true,
+      "detail": "accuracy=100%",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "30. tiny 700px",
+      "passed": true,
+      "detail": "accuracy=100%",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "31. fold shadow stripe",
+      "passed": true,
+      "detail": "accuracy=100% wrongConf=0",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "32. smeared neighbour bleed",
+      "passed": true,
+      "detail": "wrongConf=0 okOrFlagged=10/10",
+      "extra": {
+        "statuses": [
+          [
+            1,
+            "selected"
+          ],
+          [
+            2,
+            "selected"
+          ],
+          [
+            3,
+            "selected"
+          ],
+          [
+            4,
+            "selected"
+          ],
+          [
+            5,
+            "selected"
+          ],
+          [
+            6,
+            "selected"
+          ],
+          [
+            7,
+            "selected"
+          ],
+          [
+            8,
+            "selected"
+          ],
+          [
+            9,
+            "selected"
+          ],
+          [
+            10,
+            "selected"
+          ]
+        ]
+      }
+    },
+    {
+      "case": "33. highlighter over marks",
+      "passed": true,
+      "detail": "wrongConf=0 okOrFlagged=10/10",
+      "extra": {
+        "statuses": [
+          [
+            1,
+            "unanswered"
+          ],
+          [
+            2,
+            "unanswered"
+          ],
+          [
+            3,
+            "unanswered"
+          ],
+          [
+            4,
+            "unanswered"
+          ],
+          [
+            5,
+            "unanswered"
+          ],
+          [
+            6,
+            "unanswered"
+          ],
+          [
+            7,
+            "unanswered"
+          ],
+          [
+            8,
+            "unanswered"
+          ],
+          [
+            9,
+            "unanswered"
+          ],
+          [
+            10,
+            "unanswered"
+          ]
+        ]
+      }
+    },
+    {
+      "case": "34. warm tint + backlight",
+      "passed": true,
+      "detail": "accuracy=100%",
+      "extra": {
+        "problems": []
+      }
+    },
+    {
+      "case": "35. data-url input",
+      "passed": true,
+      "detail": "accuracy=100%",
+      "extra": {
+        "problems": []
+      }
     }
   ],
-  "totalMs": 85393
+  "totalMs": 51088
 }

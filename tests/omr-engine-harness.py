@@ -504,6 +504,106 @@ def main() -> None:
     acc, problems = check_answers(res, KEY)
     record("27. photocopied phone photo", acc >= 0.80 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
 
+    # ---------- 28. 270° sideways rotation (third phone orientation) ≥90%
+    img = np.rot90(build_sheet(KEY, "pencil"), k=3).copy()
+    res = run(img)
+    acc, problems = check_answers(res, KEY)
+    record("28. rotation 270°", acc >= 0.90 and res["ok"], f"accuracy={acc:.0%} rotationFixed={res['diagnostics'].get('rotationDeg')}", {"problems": problems[:3]})
+
+    # ---------- 29. extreme JPEG compression (q=45) ≥85%
+    img = rotate(perspective(build_sheet(KEY, "pencil"), 0.05), 3)
+    res = run(img, jpeg=45)
+    acc, problems = check_answers(res, KEY)
+    record("29. extreme jpeg q45", acc >= 0.85 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
+
+    # ---------- 30. tiny 700px scan (old webcam / slow connection) ≥80%
+    img = phone_camera(build_sheet(KEY, "pen"), 700, 65)
+    res = run(img)
+    acc, problems = check_answers(res, KEY)
+    record("30. tiny 700px", acc >= 0.80 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
+
+    # ---------- 31. fold shadow stripe across the answer grid ≥85%, never confidently wrong
+    img = build_sheet(KEY, "pencil")
+    y0 = int(TEMPLATE["grid"]["firstRowYMm"]["main"] * PX_PER_MM * 1.02)
+    for dy in range(-int(0.8 * PX_PER_MM), int(0.8 * PX_PER_MM)):
+        yy = y0 + dy
+        if 0 <= yy < img.shape[0]:
+            fade = 0.55 + 0.45 * (abs(dy) / (0.8 * PX_PER_MM))
+            img[yy, :, :] = (img[yy, :, :] * fade).astype(np.uint8)
+    res = run(img)
+    acc, problems = check_answers(res, KEY)
+    wrong_conf = [a for a in res.get("answers", []) if a["status"] == "selected" and a["detected"] != KEY[a["number"]] and a["confidence"] > 0.8]
+    record("31. fold shadow stripe", acc >= 0.85 and len(wrong_conf) == 0 and res["ok"], f"accuracy={acc:.0%} wrongConf={len(wrong_conf)}", {"problems": problems[:5]})
+
+    # ---------- 32. smeared mark bleeding toward the neighbour bubble → never confidently the neighbour
+    img = BLANK.copy()
+    for n, l in KEY.items():
+        q = next(qq for qq in TEMPLATE["questions"] if qq["number"] == n)
+        p = q["options"][l]
+        fill_bubble(img, p["x"], p["y"], q["radiusMm"], 0.62)
+        # a drag smear from this bubble toward its right-hand neighbour
+        nb_i = (list(q["options"].keys()).index(l) + 1) % len(q["options"])
+        nb_letter = list(q["options"].keys())[nb_i]
+        pn = q["options"][nb_letter]
+        mx, my = (p["x"] + pn["x"]) / 2, (p["y"] + pn["y"]) / 2
+        cx, cy = int(round(mx * PX_PER_MM)), int(round(my * PX_PER_MM))
+        cv2.ellipse(img, (cx, cy), (max(2, int(q["radiusMm"] * PX_PER_MM * 0.55)), max(2, int(q["radiusMm"] * PX_PER_MM * 0.3))),
+                    0, 0, 360, (90, 90, 90), -1, cv2.LINE_AA)
+    res = run(img)
+    neigh_wrong = [
+        a for a in res.get("answers", [])
+        if a["status"] == "selected" and a["detected"] != KEY[a["number"]] and a["confidence"] > 0.8
+    ]
+    ok_or_flagged = [
+        a for a in res.get("answers", [])
+        if a["detected"] == KEY[a["number"]] or a["status"] in ("unclear", "multiple")
+    ]
+    record("32. smeared neighbour bleed", len(neigh_wrong) == 0 and len(ok_or_flagged) >= 7 and res["ok"],
+           f"wrongConf={len(neigh_wrong)} okOrFlagged={len(ok_or_flagged)}/10", {"statuses": [(a["number"], a["status"]) for a in res.get("answers", [])][:10]})
+
+    # ---------- 33. highlighter over filled bubbles → never confidently wrong
+    img = build_sheet(KEY, "pencil")
+    for n, l in KEY.items():
+        q = next(qq for qq in TEMPLATE["questions"] if qq["number"] == n)
+        p = q["options"][l]
+        cx, cy = int(round(p["x"] * PX_PER_MM)), int(round(p["y"] * PX_PER_MM))
+        r = int(q["radiusMm"] * PX_PER_MM * 1.5)
+        hl = img[cy - r:cy + r, cx - r:cx + r].astype(np.float32)
+        yellow = np.array([60.0, 225.0, 225.0])
+        m = np.zeros((2 * r, 2 * r), np.uint8)
+        cv2.circle(m, (r, r), r, 255, -1)
+        mf = cv2.GaussianBlur(m, (7, 7), 2).astype(np.float32)[..., None] / 255.0
+        img[cy - r:cy + r, cx - r:cx + r] = (hl * (1 - mf) + yellow[None, None, :] * mf).astype(np.uint8)
+    res = run(img)
+    hl_wrong = [
+        a for a in res.get("answers", [])
+        if a["status"] == "selected" and a["detected"] != KEY[a["number"]] and a["confidence"] > 0.8
+    ]
+    hl_ok = [
+        a for a in res.get("answers", [])
+        if a["detected"] == KEY[a["number"]] or a["status"] in ("unclear", "multiple", "unanswered")
+    ]
+    record("33. highlighter over marks", len(hl_wrong) == 0 and len(hl_ok) >= 7 and res["ok"],
+           f"wrongConf={len(hl_wrong)} okOrFlagged={len(hl_ok)}/10", {"statuses": [(a["number"], a["status"]) for a in res.get("answers", [])][:10]})
+
+    # ---------- 34. warm indoor tint + backlight ≥85%
+    img = build_sheet(KEY, "pencil").astype(np.float32)
+    img[:, :, 0] *= 0.82  # less blue
+    img[:, :, 2] *= 1.05  # more red
+    img = np.clip(img + 18, 0, 255).astype(np.uint8)  # lifted blacks (backlight)
+    img = rotate(img, -3)
+    res = run(img)
+    acc, problems = check_answers(res, KEY)
+    record("34. warm tint + backlight", acc >= 0.85 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
+
+    # ---------- 35. pencil sheet through the FULL HTTP stack shape (base64 data-url form)
+    data_url = "data:image/jpeg;base64," + encode64(phone_camera(build_sheet(KEY, "pencil"), 1400, 75), 75)
+    res = pipeline.process({"imageBase64": data_url, "template": TEMPLATE,
+                            "answerKey": {str(k): v for k, v in KEY.items()},
+                            "marksMap": {str(k): 1 for k in KEY}, "debug": False})
+    acc, problems = check_answers(res, KEY)
+    record("35. data-url input", acc >= 0.90 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
+
     # ---------- recommended thresholds
     rec = {
         "filled": float(np.median(thresholds_stats["pencil"])) * 0.82,

@@ -9,19 +9,23 @@
 import base64
 import io
 import json
+import os
 import random
 import urllib.request
 import urllib.error
 from http.cookiejar import CookieJar
+from typing import Dict
 
 import cv2
 import numpy as np
 
 BASE = "http://localhost:3000"
-VERSION_ID = "cmug687vk0002kxvn7rhby9f7"
-KEY = {1: "B", 2: "C", 3: "A", 4: "D", 5: "B", 6: "A", 7: "B", 8: "B", 9: "C", 10: "B"}
+VERSION_ID = os.environ.get("OMR_E2E_VERSION_ID", "cmwme7tme0006qpxzanbbxs06")
 FIX = "/home/z/my-project/tests/omr-fixtures"
 TEMPLATE = json.load(open(f"{FIX}/template.json", encoding="utf-8"))
+# Ground truth is fetched live from the published version (q1..qN → letter);
+# falls back to the canonical seed key if the API shape ever changes.
+KEY: Dict[int, str] = {1: "B", 2: "C", 3: "A", 4: "D", 5: "B", 6: "A", 7: "B", 8: "B", 9: "C", 10: "B"}
 
 cj = CookieJar()
 opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
@@ -57,6 +61,19 @@ def login():
     r, code = api("/api/auth/login", {"email": "teacher@alnokhba.qb", "password": "Teacher@2025"})
     assert code == 200, f"login failed: {r}"
     print("[1] login OK:", r["user"]["name"])
+
+
+def load_ground_truth() -> None:
+    """Fetch the published version's answer key so the E2E never drifts."""
+    global KEY
+    d, code = api(f"/api/versions/{VERSION_ID}")
+    assert code == 200, f"version fetch failed ({code}): {d}"
+    raw = d.get("answerKey") or {}
+    fetched = {int(k[1:]): v for k, v in raw.items() if isinstance(k, str) and k.startswith("q") and k[1:].isdigit()}
+    if len(fetched) == len(raw) and fetched:
+        KEY = fetched
+    assert d.get("omrTemplate"), "version has no OMR template"
+    print(f"[1b] ground truth loaded: {KEY} (sheets={d['omrTemplate'].get('sheets')})")
 
 
 def download_sheet():
@@ -148,6 +165,7 @@ def scan(img_b64, hint=True):
 
 def main():
     login()
+    load_ground_truth()
     sheet = download_sheet()
     # run-nonce: a faint dot in the left margin (outside the frame, far from
     # markers/QR) so each run's images are unique — the scan API is

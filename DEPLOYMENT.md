@@ -153,3 +153,79 @@ Keep the `postgres` service on an internal network only (no published ports).
 
 - QB ships its own `docker-compose.yml`, database volume and Caddy site block. To host beside Alnokhba Management/Edu/Centres on one VPS: run **separate compose projects**, and add one site block per product in a single shared Caddy (or give each its own Caddy on different ports behind your edge).
 - Never point two products at the same `DATABASE_URL` or volume.
+
+## 11. Vercel runbook — AI provider (Groq), storage cleanup, redeploy
+
+### 11.1 Switch the AI provider to Groq (env vars only, no code change)
+
+The AI gateway (`src/lib/ai/client.ts`) speaks OpenAI-compatible
+`/chat/completions`; Groq works as-is. Set these in the Vercel dashboard
+(**Settings → Environment Variables**, all environments) or via CLI:
+
+```bash
+vercel env rm AI_API_KEY production && \
+vercel env add AI_API_KEY production      # paste: gsk_… (the Groq key)
+vercel env add AI_BASE_URL production     # https://api.groq.com/openai/v1
+vercel env add AI_VISION_MODEL production # meta-llama/llama-4-scout-17b-16e-instruct
+vercel env add AI_CHAT_MODEL production   # llama-3.3-70b-versatile
+vercel env add AI_MODEL production        # llama-3.3-70b-versatile
+vercel env add AI_FALLBACK_MODEL production # meta-llama/llama-4-maverick-17b-128e-instruct
+```
+
+Then redeploy (env changes only apply to NEW deployments):
+`git commit --allow-empty -m "chore: deploy" && git push`
+or `vercel --prod`.
+
+Verify: `curl https://alnokhba-qb.vercel.app/api/health` →
+`"ai":{"mode":"env","baseUrl":"https://api.groq.com/openai/v1","model":"…"}`
+then run a real extraction from the استخراج ذكي tab.
+
+NOTE: `AI_API_KEY` is a secret — never commit it to the repo; Vercel env
+vars (or `.env.local`, git-ignored) only.
+
+### 11.2 Clean up Vercel deployment storage ("100% of storage used")
+
+Vercel counts every deployment's source + build artifacts against the plan's
+storage. Old deployments can be deleted safely — **never** the production
+one (`target=production`) and never the newest one per environment.
+
+```bash
+TOKEN="<VERCEL_TOKEN>"; TEAM=""   # optional: "&teamId=team_…"
+PID="prj_n57xBTPm2x6kgtI1586Mgmtlf23H"
+
+# list the 100 most recent deployments
+curl -s "https://api.vercel.com/v6/deployments?projectId=$PID&limit=100$TEAM" \
+  -H "Authorization: Bearer $TOKEN" > /tmp/deployments.json
+
+# delete every deployment older than the latest production one (dry-run first!)
+python3 - <<'PY'
+import json, os, time, urllib.request
+TOKEN = os.environ["TOKEN"]; PID = os.environ["PID"]
+d = json.load(open("/tmp/deployments.json"))
+deps = sorted(d["deployments"], key=lambda x: x["createdAt"])
+prod = [x for x in deps if x.get("target") == "production" and x.get("state") == "READY"]
+keep = prod[-1]["uid"] if prod else None
+for x in deps[:-6]:                      # always keep the latest 6
+    if x["uid"] == keep: continue        # never delete the live production
+    url = f"https://api.vercel.com/v13/deployments/{x['uid']}?projectId={PID}"
+    req = urllib.request.Request(url, method="DELETE",
+        headers={"Authorization": f"Bearer {TOKEN}"})
+    print(x["uid"], x.get("state"), x.get("target"),
+          urllib.request.urlopen(req).status)
+PY
+```
+
+The dashboard equivalent: **Deployments tab → ⋯ menu → Delete** on each old
+row. Also check **Storage** usage drops after the deletions (may take a few
+minutes to reflect).
+
+### 11.3 Deploying the current code (OMR fixes + Amethyst UI)
+
+`main` HEAD (0e32262 and later) contains the circular-bubble Forms
+generator, the robust OMR engine (41/41 harness cases), the Amethyst Royale
+redesign and the Groq-ready AI gateway. Deploy by pushing `main`
+(Git integration auto-deploys), then confirm:
+
+1. `/api/health` → `ok:true`, `ai.mode:"env"`, `pdf` ready.
+2. Print an OMR sheet from أوراق OMR — bubbles must be **circles**.
+3. Scan one filled sheet from مسح وتصحيح — grade + accuracy appear.
