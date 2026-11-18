@@ -51,6 +51,7 @@ Rules:
 - marks: read from the paper when printed (questions only), otherwise 1.
 - confidence: your reading certainty for THIS item (0–1). Use low values for blurry/small/handwritten text.
 - Skip ONLY pure page furniture: logos, watermarks and bare page numbers with no other content.
+- NEVER invent, complete or "restore" content: only output text you can literally read in the image. If a block is unreadable, skip it (or output it with a very low confidence). Do not add items from memory or guess plausible exam content.
 - If a single text block exceeds ~4000 characters, split it into consecutive text items at natural paragraph boundaries.
 - If the page is completely blank, output {"questions":[]}`;
 
