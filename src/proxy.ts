@@ -18,6 +18,10 @@ const PUBLIC_API = new Set<string>([
   '/api/health',
 ]);
 
+// Pagewise toolkit endpoints are public by design (no account required);
+// queue-level rate limiting still protects them.
+const PUBLIC_PREFIXES = ['/api/pw/'];
+
 const SECRET = new TextEncoder().encode(
   process.env.AUTH_SECRET || 'alnokhba-qb-dev-secret-change-me-please-32ch'
 );
@@ -26,6 +30,7 @@ export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (PUBLIC_API.has(pathname)) return NextResponse.next();
+  if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
 
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   if (token) {

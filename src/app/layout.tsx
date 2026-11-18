@@ -1,27 +1,28 @@
 import type { Metadata, Viewport } from "next";
-import "@fontsource/tajawal/arabic-400.css";
-import "@fontsource/tajawal/arabic-500.css";
-import "@fontsource/tajawal/arabic-700.css";
 import "@fontsource/tajawal/latin-400.css";
+import "@fontsource/tajawal/latin-500.css";
 import "@fontsource/tajawal/latin-700.css";
-import "@fontsource/amiri/arabic-400.css";
-import "@fontsource/amiri/arabic-700.css";
+import "@fontsource/tajawal/arabic-400.css";
+import "@fontsource/tajawal/arabic-700.css";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
-  title: "النخبة QB — بنك الأسئلة والتصحيح الآلي",
+  title: "Pagewise — PDF toolkit",
   description:
-    "نظام بنك الأسئلة: مصمم امتحانات، محرك PDF، مولّد أوراق OMR، قارئ ضوئي وتصحيح آلي بنموذج امتحاني واحد.",
+    "Merge, split, compress, convert, sign, redact, OCR and understand PDFs. Privacy-first: most tools run entirely in your browser.",
+  applicationName: "Pagewise",
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0b1714",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#faf8f5" },
+    { media: "(prefers-color-scheme: dark)", color: "#171614" },
+  ],
 };
 
-// Applies the saved theme BEFORE first paint (no FOUC). Dark = the default
-// "Midnight Luxe" identity; light stays available via the header toggle.
-const themeBootstrap = `(function(){try{var t=localStorage.getItem('anqb-theme');if(t!=='light'){document.documentElement.classList.add('dark');}}catch(e){document.documentElement.classList.add('dark');}})();`;
+// Applies saved theme + direction BEFORE first paint (no FOUC).
+const themeBootstrap = `(function(){try{var t=localStorage.getItem('pw-theme');if(t==='dark'){document.documentElement.classList.add('dark');}var d=localStorage.getItem('pw-dir')||'ltr';document.documentElement.dir=d;}catch(e){}})();`;
 
 export default function RootLayout({
   children,
@@ -29,13 +30,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ar" dir="rtl" suppressHydrationWarning>
+    <html lang="en" dir="ltr" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
       </head>
-      <body className="min-h-screen font-sans antialiased text-foreground [font-family:Tajawal,system-ui,sans-serif]">
-        <div className="app-aurora" aria-hidden="true" />
-        <div className="app-grid" aria-hidden="true" />
+      <body className="min-h-screen font-sans antialiased text-foreground [font-family:var(--font-body)]">
         {children}
         <Toaster richColors position="top-center" />
       </body>
