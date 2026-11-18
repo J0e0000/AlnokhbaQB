@@ -8,7 +8,7 @@
 
 import { renderPng } from '../src/lib/pdf/pool';
 
-const BASE = 'http://localhost:3000';
+const BASE = process.env.BASE_URL ?? 'http://localhost:3000';
 
 const PAGE_HTML = `<!DOCTYPE html>
 <html lang="ar" dir="rtl"><head><meta charset="utf-8">
