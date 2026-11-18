@@ -75,3 +75,4 @@ __pycache__/
 # local browser bundle (working-tree only; serverless uses @sparticuz/chromium)
 chrome/
 .secrets/
+db/

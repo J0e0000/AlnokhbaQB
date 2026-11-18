@@ -33,7 +33,7 @@ def _authorized(request: Request) -> bool:
 
 @app.get("/api/omr/health")
 async def health():
-    info = {"ok": True, "engine": "python-opencv", "version": "1.0.0"}
+    info = {"ok": True, "engine": "python-opencv", "version": "1.1.0"}
     try:
         import cv2  # noqa: F401 — proves the opencv stack really loads
 
