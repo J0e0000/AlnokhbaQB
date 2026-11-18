@@ -1034,7 +1034,13 @@ def calibrate_thresholds(
     for i in range(min_left, n - min_right):
         gap = float(vals[i + 1] - vals[i])
         if gap >= 0.09:
-            low_p95 = float(vals[int(i * 0.95) - 1]) if i >= 2 else float(vals[0])
+            # p95 of the LOW cluster (vals[0..i]). NOTE: the previous formula
+            # vals[int(i*0.95)-1] evaluated the percentile at the wrong index
+            # (~i itself, not (i+1)*0.95) — for a gap sitting between a small
+            # faint-mark cluster and the pen cluster it returned the LAST PAPER
+            # value, so an ink cluster passed the paper test and `filled` was
+            # calibrated ABOVE faint-but-real marks (they all read "unclear").
+            low_p95 = float(vals[max(0, int((i + 1) * 0.95) - 1)])
             candidates.append((i, gap, low_p95))
     if not candidates:
         return th, None
@@ -1043,7 +1049,16 @@ def calibrate_thresholds(
     # photocopy marks measure >= 0.30). This rejects noise "gaps" inside
     # uniform populations (blank sheets, erased ghosts, smeared pages).
     paper_like = [c for c in candidates if c[2] <= 0.20 and float(vals[c[0] + 1]) >= 0.30]
-    pool = paper_like if paper_like else [c for c in candidates if float(vals[c[0] + 1]) >= 0.30]
+    # Fallback: relax the paper test but NEVER accept a gap whose low side is
+    # itself ink (>= 0.35) — a pencil cluster (~0.5-0.7) mistaken for paper
+    # pushes `filled` ABOVE real pencil marks and turns them into "unclear".
+    # The relaxed bound still covers heavy photocopies where paper measures
+    # up to ~0.30 in the normalized metric.
+    relaxed = [
+        c for c in candidates
+        if 0.20 < c[2] <= 0.32 and float(vals[c[0] + 1]) >= 0.38
+    ]
+    pool = paper_like if paper_like else relaxed
     if not pool:
         return th, None
     i, gap, _ = max(pool, key=lambda c: (c[1], c[0]))
