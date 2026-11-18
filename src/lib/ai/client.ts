@@ -62,6 +62,15 @@ function trimSlash(s: string): string {
   return s.replace(/\/+$/, '');
 }
 
+/** AI_FALLBACK_MODEL accepts a comma-separated list of candidate models. */
+function splitFallbacks(value?: string): string[] {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 /** Cheap config introspection — no network calls, safe for /api/health. */
 export function aiStatus(): AiStatus {
   const key = process.env.AI_API_KEY?.trim();
@@ -126,10 +135,13 @@ function geminiExtras(baseUrl: string): Record<string, unknown> {
 }
 
 /**
- * Runs a chat call with resilience:
- *  1. If the provider rejects `reasoning_effort` (400) → retry once without it.
- *  2. If the primary model is rate-limited (429) or overloaded (503) and a
- *     different AI_FALLBACK_MODEL is configured → retry once with it.
+ * Runs a chat call with deadline-budgeted resilience:
+ *  1. Provider rejects `reasoning_effort` (400) → retry once without it.
+ *  2. Primary model rate-limited (429) / overloaded (503) → wait ~1.5 s and
+ *     retry the same model once (transient spikes clear in seconds).
+ *  3. Still failing → try each AI_FALLBACK_MODEL (comma-separated) in order.
+ * Every attempt shares ONE overall deadline (`timeoutMs`) so the worst case
+ * never exceeds the caller's budget.
  */
 async function postChatResilient(
   cfg: { baseUrl: string; apiKey: string; model: string; fallbackModel?: string },
@@ -137,33 +149,56 @@ async function postChatResilient(
   timeoutMs: number
 ): Promise<{ text: string; model: string }> {
   const extras = geminiExtras(cfg.baseUrl);
-  const attempt = (model: string, withExtras: boolean) =>
-    postChat(cfg.baseUrl, cfg.apiKey, buildBody(model, withExtras ? extras : {}), timeoutMs);
+  const deadline = Date.now() + timeoutMs;
+  const remaining = () => deadline - Date.now();
+  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+  const chain = [cfg.model, ...splitFallbacks(cfg.fallbackModel).filter((m) => m && m !== cfg.model)];
 
-  let usedModel = cfg.model;
-  let res: { text: string };
-  try {
-    res = await attempt(cfg.model, true);
-  } catch (err) {
-    if (err instanceof AiProviderError && err.rawStatus === 400 && Object.keys(extras).length) {
-      // provider doesn't understand reasoning_effort → plain retry
-      res = await attempt(cfg.model, false);
-    } else if (
-      err instanceof AiProviderError &&
-      (err.rawStatus === 429 || err.rawStatus === 503) &&
-      cfg.fallbackModel &&
-      cfg.fallbackModel !== cfg.model
-    ) {
-      console.warn(
-        `[ai] ${cfg.model} unavailable (raw ${err.rawStatus}) → falling back to ${cfg.fallbackModel}`
-      );
-      usedModel = cfg.fallbackModel;
-      res = await attempt(cfg.fallbackModel, true);
-    } else {
-      throw err;
+  let lastError: unknown;
+  for (let i = 0; i < chain.length; i++) {
+    const model = chain[i];
+    const budget = Math.min(remaining(), timeoutMs);
+    if (budget < 5_000) break; // no point starting a call that cannot finish
+    const attempt = (withExtras: boolean) =>
+      postChat(cfg.baseUrl, cfg.apiKey, buildBody(model, withExtras ? extras : {}), budget);
+
+    try {
+      const res = await attempt(true);
+      return { text: res.text, model };
+    } catch (err) {
+      lastError = err;
+      if (err instanceof AiProviderError && err.rawStatus === 400 && Object.keys(extras).length) {
+        // provider doesn't understand reasoning_effort → plain retry
+        try {
+          const res = await attempt(false);
+          return { text: res.text, model };
+        } catch (err2) {
+          lastError = err2;
+          if (!(err2 instanceof AiProviderError && (err2.rawStatus === 429 || err2.rawStatus === 503))) {
+            throw err2;
+          }
+        }
+      }
+      // 429/503 (or timeout) → brief pause then same model once, then next in chain
+      if (err instanceof AiProviderError && (err.rawStatus === 429 || err.rawStatus === 503)) {
+        if (i === 0 && remaining() > 10_000) {
+          await sleep(1_500);
+          try {
+            const res = await attempt(true);
+            return { text: res.text, model };
+          } catch (err3) {
+            lastError = err3;
+          }
+        }
+        continue; // next model in chain
+      }
+      if (!(err instanceof AiProviderError && err.rawStatus === undefined)) {
+        throw err; // hard error (auth/bad request/network) — no point retrying
+      }
+      // timeouts fall through to the next candidate model
     }
   }
-  return { text: res.text, model: usedModel };
+  throw lastError instanceof Error ? lastError : new AiProviderError('فشل مزود الذكاء الاصطناعي', 502);
 }
 
 async function postChat(
