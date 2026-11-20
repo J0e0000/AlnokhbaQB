@@ -7,33 +7,18 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { finalizeAttempt, isExpired, type AttemptQuestion } from '@/lib/qb/online';
 import { serverError } from '../../../_lib/shared';
-import { requireSession } from '../../../_lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 type Ctx = { params: Promise<{ id: string }> };
 
-// NOTE: min role 'viewer' — submitting is the STUDENT-side action of the
-// online exam flow (any authenticated org member may submit their attempt).
-export async function POST(req: Request, ctx: Ctx) {
+export async function POST(_req: Request, ctx: Ctx) {
   try {
-    const g = await requireSession('viewer', req);
-    if ('error' in g) return g.error;
     const { id } = await ctx.params;
     const attempt = await db.examAttempt.findUnique({ where: { id } });
     if (!attempt) {
       return NextResponse.json({ error: 'المحاولة غير موجودة' }, { status: 404 });
-    }
-    const exam = await db.exam.findUnique({
-      where: { id: attempt.examId },
-      select: { organizationId: true },
-    });
-    if (g.session.role !== 'super_admin' && exam?.organizationId !== g.session.orgId) {
-      return NextResponse.json(
-        { error: 'غير موجود أو لا تملك صلاحية الوصول' },
-        { status: 404 }
-      );
     }
 
     if (attempt.status === 'invalidated') {

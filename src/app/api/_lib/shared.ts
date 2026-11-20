@@ -6,13 +6,17 @@ import { db } from '@/lib/db';
 import { OMR_DEFAULT_THRESHOLDS } from '@/lib/qb/omr-template';
 import type { CalibrationProfile } from '@prisma/client';
 
-// ---------- request body / errors ----------
+// ---------- env-tuned scan limits + in-memory rate limit ----------
 
-// Naive in-memory sliding-window rate limiter for expensive scan endpoints.
-// Per-actor (session user id), process-wide; resets on redeploy — enough to
-// stop runaway loops and accidental flooding, not a full WAF.
+function envNumber(name: string, fallback: number, min: number, max: number): number {
+  const raw = Number(process.env[name]);
+  if (!Number.isFinite(raw) || raw <= 0) return fallback;
+  return Math.min(max, Math.max(min, raw));
+}
+
 const RATE_BUCKETS = new Map<string, number[]>();
 
+/** Fixed-window in-memory rate limiter. Returns true when allowed. */
 export function rateLimit(key: string, limit: number, windowMs: number): boolean {
   const now = Date.now();
   const bucket = (RATE_BUCKETS.get(key) ?? []).filter((t) => now - t < windowMs);
@@ -25,6 +29,20 @@ export function rateLimit(key: string, limit: number, windowMs: number): boolean
   if (RATE_BUCKETS.size > 5000) RATE_BUCKETS.clear(); // hard memory bound
   return true;
 }
+
+export function scanMaxPdfBytes(): number {
+  return Math.floor(envNumber('SCAN_MAX_PDF_MB', 40, 1, 200) * 1024 * 1024);
+}
+
+export function scanMaxPdfPages(): number {
+  return Math.floor(envNumber('SCAN_MAX_PDF_PAGES', 200, 1, 1000));
+}
+
+export function scanPdfDpi(): number {
+  return Math.floor(envNumber('SCAN_PDF_DPI', 300, 72, 300));
+}
+
+// ---------- request body / errors ----------
 
 export async function readJsonBody(req: Request): Promise<Record<string, unknown> | null> {
   try {
@@ -53,63 +71,12 @@ export function serverError(err: unknown): { error: string; details?: string } {
   };
 }
 
-/** Strip a `data:<mime>;base64,` prefix if present → raw base64 + mime.
- *  Accepts ANY mime (images AND application/pdf for OMR batch uploads). */
+/** Strip a `data:image/...;base64,` prefix if present → raw base64 + mime. */
 export function stripDataUrl(s: string): { base64: string; mime: string } {
   const trimmed = s.trim();
-  const m = /^data:([a-zA-Z0-9.+-]+\/[a-zA-Z0-9.+-]+);base64,/.exec(trimmed);
+  const m = /^data:(image\/[a-zA-Z0-9.+-]+);base64,/.exec(trimmed);
   if (m) return { base64: trimmed.slice(m[0].length), mime: m[1] };
-  return { base64: trimmed, mime: '' };
-}
-
-// ---------- upload limits (env-configurable safe defaults) ----------
-//
-// All scan endpoints enforce these on BOTH the JSON/base64 and the
-// multipart/binary paths. Defaults keep current behavior; deployments can
-// tighten them (SCAN_MAX_IMAGE_MB=10, SCAN_MAX_PDF_MB=25, SCAN_MAX_PDF_PAGES=30)
-// or widen them for self-hosted hosts without platform body caps.
-
-function envNumber(name: string, fallback: number, min: number, max: number): number {
-  const raw = Number(process.env[name]);
-  if (!Number.isFinite(raw) || raw <= 0) return fallback;
-  return Math.min(max, Math.max(min, raw));
-}
-
-/** Single sheet image cap (bytes). Default 25 MB. */
-export function scanMaxImageBytes(): number {
-  return Math.floor(envNumber('SCAN_MAX_IMAGE_MB', 25, 1, 100) * 1024 * 1024);
-}
-
-/** PDF upload cap (bytes). Default 40 MB (scanned stacks are large). */
-export function scanMaxPdfBytes(): number {
-  return Math.floor(envNumber('SCAN_MAX_PDF_MB', 40, 1, 200) * 1024 * 1024);
-}
-
-/** PDF page-count cap. Default 200 pages. */
-export function scanMaxPdfPages(): number {
-  return Math.floor(envNumber('SCAN_MAX_PDF_PAGES', 200, 1, 1000));
-}
-
-/** PDF rasterization DPI sent to the engine. Default 300 (engine clamps 72..300). */
-export function scanPdfDpi(): number {
-  return Math.floor(envNumber('SCAN_PDF_DPI', 300, 72, 300));
-}
-
-/** Content sniff: accept only real JPEG/PNG bytes (magic numbers). */
-export function imageSignature(bytes: Uint8Array): 'jpeg' | 'png' | null {
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-    return 'jpeg';
-  }
-  if (
-    bytes.length >= 8 &&
-    bytes[0] === 0x89 &&
-    bytes[1] === 0x50 &&
-    bytes[2] === 0x4e &&
-    bytes[3] === 0x47
-  ) {
-    return 'png';
-  }
-  return null;
+  return { base64: trimmed, mime: 'image/png' };
 }
 
 // ---------- calibration (OMR thresholds) ----------
@@ -131,8 +98,8 @@ export function defaultCalibrationConfig(): CalibrationConfig {
     ...pencil,
     presets: {
       pencil,
-      pen: { filled: 0.5, empty: 0.22, ambiguousMargin: 0.1, minAbsoluteFill: 0.08 },
-      light: { filled: 0.38, empty: 0.2, ambiguousMargin: 0.1, minAbsoluteFill: 0.08 },
+      pen: { filled: 0.5, empty: 0.2, ambiguousMargin: 0.1, minAbsoluteFill: 0.08 },
+      light: { filled: 0.38, empty: 0.15, ambiguousMargin: 0.1, minAbsoluteFill: 0.08 },
     },
   };
 }

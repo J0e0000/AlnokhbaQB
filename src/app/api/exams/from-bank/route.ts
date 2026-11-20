@@ -8,10 +8,8 @@
 
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { orgFilter } from '@/lib/auth';
 import { parseOptions, toQBQuestion, type BankQuestion } from '@/lib/qb/bank';
 import { sanitizeAnswerKey, sanitizeDocument, starterDocument } from '@/lib/qb/schema';
-import { requireSession } from '../../_lib/auth-guard';
 import { readJsonBody, serverError } from '../../_lib/shared';
 
 export const runtime = 'nodejs';
@@ -19,8 +17,6 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
-    const g = await requireSession('teacher', req);
-    if ('error' in g) return g.error;
     const body = await readJsonBody(req);
     const title = typeof body?.title === 'string' ? body.title.trim() : '';
     const ids = Array.isArray(body?.questionIds)
@@ -33,9 +29,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'اختر سؤالًا واحدًا على الأقل من البنك' }, { status: 400 });
     }
 
-    const bankRows = await db.question.findMany({
-      where: { id: { in: ids }, organizationId: orgFilter(g.session) },
-    });
+    const bankRows = await db.question.findMany({ where: { id: { in: ids } } });
     // preserve the caller's selection order
     const byId = new Map(bankRows.map((r) => [r.id, r]));
     const ordered: BankQuestion[] = ids
@@ -133,7 +127,6 @@ export async function POST(req: Request) {
 
     const exam = await db.exam.create({
       data: {
-        organizationId: g.session.orgId ?? null,
         title,
         subject: typeof body?.subject === 'string' ? body.subject.trim() : null,
         direction,

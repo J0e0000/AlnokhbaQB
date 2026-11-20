@@ -6,7 +6,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { readJsonBody, serverError } from '../../../../_lib/shared';
-import { requireSession } from '../../../../_lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,27 +14,10 @@ type Ctx = { params: Promise<{ id: string; submissionId: string }> };
 
 export async function PATCH(req: Request, ctx: Ctx) {
   try {
-    const g = await requireSession('teacher', req);
-    if ('error' in g) return g.error;
     const { id, submissionId } = await ctx.params;
     const body = await readJsonBody(req);
     if (!body) {
       return NextResponse.json({ error: 'بيانات غير صالحة' }, { status: 400 });
-    }
-
-    // grading is a teacher op inside the assignment's organisation only
-    const assignment = await db.assignment.findUnique({
-      where: { id },
-      select: { organizationId: true },
-    });
-    if (!assignment) {
-      return NextResponse.json({ error: 'التسليم غير موجود' }, { status: 404 });
-    }
-    if (g.session.role !== 'super_admin' && assignment.organizationId !== g.session.orgId) {
-      return NextResponse.json(
-        { error: 'غير موجود أو لا تملك صلاحية الوصول' },
-        { status: 404 }
-      );
     }
 
     const submission = await db.assignmentSubmission.findUnique({ where: { id: submissionId } });

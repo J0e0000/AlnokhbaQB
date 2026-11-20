@@ -1,11 +1,6 @@
-# ALNOKHBA QB — OMR engine Python deps (container + Z.ai artifact runtime).
-# Same pin rationale as omr-service/requirements.txt: 4.10.0.84 wheels have
-# NO external native deps (the 4.13 wheels link libxcb) and produce
-# byte-identical engine results (verified against tests/omr-fixtures).
-opencv-python-headless==4.10.0.84
-numpy==2.1.3
-# PDF rasterization for /pdf_pages + pdf inputs to /process (import fitz).
-# Same pin as omr-service — must stay in sync so both hosts rasterize
-# identically (fitz is imported lazily by engine/pipeline.py:pdf_pages, but
-# a container without it fails every PDF scan at runtime instead of build time).
-pymupdf==1.24.14
+# Engine image manifest — baked into the Docker build (Dockerfile does
+# `COPY requirements.txt .`). Tesseract comes via apt in the Dockerfile.
+# The ROOT-LEVEL requirements.txt is a separate copy consumed only by the
+# .zscripts self-hosting flow; keep the two in sync when bumping deps.
+opencv-python-headless>=4.9,<5
+numpy>=1.26,<3

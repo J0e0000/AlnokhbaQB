@@ -9,9 +9,7 @@ import { sanitizeAnswerKey, sanitizeDocument } from '@/lib/qb/schema';
 import type { OMRTemplate, QBAnswerKey, QBDocument } from '@/lib/qb/types';
 
 export interface LoadedVersion {
-  // findUnique below uses include: { exam: true } — expose it so routes can
-  // read row.exam.organizationId for org scoping.
-  row: ExamVersion & { exam: Exam };
+  row: ExamVersion;
   document: QBDocument;
   answerKey: QBAnswerKey;
   omrTemplate: OMRTemplate | null;
@@ -21,12 +19,6 @@ export interface LoadedVersion {
 export async function loadVersion(id: string): Promise<LoadedVersion | null> {
   const row = await db.examVersion.findUnique({ where: { id }, include: { exam: true } });
   if (!row) return null;
-  return assembleVersion(row);
-}
-
-function assembleVersion(
-  row: ExamVersion & { exam: Exam }
-): LoadedVersion {
   const document = sanitizeDocument(JSON.parse(row.documentJson));
   let answerKey: QBAnswerKey = {};
   try {
@@ -43,33 +35,6 @@ function assembleVersion(
     }
   }
   return { row, document, answerKey, omrTemplate };
-}
-
-/**
- * Resolve a scan hint that MAY be an ExamVersion id (new clients) or an
- * EXAM id (legacy ScanStudio builds its version picker from /api/exams and
- * used to send exam.id). Falls back exam.id → its currentVersion's snapshot,
- * then the newest snapshot of that exam. Returns null when nothing matches
- * (the routes turn that into 404 noMatchingVersion).
- */
-export async function loadVersionHint(hint: string): Promise<LoadedVersion | null> {
-  const direct = await loadVersion(hint);
-  if (direct) return direct;
-  const exam = await db.exam.findUnique({ where: { id: hint } });
-  if (!exam) return null;
-  if (exam.currentVersion > 0) {
-    const current = await db.examVersion.findUnique({
-      where: { examId_version: { examId: exam.id, version: exam.currentVersion } },
-      include: { exam: true },
-    });
-    if (current) return assembleVersion(current);
-  }
-  const latest = await db.examVersion.findFirst({
-    where: { examId: exam.id },
-    orderBy: { version: 'desc' },
-    include: { exam: true },
-  });
-  return latest ? assembleVersion(latest) : null;
 }
 
 /** Binary PDF response with inline disposition. */
@@ -107,4 +72,54 @@ export function intParam(
   const n = parseInt(value ?? '', 10);
   if (!Number.isInteger(n)) return fallback;
   return Math.min(max, Math.max(min, n));
+}
+
+/**
+ * Resolve a version by version id OR by exam id. When an exam id is given the
+ * current published version wins; otherwise the latest version is used. This
+ * lets legacy clients pass an examId "hint" instead of an exact version id.
+ */
+export async function loadVersionHint(hint: string): Promise<LoadedVersion | null> {
+  const direct = await loadVersion(hint);
+  if (direct) return direct;
+  const exam = await db.exam.findUnique({ where: { id: hint } });
+  if (!exam) return null;
+  if (exam.currentVersion > 0) {
+    const current = await loadVersionByRow(
+      await db.examVersion.findUnique({
+        where: { examId_version: { examId: exam.id, version: exam.currentVersion } },
+        include: { exam: true },
+      })
+    );
+    if (current) return current;
+  }
+  const latest = await db.examVersion.findFirst({
+    where: { examId: exam.id },
+    orderBy: { version: 'desc' },
+    include: { exam: true },
+  });
+  return loadVersionByRow(latest);
+}
+
+/** Assemble a LoadedVersion from a raw (already-loaded) ExamVersion row. */
+async function loadVersionByRow(
+  row: (ExamVersion & { exam: Exam }) | null
+): Promise<LoadedVersion | null> {
+  if (!row) return null;
+  const document = sanitizeDocument(JSON.parse(row.documentJson));
+  let answerKey: QBAnswerKey = {};
+  try {
+    answerKey = sanitizeAnswerKey(JSON.parse(row.answerKeyJson));
+  } catch {
+    answerKey = {};
+  }
+  let omrTemplate: OMRTemplate | null = null;
+  if (row.omrTemplateJson) {
+    try {
+      omrTemplate = JSON.parse(row.omrTemplateJson) as OMRTemplate;
+    } catch {
+      omrTemplate = null;
+    }
+  }
+  return { row, document, answerKey, omrTemplate };
 }

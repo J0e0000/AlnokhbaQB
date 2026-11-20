@@ -17,8 +17,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { apiErrorMessage, prepareUpload } from '@/lib/image/prepareUpload';
 import { FileInput, ImageIcon, ListPlus, Loader2, ScanText } from 'lucide-react';
-import { PaneHeader } from '@/components/qb/pane-kit';
 
 /** Same rule as the server parser: a numbered line starts a new question. */
 const NUMBERED_LINE_RE = /^[\d\u0660-\u0669]+[\.\)\-]/;
@@ -40,8 +40,8 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
     .filter((l) => NUMBERED_LINE_RE.test(l)).length;
 
   const extract = async (file: File) => {
-    if (file.size > 20 * 1024 * 1024) {
-      toast.error('حجم الملف كبير جدًا (الحد 20 ميجابايت)');
+    if (file.size > 25 * 1024 * 1024) {
+      toast.error('حجم الملف كبير جدًا (الحد 25 ميجابايت)');
       return;
     }
     setOcrBusy(true);
@@ -50,9 +50,10 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
       const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
       if (isPdf) {
         const pdfjs = await import('pdfjs-dist');
-        // Use the static worker asset already shipped in /public (same
-        // convention as PdfWorkspace / ExtractionStudio in this codebase).
-        pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+          'pdfjs-dist/build/pdf.worker.min.mjs',
+          import.meta.url
+        ).toString();
         const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
         if (pdf.numPages > 30) throw new Error('الحد الأقصى لمعالجة الملف هو 30 صفحة');
 
@@ -95,15 +96,16 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ imageBase64: pageImage, lang }),
           });
-          const d = (await res.json()) as {
+          const d = (await res.json().catch(() => null)) as {
             ok?: boolean;
             text?: string;
             error?: string;
             details?: string;
             engine?: string;
-          };
-          if (!res.ok || !d.ok) {
-            throw new Error(d.details ? `${d.error ?? 'فشل تحليل الصفحة'} — ${d.details}` : d.error ?? `فشل تحليل الصفحة ${pageNumber}`);
+          } | null;
+          if (!res.ok || !d?.ok) {
+            const message = await apiErrorMessage(res, `فشل تحليل الصفحة ${pageNumber}`);
+            throw new Error(d?.details ? `${d.error ?? message} — ${d.details}` : d?.error ?? message);
           }
           pageTexts.push(d.text ?? '');
           await page.cleanup();
@@ -115,21 +117,25 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
         return;
       }
 
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = () => resolve(r.result as string);
-        r.onerror = reject;
-        r.readAsDataURL(file);
-      });
-      setImagePreview(dataUrl);
+      // Downscale + JPEG re-encode on-device: keeps the base64 JSON body
+      // under Vercel's 4.5 MB function payload limit for phone photos.
+      const prepared = await prepareUpload(file);
+      setImagePreview(prepared.dataUrl);
       const res = await fetch('/api/ocr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: dataUrl, lang }),
+        body: JSON.stringify({ imageBase64: prepared.dataUrl, lang }),
       });
-      const d = (await res.json()) as { ok?: boolean; text?: string; error?: string; details?: string; engine?: string };
-      if (!res.ok || !d.ok) {
-        toast.error(d.details ? `${d.error} — ${d.details}` : d.error ?? 'فشل استخراج النص من الصورة');
+      const d = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        text?: string;
+        error?: string;
+        details?: string;
+        engine?: string;
+      } | null;
+      if (!res.ok || !d?.ok) {
+        const message = await apiErrorMessage(res, 'فشل استخراج النص من الصورة');
+        toast.error(d?.details ? `${d.error ?? message} — ${d.details}` : d?.error ?? message);
         return;
       }
       setText(d.text ?? '');
@@ -187,25 +193,19 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
   };
 
   return (
-    <div className="space-y-4" dir="rtl">
-      <PaneHeader
-        icon={FileInput}
-        title="استيراد OCR"
-        desc="حوّل صورة أو ملف PDF إلى نص قابل للتعديل، ثم استورده كامتحان مسودة أو أسئلة بحاجة لمراجعة في بنك الأسئلة"
-      />
-      <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid gap-4 lg:grid-cols-2" dir="rtl">
       {/* Step 1 — image → text */}
-      <Card className="rounded-2xl">
+      <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-sm font-bold">
-            <ScanText className="h-5 w-5 text-emerald-600" /> استخراج النص من صورة (OCR)
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ScanText className="h-5 w-5 text-success" /> استخراج النص من صورة (OCR)
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-slate-500">لغة النص:</span>
+            <span className="text-[13px] text-muted-foreground">لغة النص:</span>
             <Select value={lang} onValueChange={(v) => setLang(v === 'eng' ? 'eng' : 'ara')}>
-              <SelectTrigger className="h-8 w-56 text-xs"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-8 w-56 text-[13px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="ara">العربية (Tesseract — مراجعة مطلوبة)</SelectItem>
                 <SelectItem value="eng">English (Tesseract — review required)</SelectItem>
@@ -220,7 +220,7 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
               if (f) void extract(f);
             }}
             onClick={() => inputRef.current?.click()}
-            className="flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/60 p-5 text-center transition hover:border-emerald-400 hover:bg-emerald-50/40"
+            className="flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-success/40 bg-success/5 p-5 text-center transition hover:border-success/40 hover:bg-success/10"
           >
             <input
               ref={inputRef}
@@ -233,15 +233,15 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
                 if (f) void extract(f);
               }}
             />
-            {ocrBusy ? <Loader2 className="h-7 w-7 animate-spin text-emerald-600" /> : <ImageIcon className="h-7 w-7 text-emerald-600" />}
-            <div className="text-sm font-bold text-slate-700">اختر صورة أو ملف PDF لورقة الأسئلة</div>
-            <div className="text-[11px] text-slate-500">يُقرأ النص المضمّن في PDF، وتُحوّل الصفحات المصوّرة تلقائيًا إلى OCR</div>
+            {ocrBusy ? <Loader2 className="h-7 w-7 animate-spin text-success" /> : <ImageIcon className="h-7 w-7 text-success" />}
+            <div className="text-sm font-medium text-success">اختر صورة أو ملف PDF لورقة الأسئلة</div>
+            <div className="text-[13px] text-muted-foreground">يُقرأ النص المضمّن في PDF، وتُحوّل الصفحات المصوّرة تلقائيًا إلى OCR</div>
           </div>
           {imagePreview && !ocrBusy && (
             <img src={imagePreview} alt="الصورة المرفوعة" className="max-h-40 w-full rounded-lg border object-contain" />
           )}
           {engine && (
-            <Badge className="bg-emerald-100 text-emerald-700">
+            <Badge className="bg-success/10 text-success">
               المحرك: {engine === 'vlm' ? 'نموذج رؤية' : 'Tesseract'}
             </Badge>
           )}
@@ -249,18 +249,18 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
       </Card>
 
       {/* Step 2 — text → exam draft OR bank review queue */}
-      <Card className="rounded-2xl">
+      <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-sm font-bold">
-            <FileInput className="h-5 w-5 text-emerald-600" /> تحويل النص إلى أسئلة
+          <CardTitle className="flex items-center gap-2 text-base">
+            <FileInput className="h-5 w-5 text-success" /> تحويل النص إلى أسئلة
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label className="text-xs">الوجهة</Label>
+              <Label className="text-[13px]">الوجهة</Label>
               <Select value={target} onValueChange={(v) => setTarget(v === 'bank' ? 'bank' : 'exam')}>
-                <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-9 text-[13px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="exam">امتحان مسودة — يفتح في المصمم</SelectItem>
                   <SelectItem value="bank">بنك الأسئلة — بحاجة لمراجعة</SelectItem>
@@ -268,7 +268,7 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">{target === 'bank' ? 'وسم المصدر (اختياري)' : 'عنوان الامتحان (اختياري)'}</Label>
+              <Label className="text-[13px]">{target === 'bank' ? 'وسم المصدر (اختياري)' : 'عنوان الامتحان (اختياري)'}</Label>
               <Input
                 className="h-9 text-sm"
                 value={title}
@@ -280,22 +280,22 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
           </div>
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label className="text-xs">نص الأسئلة (قابل للتعديل — يمكنك اللصق مباشرة)</Label>
+              <Label className="text-[13px]">نص الأسئلة (قابل للتعديل — يمكنك اللصق مباشرة)</Label>
               {text.trim().length >= 3 && (
-                <Badge variant="outline" className="gap-1 text-[10px] text-emerald-700">
+                <Badge variant="outline" className="gap-1 text-[13px] text-success">
                   <ListPlus className="h-3 w-3" /> {detectedCount > 0 ? `${detectedCount} سؤال مكتشف` : 'سؤال واحد (بدون ترقيم)'}
                 </Badge>
               )}
             </div>
             <Textarea
-              className="max-h-96 min-h-56 overflow-y-auto text-xs leading-relaxed"
+              className="max-h-96 min-h-56 overflow-y-auto text-[13px] leading-relaxed"
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder={'الصق النص هنا… كل سطر يبدأ برقم (1. أو ٢-) يبدأ سؤالًا جديدًا\n1. ما ناتج جمع 2 + 2؟\n2. عاصمة مصر؟'}
             />
           </div>
           <Button
-            className="w-full btn-primary-grad border-0 text-white"
+            className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
             disabled={importBusy || ocrBusy || text.trim().length < 3}
             onClick={() => void importContent()}
           >
@@ -307,7 +307,7 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
               'استيراد وفتح في المصمم'
             )}
           </Button>
-          <p className="text-[11px] leading-relaxed text-slate-500">
+          <p className="text-[13px] leading-relaxed text-muted-foreground">
             القواعد: السطر المرقم (1. / 2) / ٣-) يبدأ سؤالًا جديدًا، والأسطر التالية تُلحق به.
             {target === 'bank'
               ? ' أسئلة البنك المستوردة لا تُنشر تلقائيًا أبدًا — راجعها واضبط مفتاح الإجابة لاعتمادها.'
@@ -315,7 +315,6 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
           </p>
         </CardContent>
       </Card>
-      </div>
     </div>
   );
 }

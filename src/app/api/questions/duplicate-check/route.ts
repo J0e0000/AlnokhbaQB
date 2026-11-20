@@ -4,7 +4,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { requireSession } from '../../_lib/auth-guard';
 import { serverError, readJsonBody } from '../../_lib/shared';
 import { normalizeForDuplicate } from '@/lib/qb/extract';
 
@@ -17,9 +16,6 @@ const bodySchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const g = await requireSession('viewer', req);
-  if ('error' in g) return g.error;
-
   const body = await readJsonBody(req);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ duplicates: [] });
@@ -30,7 +26,6 @@ export async function POST(req: Request) {
 
     const candidates = await db.question.findMany({
       where: {
-        ...(g.session.role === 'super_admin' ? {} : { organizationId: g.session.orgId }),
         ...(parsed.data.excludeId ? { id: { not: parsed.data.excludeId } } : {}),
       },
       select: { id: true, prompt: true, subject: true, chapter: true },

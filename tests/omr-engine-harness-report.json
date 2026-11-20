@@ -1,33 +1,33 @@
 {
-  "passed": 41,
-  "total": 41,
+  "passed": 24,
+  "total": 24,
   "allPassed": true,
   "recommendedThresholds": {
-    "filled": 0.457,
+    "filled": 0.6,
     "empty": 0.16,
     "ambiguousMargin": 0.1,
     "minAbsoluteFill": 0.06
   },
   "ratioStats": {
     "empty": {
-      "median": 0.0,
-      "p99": 0.0
+      "median": 0.0179,
+      "p99": 0.0288
     },
     "pencil": {
-      "median": 0.5573,
-      "p99": 0.5586
+      "median": 0.7649,
+      "p99": 0.7793
     },
     "pen": {
-      "median": 0.9514,
-      "p99": 0.9537
+      "median": 0.9558,
+      "p99": 0.9694
     },
     "blue": {
-      "median": 0.6026,
-      "p99": 0.604
+      "median": 0.8376,
+      "p99": 0.8515
     },
     "light": {
-      "median": 0.3035,
-      "p99": 0.3043
+      "median": 0.026,
+      "p99": 0.0345
     }
   },
   "cases": [
@@ -37,7 +37,7 @@
       "detail": "accuracy=100%",
       "extra": {
         "problems": [],
-        "ms": 553
+        "ms": 4239
       }
     },
     {
@@ -155,7 +155,7 @@
     {
       "case": "11. erased ghosts",
       "passed": true,
-      "detail": "statuses={'unanswered'} medianEmpty=0.0",
+      "detail": "statuses={'unanswered'} medianEmpty=0.0189",
       "extra": {}
     },
     {
@@ -179,7 +179,7 @@
     {
       "case": "15. student ID",
       "passed": true,
-      "detail": "digits=314?59 conf=0.917",
+      "detail": "digits=314?59 conf=0.867",
       "extra": {}
     },
     {
@@ -199,225 +199,7 @@
       "passed": true,
       "detail": "acc=100% src=manual rot=0",
       "extra": {}
-    },
-    {
-      "case": "19. photocopy low contrast",
-      "passed": true,
-      "detail": "accuracy=100%",
-      "extra": {
-        "problems": []
-      }
-    },
-    {
-      "case": "20. side shadow + rotation",
-      "passed": true,
-      "detail": "accuracy=100%",
-      "extra": {
-        "problems": []
-      }
-    },
-    {
-      "case": "21. severe perspective",
-      "passed": true,
-      "detail": "accuracy=100%",
-      "extra": {
-        "problems": []
-      }
-    },
-    {
-      "case": "22. blur + 1000px",
-      "passed": true,
-      "detail": "accuracy=100%",
-      "extra": {
-        "problems": []
-      }
-    },
-    {
-      "case": "23. off-center marks",
-      "passed": true,
-      "detail": "accuracy=100%",
-      "extra": {
-        "problems": []
-      }
-    },
-    {
-      "case": "24. stray marks",
-      "passed": true,
-      "detail": "accuracy=100% wrongConf=0",
-      "extra": {
-        "problems": []
-      }
-    },
-    {
-      "case": "25. mixed pencil+pen",
-      "passed": true,
-      "detail": "accuracy=100%",
-      "extra": {
-        "problems": []
-      }
-    },
-    {
-      "case": "26. faint photocopy pencil",
-      "passed": true,
-      "detail": "okOrUnclear=10/10 acc=100%",
-      "extra": {
-        "problems": []
-      }
-    },
-    {
-      "case": "27. photocopied phone photo",
-      "passed": true,
-      "detail": "accuracy=100%",
-      "extra": {
-        "problems": []
-      }
-    },
-    {
-      "case": "28. rotation 270°",
-      "passed": true,
-      "detail": "accuracy=100% rotationFixed=0",
-      "extra": {
-        "problems": []
-      }
-    },
-    {
-      "case": "29. extreme jpeg q45",
-      "passed": true,
-      "detail": "accuracy=100%",
-      "extra": {
-        "problems": []
-      }
-    },
-    {
-      "case": "30. tiny 700px",
-      "passed": true,
-      "detail": "accuracy=100%",
-      "extra": {
-        "problems": []
-      }
-    },
-    {
-      "case": "31. fold shadow stripe",
-      "passed": true,
-      "detail": "accuracy=100% wrongConf=0",
-      "extra": {
-        "problems": []
-      }
-    },
-    {
-      "case": "32. smeared neighbour bleed",
-      "passed": true,
-      "detail": "wrongConf=0 okOrFlagged=10/10",
-      "extra": {
-        "statuses": [
-          [
-            1,
-            "selected"
-          ],
-          [
-            2,
-            "selected"
-          ],
-          [
-            3,
-            "selected"
-          ],
-          [
-            4,
-            "selected"
-          ],
-          [
-            5,
-            "selected"
-          ],
-          [
-            6,
-            "selected"
-          ],
-          [
-            7,
-            "selected"
-          ],
-          [
-            8,
-            "selected"
-          ],
-          [
-            9,
-            "selected"
-          ],
-          [
-            10,
-            "selected"
-          ]
-        ]
-      }
-    },
-    {
-      "case": "33. highlighter over marks",
-      "passed": true,
-      "detail": "wrongConf=0 okOrFlagged=10/10",
-      "extra": {
-        "statuses": [
-          [
-            1,
-            "unanswered"
-          ],
-          [
-            2,
-            "unanswered"
-          ],
-          [
-            3,
-            "unanswered"
-          ],
-          [
-            4,
-            "unanswered"
-          ],
-          [
-            5,
-            "unanswered"
-          ],
-          [
-            6,
-            "unanswered"
-          ],
-          [
-            7,
-            "unanswered"
-          ],
-          [
-            8,
-            "unanswered"
-          ],
-          [
-            9,
-            "unanswered"
-          ],
-          [
-            10,
-            "unanswered"
-          ]
-        ]
-      }
-    },
-    {
-      "case": "34. warm tint + backlight",
-      "passed": true,
-      "detail": "accuracy=100%",
-      "extra": {
-        "problems": []
-      }
-    },
-    {
-      "case": "35. data-url input",
-      "passed": true,
-      "detail": "accuracy=100%",
-      "extra": {
-        "problems": []
-      }
     }
   ],
-  "totalMs": 51088
+  "totalMs": 138766
 }

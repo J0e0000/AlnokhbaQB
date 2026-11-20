@@ -6,9 +6,6 @@
       "dom.iterable",
       "esnext"
     ],
-    "types": [
-      "bun-types"
-    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -40,6 +37,9 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "examples",
+    "mini-services",
+    "skills"
   ]
 }

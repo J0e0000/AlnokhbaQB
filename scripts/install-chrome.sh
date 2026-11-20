@@ -13,6 +13,9 @@
 set -u
 cd "$(dirname "$0")/.."
 
+# Vercel uses @sparticuz/chromium at runtime — skip the ~190MB download.
+[ -n "${VERCEL:-}" ] && { echo "[install-chrome] VERCEL detected — skipping"; exit 0; }
+
 have_chrome() {
   ls chrome/chrome-headless-shell/linux-*/chrome-headless-shell-linux64/chrome-headless-shell >/dev/null 2>&1
 }

@@ -6,8 +6,6 @@
 
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { orgFilter } from '@/lib/auth';
-import { requireSession } from '../../_lib/auth-guard';
 import { serverError } from '../../_lib/shared';
 
 export const runtime = 'nodejs';
@@ -19,22 +17,11 @@ function csvCell(v: unknown): string {
 
 export async function GET(req: Request) {
   try {
-    const g = await requireSession('viewer', req);
-    if ('error' in g) return g.error;
     const url = new URL(req.url);
     const examId = url.searchParams.get('examId') || undefined;
-    const org = orgFilter(g.session);
 
     const scans = await db.scan.findMany({
-      where:
-        org === undefined
-          ? examId
-            ? { examId }
-            : undefined
-          : {
-              ...(examId ? { examId } : {}),
-              exam: { organizationId: org },
-            },
+      where: examId ? { examId } : undefined,
       orderBy: { createdAt: 'desc' },
       take: 5000,
       include: { exam: { select: { title: true } }, student: { select: { name: true } } },

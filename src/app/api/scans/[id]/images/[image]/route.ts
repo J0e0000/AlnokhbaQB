@@ -5,10 +5,6 @@
 import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { blobConfigured, blobPathname } from '@/lib/omr/scan-store';
-import { scansDir } from '@/lib/omr/scans-dir';
-import { requireSession } from '../../../../_lib/auth-guard';
 import { serverError } from '../../../../_lib/shared';
 
 export const runtime = 'nodejs';
@@ -16,15 +12,11 @@ export const dynamic = 'force-dynamic';
 
 type Ctx = { params: Promise<{ id: string; image: string }> };
 
-// /tmp/alnokhba-scans on Vercel (read-only FS), db/scans locally — both via
-// the shared resolver so writer and reader NEVER drift apart.
-const SCANS_DIR = scansDir();
+const SCANS_DIR = path.join(process.cwd(), 'db', 'scans');
 const ALLOWED = new Set(['debug', 'corrected']);
 
-export async function GET(req: Request, ctx: Ctx) {
+export async function GET(_req: Request, ctx: Ctx) {
   try {
-    const g = await requireSession('viewer', req);
-    if ('error' in g) return g.error;
     const { id, image } = await ctx.params;
 
     // strict allowlists — no '..', no separators, exact names only
@@ -35,50 +27,12 @@ export async function GET(req: Request, ctx: Ctx) {
       return NextResponse.json({ error: 'معرّف غير صالح' }, { status: 400 });
     }
 
-    // org scoping: the image belongs to a scan → its exam decides access
-    const scan = await db.scan.findUnique({ where: { id }, select: { examId: true } });
-    if (!scan) {
-      return NextResponse.json({ error: 'الصورة غير موجودة' }, { status: 404 });
-    }
-    if (g.session.role !== 'super_admin') {
-      if (!scan.examId) {
-        return NextResponse.json({ error: 'الصورة غير موجودة' }, { status: 404 });
-      }
-      const exam = await db.exam.findUnique({
-        where: { id: scan.examId },
-        select: { organizationId: true },
-      });
-      if (exam?.organizationId !== g.session.orgId) {
-        return NextResponse.json({ error: 'الصورة غير موجودة' }, { status: 404 });
-      }
-    }
-
     const filePath = path.join(SCANS_DIR, `${id}_${image}.jpg`);
     const resolved = path.resolve(filePath);
     if (!resolved.startsWith(path.resolve(SCANS_DIR) + path.sep)) {
       return NextResponse.json({ error: 'مسار غير صالح' }, { status: 400 });
     }
     if (!existsSync(resolved)) {
-      // Local/self-hosted: the file should exist on disk. Vercel: disk copies
-      // die with the serverless instance — stream the canonical copy from
-      // Vercel Blob (uploaded by the scan writers) behind this authed route.
-      if (blobConfigured()) {
-        try {
-          const { get } = await import('@vercel/blob');
-          const blob = await get(blobPathname(id, image as 'debug' | 'corrected'), { access: 'public' });
-          if (blob) {
-            return new NextResponse(blob.stream, {
-              status: 200,
-              headers: {
-                'Content-Type': blob.blob.contentType || 'image/jpeg',
-                'Cache-Control': 'private, max-age=3600',
-              },
-            });
-          }
-        } catch {
-          /* not in Blob either → fall through to 404 */
-        }
-      }
       return NextResponse.json({ error: 'الصورة غير موجودة' }, { status: 404 });
     }
 

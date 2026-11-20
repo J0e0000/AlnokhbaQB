@@ -9,8 +9,9 @@ set -e
 # 使用 $0 获取脚本路径（兼容 sh 和 bash）
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Next.js 项目路径
-NEXTJS_PROJECT_DIR="/home/z/my-project"
+# Resolve the project root from this script (or an explicit build override).
+NEXTJS_PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+BUILD_ID="${BUILD_ID:-$(date +%s)}"
 
 # 检查 Next.js 项目目录是否存在
 if [ ! -d "$NEXTJS_PROJECT_DIR" ]; then
@@ -27,7 +28,7 @@ cd "$NEXTJS_PROJECT_DIR" || exit 1
 # 设置环境变量
 export NEXT_TELEMETRY_DISABLED=1
 
-BUILD_DIR="/tmp/build_fullstack_$BUILD_ID"
+BUILD_DIR="${BUILD_DIR:-/tmp/build_fullstack_$BUILD_ID}"
 echo "📁 清理并创建构建目录: $BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 
@@ -102,8 +103,8 @@ fi
 if [ -d "$NEXTJS_PROJECT_DIR/mini-services" ]; then
     echo "🔨 构建 mini-services..."
     # 使用 workspace-agent 目录下的 mini-services 脚本
-    sh "$SCRIPT_DIR/mini-services-install.sh"
-    sh "$SCRIPT_DIR/mini-services-build.sh"
+    PROJECT_DIR="$NEXTJS_PROJECT_DIR" BUILD_DIR="$BUILD_DIR" bash "$SCRIPT_DIR/mini-services-install.sh"
+    PROJECT_DIR="$NEXTJS_PROJECT_DIR" BUILD_DIR="$BUILD_DIR" bash "$SCRIPT_DIR/mini-services-build.sh"
 
     # 复制 mini-services-start.sh 到 mini-services-dist 目录
     echo "  - 复制 mini-services-start.sh 到 $BUILD_DIR"
@@ -139,6 +140,10 @@ fi
 # 依赖清单，在构建期将生产依赖固化到产物，并保持 Python 源码的项目相对路径。
 PROJECT_DIR="$NEXTJS_PROJECT_DIR" BUILD_DIR="$BUILD_DIR" \
     bash "$SCRIPT_DIR/python-runtime-build.sh"
+
+# Tesseract is a system executable (not a Python package); bundle its binary,
+# shared libraries, and English/Arabic language data alongside the service.
+BUILD_DIR="$BUILD_DIR" bash "$SCRIPT_DIR/tesseract-runtime-build.sh"
 
 # 有 Preview 数据库时复制现有数据；没有时直接在部署产物中初始化空库。
 # 模板源码不携带 db/custom.db，不能依赖 dev.sh 必须在 Deploy 前成功运行过。

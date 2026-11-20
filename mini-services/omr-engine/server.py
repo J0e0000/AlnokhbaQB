@@ -1,50 +1,42 @@
 # ALNOKHBA QB — OMR Engine HTTP service (stdlib only, port 3032)
-import hashlib
+#
+# Auth: every route except GET /health requires
+#   Authorization: Bearer <OMR_ENGINE_TOKEN>
+# The service REFUSES to start on 0.0.0.0 when OMR_ENGINE_TOKEN is empty —
+# an unauthenticated engine may only ever bind loopback.
 import hmac
 import json
 import os
 import sys
-import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from engine.pipeline import ocr, process  # noqa: E402
 
-PORT = int(os.environ.get("OMR_ENGINE_PORT", "3032"))  # container platforms inject $PORT
-HOST = os.environ.get("OMR_ENGINE_HOST", "127.0.0.1")  # 0.0.0.0 in Docker
-MAX_BODY = 40 * 1024 * 1024
-SHARED_SECRET = os.environ.get("OMR_SHARED_SECRET", "").strip()
-# Localhost-only by default; when exposed (Docker/0.0.0.0) the shared secret
-# becomes REQUIRED so the engine can never serve as an unauthenticated public
-# endpoint.
-if HOST != "127.0.0.1" and not SHARED_SECRET:
-    print("[omr-engine] WARNING: bound to a non-loopback host without OMR_SHARED_SECRET — refusing to start", flush=True)
-    sys.exit(1)
-
-# naive per-IP sliding-window rate limit (process-wide, stdlib only)
-_RATE: dict[str, list[float]] = {}
-RATE_LIMIT = int(os.environ.get("OMR_RATE_LIMIT", "120"))  # requests/min/IP
-RATE_WINDOW = 60.0
+PORT = int(os.environ.get("OMR_ENGINE_PORT", "3032"))
+HOST = os.environ.get("OMR_ENGINE_HOST", "127.0.0.1")
+TOKEN = (os.environ.get("OMR_ENGINE_TOKEN") or "").strip()
+# Base64 expands a 20 MiB upload by roughly one third; leave room for JSON too.
+MAX_BODY = 32 * 1024 * 1024
 
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
-    def _rate_ok(self) -> bool:
-        if RATE_LIMIT <= 0:
+    def _authorized(self) -> bool:
+        """Bearer-token check (constant-time). GET /health is public by design;
+        when no token is configured the service must be loopback-only (the
+        startup guard below refuses 0.0.0.0 without a token)."""
+        if not TOKEN:
             return True
-        ip = self.client_address[0]
-        now = time.time()
-        bucket = [t for t in _RATE.get(ip, []) if now - t < RATE_WINDOW]
-        bucket.append(now)
-        _RATE[ip] = bucket
-        return len(bucket) <= RATE_LIMIT
-
-    def _authed(self) -> bool:
-        if not SHARED_SECRET:
-            return True  # loopback dev mode
-        got = self.headers.get("x-anqb-omr-key", "")
-        return hmac.compare_digest(got, SHARED_SECRET)
+        header = self.headers.get("Authorization", "")
+        if header.startswith("Bearer "):
+            provided = header[len("Bearer "):].strip()
+            if provided and hmac.compare_digest(
+                provided.encode("utf-8"), TOKEN.encode("utf-8")
+            ):
+                return True
+        return False
 
     def _send(self, code: int, obj: dict) -> None:
         body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
@@ -55,20 +47,14 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):  # noqa: N802
-        if not self._rate_ok():
-            self._send(429, {"ok": False, "error": "rate limit exceeded"})
-            return
         if self.path == "/health":
-            self._send(200, {"ok": True, "engine": "python-opencv", "version": "1.1.0"})
+            self._send(200, {"ok": True, "engine": "python-opencv", "version": "1.0.0"})
         else:
             self._send(404, {"ok": False, "error": "not found"})
 
     def do_POST(self):  # noqa: N802
-        if not self._rate_ok():
-            self._send(429, {"ok": False, "error": "rate limit exceeded"})
-            return
-        if not self._authed():
-            self._send(401, {"ok": False, "error": "unauthorized"})
+        if not self._authorized():
+            self._send(401, {"ok": False, "error": "unauthorized — missing or invalid bearer token"})
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -88,42 +74,26 @@ class Handler(BaseHTTPRequestHandler):
             elif self.path == "/ocr":
                 result = ocr(payload.get("imageBase64", ""), payload.get("lang", "eng"))
                 self._send(200, result)
-            elif self.path == "/pdf_pages":
-                # Rasterize a batch of PDF pages → JPEG base64 (chunked cursor:
-                # { pdfBase64, fromPage, maxPages, dpi, quality }).
-                from engine.pipeline import pdf_pages
-
-                result = pdf_pages(
-                    payload.get("pdfBase64", ""),
-                    dpi=int(payload.get("dpi") or 200),
-                    from_page=int(payload.get("fromPage") or 0),
-                    max_pages=int(payload.get("maxPages") or 30),
-                    quality=int(payload.get("quality") or 85),
-                )
-                self._send(200, {"ok": True, **result})
             else:
                 self._send(404, {"ok": False, "error": "not found"})
-        except ValueError as e:
-            # Caller input problems (bad base64, missing header, encrypted/corrupt
-            # pdf, wrong parameters) → 422 with a STRUCTURED body. The Node client
-            # preserves structured bodies on non-2xx statuses, so callers keep
-            # reading ok/stage/error exactly as before — but HTTP semantics are
-            # now correct instead of masking validation failures behind 200.
-            self._send(422, {"ok": False, "stage": "pdf", "error": str(e)})
         except Exception as e:  # noqa: BLE001
             import traceback
 
             traceback.print_exc()
-            # Unhandled engine crash → 500. The Node client retries structured
-            # 5xx once (transient crash windows) and otherwise surfaces a
-            # transport error instead of a fake success.
-            self._send(500, {"ok": False, "stage": "unhandled", "error": f"internal error: {e}"})
+            self._send(200, {"ok": False, "stage": "unhandled", "error": f"internal error: {e}"})
 
     def log_message(self, fmt, *args):  # quiet-ish
         sys.stderr.write("[omr-engine] " + (fmt % args) + "\n")
 
 
 if __name__ == "__main__":
+    if not TOKEN and HOST in ("0.0.0.0", "::", ""):
+        print(
+            "[omr-engine] refusing to start: OMR_ENGINE_TOKEN is empty but the "
+            "host is public (0.0.0.0). Set OMR_ENGINE_TOKEN or bind 127.0.0.1.",
+            flush=True,
+        )
+        sys.exit(1)
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"[omr-engine] listening on http://{HOST}:{PORT}", flush=True)
     server.serve_forever()

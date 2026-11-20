@@ -1,3 +1,33 @@
-skills/
+# dependencies
 node_modules/
+
+# sandbox skills
+skills/
+
+# next build output
+.next/
+next-env.d.ts
+tsconfig.tsbuildinfo
+*.pid
+
+# local runtime data (dev sqlite lives here; production uses Supabase Postgres)
+db/
+upload/
+
+# logs & transient tool output
+dev.log
+server.log
+*.log
+tool-results/
+
+# python runtime artifacts
+__pycache__/
+.venv/
+
+# dev-server runtime dir (tesseract bundle etc.)
+.dev-runtime/
+
+# secrets & credentials — NEVER commit
+.env
+.env*.local
 .secrets/

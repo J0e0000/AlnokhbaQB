@@ -3,8 +3,6 @@
 
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { orgFilter } from '@/lib/auth';
-import { requireSession } from '../_lib/auth-guard';
 import { serverError } from '../_lib/shared';
 
 export const runtime = 'nodejs';
@@ -16,25 +14,18 @@ interface GradeLike {
   maxScore?: number;
 }
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
-    const g = await requireSession('viewer', req);
-    if ('error' in g) return g.error;
-    const org = orgFilter(g.session);
-    const orgExam = org !== undefined ? { organizationId: org } : {};
-    const orgViaExam = org !== undefined ? { exam: { organizationId: org } } : {};
-
     const [exams, publishedExams, versions, scans, students] = await Promise.all([
-      db.exam.count({ where: orgExam }),
-      db.exam.count({ where: { ...orgExam, status: 'PUBLISHED' } }),
-      db.examVersion.count({ where: orgViaExam }),
+      db.exam.count(),
+      db.exam.count({ where: { status: 'PUBLISHED' } }),
+      db.examVersion.count(),
       db.scan.findMany({
-        where: orgViaExam,
         orderBy: { createdAt: 'desc' },
         take: 2000,
         select: { status: true, overallConfidence: true, gradeJson: true },
       }),
-      db.student.count({ where: orgExam }),
+      db.student.count(),
     ]);
 
     let confidenceSum = 0;

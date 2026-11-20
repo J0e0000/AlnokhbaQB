@@ -145,7 +145,13 @@ function geminiExtras(baseUrl: string): Record<string, unknown> {
  */
 async function postChatResilient(
   cfg: { baseUrl: string; apiKey: string; model: string; fallbackModel?: string },
-  buildBody: (model: string, extras: Record<string, unknown>) => Record<string, unknown>,
+  /** `softOpts=false` rebuilds the body WITHOUT optional fields (detail /
+   *  temperature) — used as the automatic fallback when a provider 400s. */
+  buildBody: (
+    model: string,
+    extras: Record<string, unknown>,
+    softOpts: boolean
+  ) => Record<string, unknown>,
   timeoutMs: number
 ): Promise<{ text: string; model: string }> {
   const extras = geminiExtras(cfg.baseUrl);
@@ -159,18 +165,24 @@ async function postChatResilient(
     const model = chain[i];
     const budget = Math.min(remaining(), timeoutMs);
     if (budget < 5_000) break; // no point starting a call that cannot finish
-    const attempt = (withExtras: boolean) =>
-      postChat(cfg.baseUrl, cfg.apiKey, buildBody(model, withExtras ? extras : {}), budget);
+    const attempt = (withExtras: boolean, withSoftOpts = true) =>
+      postChat(
+        cfg.baseUrl,
+        cfg.apiKey,
+        buildBody(model, withExtras ? extras : {}, withSoftOpts),
+        budget
+      );
 
     try {
       const res = await attempt(true);
       return { text: res.text, model };
     } catch (err) {
       lastError = err;
-      if (err instanceof AiProviderError && err.rawStatus === 400 && Object.keys(extras).length) {
-        // provider doesn't understand reasoning_effort → plain retry
+      if (err instanceof AiProviderError && err.rawStatus === 400) {
+        // provider rejected something optional (reasoning_effort / detail /
+        // temperature) → retry once with a minimal body
         try {
-          const res = await attempt(false);
+          const res = await attempt(false, false);
           return { text: res.text, model };
         } catch (err2) {
           lastError = err2;
@@ -279,6 +291,11 @@ interface VisionParams {
   dataUrl: string;
   maxTokens?: number;
   timeoutMs?: number;
+  /** Sampling temperature. Defaults to 0 (greedy decoding): OCR and
+   *  extraction are TRANSCRIPTION, not generation — deterministic sampling
+   *  plus full-resolution input are the two strongest anti-hallucination
+   *  levers. Pass a higher value only for genuinely creative vision tasks. */
+  temperature?: number;
 }
 
 /** One-shot vision call: image + instruction → text. */
@@ -287,23 +304,35 @@ export async function aiVisionText({
   dataUrl,
   maxTokens = 4096,
   timeoutMs = 120_000,
+  temperature = 0,
 }: VisionParams): Promise<string> {
   const cfg = assertConfigured();
   if (cfg.apiKey) {
     const { text } = await postChatResilient(
       { baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.visionModel, fallbackModel: cfg.fallbackModel },
-      (model, extras) => ({
+      (model, extras, soft) => ({
         model,
         messages: [
           {
             role: 'user',
             content: [
               { type: 'text', text: prompt },
-              { type: 'image_url', image_url: { url: dataUrl } },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: dataUrl,
+                  // detail:'high' keeps near-full image resolution instead of
+                  // a downscaled thumbnail — low-res input is the #1 reason
+                  // vision models "reconstruct" (i.e. invent) unreadable pages
+                  ...(soft ? { detail: 'high' } : {}),
+                },
+              },
             ],
           },
         ],
         max_tokens: maxTokens,
+        // greedy decoding — a transcription must never "roll the dice"
+        ...(soft ? { temperature } : {}),
         ...extras,
       }),
       timeoutMs
@@ -321,6 +350,7 @@ export async function aiVisionText({
         ],
       },
     ],
+    temperature,
     thinking: { type: 'disabled' },
   });
   return completion.choices?.[0]?.message?.content ?? '';

@@ -16,7 +16,6 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ExamRunner, { type StartedAttempt } from '@/components/qb/ExamRunner';
-import { EmptyState, PaneHeader } from '@/components/qb/pane-kit';
 import { Clock, GraduationCap, Loader2, MonitorPlay, RefreshCw, ShieldAlert, UserRound } from 'lucide-react';
 
 interface ExamListItem {
@@ -47,10 +46,10 @@ interface AttemptRow {
 }
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
-  active: { label: 'جارية', cls: 'bg-emerald-100 text-emerald-700' },
-  submitted: { label: 'مُسلَّمة', cls: 'bg-slate-100 text-slate-600' },
-  expired: { label: 'انتهى وقتها', cls: 'bg-amber-100 text-amber-800' },
-  invalidated: { label: 'ملغاة (مخالفة)', cls: 'bg-red-100 text-red-700' },
+  active: { label: 'جارية', cls: 'bg-success/10 text-success' },
+  submitted: { label: 'مُسلَّمة', cls: 'bg-muted text-muted-foreground' },
+  expired: { label: 'انتهى وقتها', cls: 'bg-warning/10 text-warning' },
+  invalidated: { label: 'ملغاة (مخالفة)', cls: 'bg-destructive/10 text-destructive' },
 };
 
 export default function OnlinePane() {
@@ -79,26 +78,19 @@ export default function OnlinePane() {
 
   return (
     <div className="space-y-4" dir="rtl">
-      <PaneHeader
-        icon={GraduationCap}
-        title="الامتحانات الأونلاين"
-        desc="ادخل امتحانك المنشور وحلّه من المتصفح — ويراقب المعلم المحاولات والدرجات والمخالفات لحظة بلحظة"
-      />
       <Tabs defaultValue="student">
         <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="student" className="gap-1.5 text-xs"><UserRound className="h-3.5 w-3.5" /> وضع الطالب</TabsTrigger>
-          <TabsTrigger value="teacher" className="gap-1.5 text-xs"><MonitorPlay className="h-3.5 w-3.5" /> مراقبة المعلم</TabsTrigger>
+          <TabsTrigger value="student" className="gap-1.5 text-[13px]"><UserRound className="h-3.5 w-3.5" /> وضع الطالب</TabsTrigger>
+          <TabsTrigger value="teacher" className="gap-1.5 text-[13px]"><MonitorPlay className="h-3.5 w-3.5" /> مراقبة المعلم</TabsTrigger>
         </TabsList>
 
         <TabsContent value="student" className="mt-4">
           {loading ? (
-            <div className="flex justify-center py-14"><Loader2 className="h-6 w-6 animate-spin text-emerald-600" /></div>
+            <div className="flex justify-center py-14"><Loader2 className="h-6 w-6 animate-spin text-success" /></div>
           ) : exams.length === 0 ? (
-            <EmptyState
-              icon={MonitorPlay}
-              title="لا توجد امتحانات أونلاين منشورة بعد"
-              hint="أنشئ امتحانًا من بنك الأسئلة أو فعّل الوضع الأونلاين ثم انشره — سيظهر هنا للطلاب مباشرة"
-            />
+            <div className="rounded-xl border-2 border-dashed border-border py-14 text-center text-sm text-muted-foreground">
+              لا توجد امتحانات أونلاين منشورة بعد — أنشئ امتحانًا من بنك الأسئلة أو فعّل الوضع الأونلاين ثم انشر
+            </div>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               {exams.map((e) => (
@@ -163,30 +155,30 @@ function StudentExamCard({ exam, onFinished }: { exam: ExamListItem; onFinished:
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-base"><GraduationCap className="h-5 w-5 text-emerald-600" /> {exam.title}</CardTitle>
+        <CardTitle className="flex items-center gap-2 text-base"><GraduationCap className="h-5 w-5 text-success" /> {exam.title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        <div className="flex flex-wrap items-center gap-1.5 text-[13px]">
           {exam.subject && <Badge variant="outline">{exam.subject}</Badge>}
           <Badge variant="outline">{exam.questionCount} سؤال</Badge>
-          <Badge className="gap-1 bg-emerald-100 text-emerald-700"><Clock className="h-3 w-3" /> {exam.durationMin} دقيقة</Badge>
+          <Badge className="gap-1 bg-success/10 text-success"><Clock className="h-3 w-3" /> {exam.durationMin} دقيقة</Badge>
           <Badge variant="outline">{exam.attemptsAllowed} محاولة</Badge>
-          {exam.securityPolicy === 'strict' && <Badge className="gap-1 bg-red-100 text-red-700"><ShieldAlert className="h-3 w-3" /> أمان صارم</Badge>}
+          {exam.securityPolicy === 'strict' && <Badge className="gap-1 bg-destructive/10 text-destructive"><ShieldAlert className="h-3 w-3" /> أمان صارم</Badge>}
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <div className="space-y-1 sm:col-span-2">
-            <Label className="text-xs">اسم الطالب</Label>
+            <Label className="text-[13px]">اسم الطالب</Label>
             <Input className="h-9 text-sm" value={name} onChange={(e) => setName(e.target.value)} placeholder="الاسم الثلاثي" />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">الرقم (اختياري)</Label>
+            <Label className="text-[13px]">الرقم (اختياري)</Label>
             <Input className="h-9 text-sm" value={code} onChange={(e) => setCode(e.target.value)} placeholder="مثال: 12" />
           </div>
         </div>
-        <Button className="btn-primary-grad w-full border-0 text-white" disabled={busy} onClick={() => void start()}>
+        <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy} onClick={() => void start()}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'بدء / استئناف المحاولة'}
         </Button>
-        <p className="text-[11px] leading-relaxed text-slate-500">
+        <p className="text-[13px] leading-relaxed text-muted-foreground">
           الوقت يُحسب على الخادم — التحديث أو إعادة الفتح لن يعيده. تُحفظ إجاباتك تلقائيًا كل ٥ ثوانٍ حتى مع انقطاع الشبكة.
           {exam.securityPolicy === 'strict' && ' سياسة صارمة: أي مغادرة للنافذة تُنهي المحاولة.'}
         </p>
@@ -226,16 +218,16 @@ function TeacherMonitor({ exams, onRefreshExams }: { exams: ExamListItem[]; onRe
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-          <MonitorPlay className="h-5 w-5 text-emerald-600" /> مراقبة المحاولات
+          <MonitorPlay className="h-5 w-5 text-success" /> مراقبة المحاولات
           <div className="ms-auto flex items-center gap-2">
             <Select value={examId} onValueChange={setExamId}>
-              <SelectTrigger className="h-8 w-64 text-xs"><SelectValue placeholder="اختر امتحانًا أونلاين" /></SelectTrigger>
+              <SelectTrigger className="h-8 w-64 text-[13px]"><SelectValue placeholder="اختر امتحانًا أونلاين" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none" disabled>اختر امتحانًا أونلاين</SelectItem>
                 {exams.map((e) => <SelectItem key={e.id} value={e.id}>{e.title}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" disabled={busy || examId === 'none'}
+            <Button size="sm" variant="outline" className="h-8 gap-1 text-[13px]" disabled={busy || examId === 'none'}
               onClick={() => { void loadAttempts(examId); onRefreshExams(); }}>
               <RefreshCw className={`h-3.5 w-3.5 ${busy ? 'animate-spin' : ''}`} /> تحديث
             </Button>
@@ -244,29 +236,29 @@ function TeacherMonitor({ exams, onRefreshExams }: { exams: ExamListItem[]; onRe
       </CardHeader>
       <CardContent>
         {!selected ? (
-          <div className="rounded-2xl border-2 border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">
+          <div className="rounded-xl border-2 border-dashed border-border py-10 text-center text-sm text-muted-foreground">
             اختر امتحانًا لعرض محاولات الطلاب والدرجات والمخالفات
           </div>
         ) : attempts.length === 0 ? (
-          <div className="rounded-2xl border-2 border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">لا محاولات بعد</div>
+          <div className="rounded-xl border-2 border-dashed border-border py-10 text-center text-sm text-muted-foreground">لا محاولات بعد</div>
         ) : (
-          <div className="max-h-96 space-y-2 overflow-y-auto pe-1">
+          <div className="max-h-96 space-y-2 overflow-y-auto ps-1">
             {attempts.map((a) => {
               const st = STATUS_META[a.status] ?? STATUS_META.submitted;
               return (
                 <div key={a.id} className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-                  <span className="font-bold text-slate-800">{a.studentName}</span>
-                  {a.studentCode && <span className="text-xs text-slate-400">({a.studentCode})</span>}
-                  <Badge className={`text-[10px] ${st.cls}`}>{st.label}</Badge>
+                  <span className="font-bold text-foreground">{a.studentName}</span>
+                  {a.studentCode && <span className="text-[13px] text-muted-foreground">({a.studentCode})</span>}
+                  <Badge className={`text-[13px] ${st.cls}`}>{st.label}</Badge>
                   {a.score !== null && a.maxScore ? (
-                    <Badge className="bg-emerald-600 text-xs">{a.score}/{a.maxScore}</Badge>
+                    <Badge className="bg-success text-[13px]">{a.score}/{a.maxScore}</Badge>
                   ) : a.status === 'invalidated' ? (
-                    <Badge className="bg-red-100 text-xs text-red-700">بلا درجة</Badge>
+                    <Badge className="bg-destructive/10 text-[13px] text-destructive">بلا درجة</Badge>
                   ) : null}
                   {a.securityEvents > 0 && (
-                    <Badge className="gap-1 bg-amber-100 text-[10px] text-amber-800"><ShieldAlert className="h-3 w-3" /> {a.securityEvents} مخالفة</Badge>
+                    <Badge className="gap-1 bg-warning/10 text-[13px] text-warning"><ShieldAlert className="h-3 w-3" /> {a.securityEvents} مخالفة</Badge>
                   )}
-                  <span className="mr-auto text-[11px] text-slate-400">
+                  <span className="ms-auto text-[13px] text-muted-foreground">
                     بدأت {new Date(a.startedAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
                     {a.submittedAt && ` • سلَّمت ${new Date(a.submittedAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}`}
                   </span>
@@ -276,7 +268,7 @@ function TeacherMonitor({ exams, onRefreshExams }: { exams: ExamListItem[]; onRe
           </div>
         )}
         {selected && (
-          <p className="mt-3 text-[11px] text-slate-500">
+          <p className="mt-3 text-[13px] text-muted-foreground">
             المحاولات المنتهية زمنيًا تُغلق وتُصحَّح تلقائيًا عند أول قراءة. المخالفات مسجلة على الخادم بختم زمني.
           </p>
         )}

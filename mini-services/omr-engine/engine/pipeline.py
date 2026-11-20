@@ -19,10 +19,6 @@ import numpy as np
 QR_DETECTOR = cv2.QRCodeDetector()
 A4 = {"widthMm": 210.0, "heightMm": 297.0}
 
-# Per-request QR v2 signing secret (set by process(); same for every request
-# in a deployment, so the module-global races of ThreadingHTTPServer are moot).
-_QR_SECRET: Optional[str] = None
-
 
 def _find_contours(binary: np.ndarray, mode=cv2.RETR_LIST):
     """findContours wrapper. NOTE: OpenCV 4.13.0 has a RETR_EXTERNAL/CCOMP
@@ -44,38 +40,9 @@ def omr_checksum(exam_version_id: str, template_id: str, sheet: int) -> str:
     return hashlib.sha256(raw).hexdigest()[:8].upper()
 
 
-def _qr_hmac(exam_version_id: str, template_id: str, sheet: int, sheets: int, secret: str) -> str:
-    import hmac as _hmac
-
-    raw = f"2|{exam_version_id}|{template_id}|{sheet}|{sheets}".encode()
-    return _hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()[:10].upper()
-
-
-def parse_qr_payload(payload: str, secret: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def parse_qr_payload(payload: str) -> Optional[Dict[str, Any]]:
     try:
         parts = payload.strip().split("|")
-        # ---- v2 (HMAC-signed): ANQB2|evid|tid|sheet|sheets|mac10
-        if len(parts) == 6 and parts[0] == "ANQB2":
-            _, exam_version_id, template_id, sheet_s, sheets_s, mac = parts
-            if not secret:
-                # v2 payloads MUST be verified; without the secret reject —
-                # the Next.js layer always passes it server-to-server.
-                return None
-            sheet = int(sheet_s)
-            sheets = int(sheets_s)
-            if sheet < 0 or sheets < 1 or sheet >= sheets:
-                return None
-            expected = _qr_hmac(exam_version_id, template_id, sheet, sheets, secret)
-            if mac.upper() != expected:
-                return None
-            return {
-                "examVersionId": exam_version_id,
-                "templateId": template_id,
-                "sheet": sheet,
-                "sheets": sheets,
-                "v": 2,
-            }
-        # ---- v1 (legacy, sha256-8 checksum): ANQB|1|evid|tid|sheet|sheets|check
         if len(parts) != 7 or parts[0] != "ANQB":
             return None
         _, ver, exam_version_id, template_id, sheet_s, sheets_s, check = parts
@@ -93,7 +60,6 @@ def parse_qr_payload(payload: str, secret: Optional[str] = None) -> Optional[Dic
             "templateId": template_id,
             "sheet": sheet,
             "sheets": sheets,
-            "v": 1,
         }
     except Exception:
         return None
@@ -119,18 +85,7 @@ def load_image_b64(image_b64: str) -> np.ndarray:
     h, w = img.shape[:2]
     if w < 500 or h < 500:
         raise ValueError(f"image too small ({w}x{h}) — need at least 500x500")
-    # Cap the long edge: phone photos ship at 12-108MP; every downstream stage
-    # (flat-field, marker detection, QR decode, warp) is ~linear in pixels.
-    # A4 at 3600px ≈ 306 DPI — matches the engine's canonical warp resolution
-    # and bounds worst-case latency on slow serverless CPU. The cap is ALSO an
-    # accuracy control: re-sampling borderline fills shifts measured ratios by
-    # ~0.01-0.015, so the cap must stay as close as possible to the warp DPI
-    # (300) where the fill thresholds were calibrated.
-    long_edge = max(w, h)
-    if long_edge > 3600:
-        scale = 3600.0 / long_edge
-        img = cv2.resize(img, (max(1, int(w * scale)), max(1, int(h * scale))), interpolation=cv2.INTER_AREA)
-    elif w * h > 40_000_000:
+    if w * h > 40_000_000:
         scale = math.sqrt(40_000_000 / (w * h))
         img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
     return img
@@ -165,21 +120,9 @@ def preprocess(img_bgr: np.ndarray) -> Tuple[np.ndarray, np.ndarray, Dict[str, A
     # ---- Flat-field normalization (kills lighting gradients / shadows) ----
     # Background estimate: close with a kernel much larger than any dark mark
     # (markers ~83px) so marks stay dark while slow shading is captured.
-    # PERF: the background is a SMOOTH illumination field — estimating it on a
-    # downscaled copy (max edge 800px) and upscaling it back is numerically
-    # equivalent for the divide, and the huge-kernel morphology runs ~12x less
-    # pixels (was 1.8s of the total 5s on 12MP inputs).
-    sh, sw = work.shape[:2]
-    fscale = min(1.0, 800.0 / max(sh, sw))
-    if fscale < 1.0:
-        small = cv2.resize(work, (max(1, int(sw * fscale)), max(1, int(sh * fscale))), interpolation=cv2.INTER_AREA)
-    else:
-        small = work
-    k = max(61, int(min(small.shape) * 0.05) | 1)
-    bg = cv2.morphologyEx(small, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)))
-    bg = cv2.GaussianBlur(bg, (0, 0), max(4.0, k / 12.0))
-    if fscale < 1.0:
-        bg = cv2.resize(bg, (sw, sh), interpolation=cv2.INTER_LINEAR)
+    k = max(121, int(min(work.shape) * 0.05) | 1)
+    bg = cv2.morphologyEx(work, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)))
+    bg = cv2.GaussianBlur(bg, (0, 0), max(8.0, k / 12.0))
     bg = np.maximum(bg, 1)
     norm = cv2.divide(work, bg, scale=255)
     info["normalized"] = True
@@ -190,18 +133,15 @@ def preprocess(img_bgr: np.ndarray) -> Tuple[np.ndarray, np.ndarray, Dict[str, A
 # ---------------- Stage 3: sheet detection ----------------
 
 def _order_points(pts: np.ndarray) -> np.ndarray:
-    """Order 4 points: TL, TR, BR, BL. Uses angular sorting around the
-    centroid (robust for diamond/45° quads where sum/diff heuristics tie),
-    anchored so the first point is the most top-left one."""
+    """Order 4 points: TL, TR, BR, BL."""
     pts = np.array(pts, dtype=np.float32)
-    c = pts.mean(axis=0)
-    ang = np.arctan2(pts[:, 1] - c[1], pts[:, 0] - c[0])
-    order = np.argsort(ang)  # clockwise in y-down coords
-    pts = pts[order]
-    # rotate sequence so the point with min (x+y) — the TL-most — is first
-    start = int(np.argmin(pts[:, 0] + pts[:, 1]))
-    pts = np.roll(pts, -start, axis=0)
-    return pts
+    s = pts.sum(axis=1)
+    d = np.diff(pts, axis=1).ravel()
+    tl = pts[np.argmin(s)]
+    br = pts[np.argmax(s)]
+    tr = pts[np.argmin(d)]
+    bl = pts[np.argmax(d)]
+    return np.array([tl, tr, br, bl], dtype=np.float32)
 
 
 def find_corner_markers(gray: np.ndarray) -> Optional[List[Tuple[float, float, float]]]:
@@ -213,18 +153,12 @@ def find_corner_markers(gray: np.ndarray) -> Optional[List[Tuple[float, float, f
     # area-based scale estimate — orientation-independent (works for rotated
     # landscape captures of a portrait A4 sheet)
     px_per_mm_est = (w * h / (210.0 * 297.0)) ** 0.5
-    # smallest real marker is 5mm; QR finder rings (~3.5mm) must stay excluded.
-    # Upper bound has headroom for oblique photos where the NEAR marker appears
-    # up to ~1.3x larger than its printed size.
+    # smallest real marker is 5mm; QR finder rings (~3.5mm) must stay excluded
     min_sz = 4.2 * px_per_mm_est
-    max_sz = 11.0 * px_per_mm_est
+    max_sz = 9.5 * px_per_mm_est
     thr = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
     thr = cv2.morphologyEx(thr, cv2.MORPH_CLOSE, kernel)
-    # Solid-fill check: Otsu-based (same ink/paper split as the contour pass).
-    # A fixed low threshold (110) rejected markers on faint photocopies where
-    # solid black prints as gray ~120 — Otsu adapts to the page's ink level.
-    thr_fill = thr
     contours = _find_contours(thr, cv2.RETR_EXTERNAL)
     candidates = []
     for c in contours:
@@ -242,14 +176,10 @@ def find_corner_markers(gray: np.ndarray) -> Optional[List[Tuple[float, float, f
         aspect = size / max(1e-6, min(rw, rh))
         if rectangularity < 0.75 or aspect > 1.35:
             continue
-        # solid fill check on the (normalized) gray — bbox-crop only
-        x, y, bw, bh = cv2.boundingRect(c)
-        mask = np.zeros((bh, bw), dtype=np.uint8)
-        cv2.drawContours(mask, [c], -1, 255, -1, offset=(-x, -y))
-        mask_nz = cv2.countNonZero(mask)
-        if mask_nz <= 0:
-            continue
-        fill = cv2.countNonZero(cv2.bitwise_and(thr_fill[y:y + bh, x:x + bw], mask)) / float(mask_nz)
+        # solid fill check on the (normalized) gray
+        mask = np.zeros(gray.shape, dtype=np.uint8)
+        cv2.drawContours(mask, [c], -1, 255, -1)
+        fill = cv2.countNonZero(cv2.bitwise_and(cv2.threshold(gray, 110, 255, cv2.THRESH_BINARY_INV)[1], mask)) / max(1.0, cv2.countNonZero(mask))
         if fill < 0.75:
             continue
         candidates.append((float(cx), float(cy), size, area))
@@ -266,22 +196,7 @@ def find_corner_markers(gray: np.ndarray) -> Optional[List[Tuple[float, float, f
     if len(pool) < 3:
         return None
     pool.sort(key=lambda t: -t[3])
-    chosen = [(c[0], c[1], c[2]) for c in pool[:4]]
-    # Spatial-spread validation: the real 4 markers span the PAGE (bounding
-    # box ≥ 50% of image width AND height). 4 blobs clustered in one region
-    # (text fragments, grid dots, QR remnants on cropped captures) must be
-    # rejected — trusting them builds a garbage homography that silently
-    # misreads every bubble. Worse than a clean failure.
-    if len(chosen) >= 3:
-        xs = [c[0] for c in chosen]
-        ys = [c[1] for c in chosen]
-        span_x = (max(xs) - min(xs)) / max(1, w)
-        span_y = (max(ys) - min(ys)) / max(1, h)
-        if len(chosen) == 4 and (span_x < 0.5 or span_y < 0.5):
-            return None
-        if len(chosen) == 3 and (span_x < 0.4 or span_y < 0.4):
-            return None
-    return chosen
+    return [(c[0], c[1], c[2]) for c in pool[:4]]
 
 
 def detect_document_quad(gray: np.ndarray) -> Optional[np.ndarray]:
@@ -318,117 +233,28 @@ CANONICAL_MARKERS = [
 ]
 
 
-def _rotate_bound(img: np.ndarray, angle_deg: float) -> Tuple[np.ndarray, np.ndarray]:
-    """Rotate around center with canvas expansion (no corner cropping).
-    getRotationMatrix2D convention: positive angle rotates the content
-    counter-clockwise on screen (y-down display coords).
-    Returns (rotated_img, M) — M maps ORIGINAL image coords → rotated coords
-    (needed to carry decoded QR corner points across the rotation)."""
-    h, w = img.shape[:2]
-    center = (w / 2.0, h / 2.0)
-    M = cv2.getRotationMatrix2D(center, angle_deg, 1.0)
-    cos_v, sin_v = abs(M[0, 0]), abs(M[0, 1])
-    nw = int(h * sin_v + w * cos_v) + 1
-    nh = int(h * cos_v + w * sin_v) + 1
-    M[0, 2] += nw / 2.0 - center[0]
-    M[1, 2] += nh / 2.0 - center[1]
-    border = 255 if img.ndim == 2 else (255, 255, 255)
-    return cv2.warpAffine(img, M, (nw, nh), flags=cv2.INTER_LINEAR, borderValue=border), M
-
-
-def _rot90_pts(pts: np.ndarray, k: int, w0: int, h0: int) -> np.ndarray:
-    """Map points through np.rot90(m, k=k) (counter-clockwise image rotation).
-    (x, y) → k=1: (y, w0-1-x) · k=2: (w0-1-x, h0-1-y) · k=3: (h0-1-y, x)."""
-    x, y = pts[:, 0], pts[:, 1]
-    if k == 1:
-        return np.stack([y, w0 - 1 - x], axis=1)
-    if k == 2:
-        return np.stack([w0 - 1 - x, h0 - 1 - y], axis=1)
-    if k == 3:
-        return np.stack([h0 - 1 - y, x], axis=1)
-    return pts.copy()
-
-
-def _orientation_from_markers(
-    gray: np.ndarray,
-    markers: Optional[List[Tuple[float, float, float]]] = None,
-) -> Optional[float]:
-    """Rotation cue from the printed markers when the QR is unreadable.
-    The BR marker is intentionally the SMALLEST; the vector from the centroid
-    of all markers toward the smallest must point down-right (+45° in y-down
-    image coords) on an upright page. Returns the exact corrective angle for
-    cv2.getRotationMatrix2D, or None when inconclusive."""
-    markers = markers if markers is not None else find_corner_markers(gray)
-    if not markers or len(markers) != 4:
-        return None
-    smallest = min(markers, key=lambda m: m[2])
-    others = [m for m in markers if m is not smallest]
-    cx = sum(m[0] for m in others) / 3.0
-    cy = sum(m[1] for m in others) / 3.0
-    vx, vy = smallest[0] - cx, smallest[1] - cy
-    if math.hypot(vx, vy) < 1e-6:
-        return None
-    ang = math.degrees(math.atan2(vy, vx))  # y-down: 45° == down-right
-    # corrective rotation R such that after rotating by R the vector sits at 45°
-    R = ang - 45.0
-    R = (R + 180.0) % 360.0 - 180.0
-    if abs(R) < 2.0:
-        return 0.0
-    return R
-
-
-def try_qr(
-    gray: np.ndarray,
-    raw_gray: Optional[np.ndarray] = None,
-    prefer_crop: bool = False,
-) -> Optional[Dict[str, Any]]:
+def try_qr(gray: np.ndarray, raw_gray: Optional[np.ndarray] = None) -> Optional[Dict[str, Any]]:
     """Attempt QR decode with several normalizations (degraded phone photos need
     retries: upscale / binarize / raw-illumination variant).
-    Returned pts are ALWAYS in the coordinate system of the `gray` input.
-
-    PERF: `prefer_crop=True` tries the top-left quadrant FIRST — on an upright
-    page the QR is printed at (24,24)mm, so a 50%x40% crop decodes ~5x faster
-    than the full frame. The full frame and other normalizations remain as
-    fallbacks, so recall is unchanged (order: cheap → expensive)."""
-    candidates: List[Tuple[np.ndarray, float, Tuple[int, int]]] = []
-
-    def add(img: np.ndarray, scale: float, off: Tuple[int, int] = (0, 0)) -> None:
-        candidates.append((img, scale, off))
-
-    if prefer_crop:
-        h, w = gray.shape[:2]
-        ch, cw = int(h * 0.40), int(w * 0.50)
-        crop = gray[0:ch, 0:cw]
-        add(crop, 1.0, (0, 0))
-        if raw_gray is not None:
-            add(raw_gray[0:ch, 0:cw], 1.0, (0, 0))
-        # modest upscale of the small crop — cheap and rescues soft QRs
-        add(cv2.resize(crop, None, fx=1.6, fy=1.6, interpolation=cv2.INTER_CUBIC), 1.6, (0, 0))
-    # downscaled full frame: QR (18mm) stays >100px at 1400px width — decodes
-    # reliably at ~2.5x less CPU than the full-res frame
-    h, w = gray.shape[:2]
-    dscale = min(1.0, 1400.0 / max(h, w))
-    if dscale < 1.0:
-        add(cv2.resize(gray, (int(w * dscale), int(h * dscale)), interpolation=cv2.INTER_AREA), dscale, (0, 0))
-        if raw_gray is not None:
-            rh, rw = raw_gray.shape[:2]
-            add(cv2.resize(raw_gray, (int(rw * dscale), int(rh * dscale)), interpolation=cv2.INTER_AREA), dscale, (0, 0))
-    add(gray, 1.0)
+    Returned pts are ALWAYS in the coordinate system of the `gray` input."""
+    candidates: List[Tuple[np.ndarray, float]] = [(gray, 1.0)]
     if raw_gray is not None:
-        add(raw_gray, 1.0)
+        candidates.append((raw_gray, 1.0))
     try:
+        bigger = cv2.resize(gray, None, fx=1.6, fy=1.6, interpolation=cv2.INTER_CUBIC)
+        candidates.append((bigger, 1.6))
         binarized = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-        add(binarized, 1.0)
+        candidates.append((binarized, 1.0))
         if raw_gray is not None:
             bin_raw = cv2.threshold(raw_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-            add(bin_raw, 1.0)
+            candidates.append((bin_raw, 1.0))
     except cv2.error:
         pass
-    for cand, scale, (off_x, off_y) in candidates:
+    for cand, scale in candidates:
         res = _try_qr_once(cand)
         if res:
-            pts = res["pts"] / scale if scale != 1.0 else res["pts"]
-            res["pts"] = pts + np.array([off_x, off_y], dtype=np.float32)
+            if scale != 1.0:
+                res["pts"] = res["pts"] / scale
             return res
     return None
 
@@ -437,38 +263,20 @@ def _try_qr_once(gray: np.ndarray) -> Optional[Dict[str, Any]]:
     try:
         payload, pts, _ = QR_DETECTOR.detectAndDecode(gray)[:3]
     except cv2.error:
-        payload, pts = None, None
-    if payload and pts is not None:
-        parsed = parse_qr_payload(payload, _QR_SECRET)
-        if parsed:
-            pts = np.array(pts, dtype=np.float32).reshape(-1, 2)
-            if len(pts) == 4:
-                # IMPORTANT: OpenCV returns corners in the QR code's LOCAL frame order
-                # (TL, TR, BR, BL of the printed code) — this order is INVARIANT to image
-                # rotation (verified empirically). Do NOT re-sort by image coordinates:
-                # that corrupts the mapping for rotated sheets.
-                return {"payload": payload, "parsed": parsed, "pts": pts}
-    # Fallback: pyzbar (zbar). Decodes at ANY rotation angle where cv2's
-    # detector gives up (e.g. 45°-tilted captures) and handles small/soft QRs.
-    try:
-        from pyzbar.pyzbar import decode as _zbar_decode
-        from pyzbar.pyzbar import ZBarSymbol
-
-        for r in _zbar_decode(gray, symbols=[ZBarSymbol.QRCODE]):
-            payload = (r.data or b"").decode("utf-8", "ignore")
-            parsed = parse_qr_payload(payload, _QR_SECRET)
-            if not parsed or r.polygon is None or len(r.polygon) != 4:
-                continue
-            pts = np.array([(p.x, p.y) for p in r.polygon], dtype=np.float32)
-            # zbar polygon order is TL, BL, BR, TR (CCW) — reorder to the
-            # cv2 convention TL, TR, BR, BL (symbol-local, rotation-invariant)
-            pts = pts[[0, 3, 2, 1]]
-            return {"payload": payload, "parsed": parsed, "pts": pts}
-    except ImportError:
-        pass
-    except Exception:  # noqa: BLE001
-        pass
-    return None
+        return None
+    if not payload:
+        return None
+    parsed = parse_qr_payload(payload)
+    if pts is None:
+        return None
+    pts = np.array(pts, dtype=np.float32).reshape(-1, 2)
+    if len(pts) != 4:
+        return None
+    # IMPORTANT: OpenCV returns corners in the QR code's LOCAL frame order
+    # (TL, TR, BR, BL of the printed code) — this order is INVARIANT to image
+    # rotation (verified empirically). Do NOT re-sort by image coordinates:
+    # that corrupts the mapping for rotated sheets.
+    return {"payload": payload, "parsed": parsed, "pts": pts}
 
 
 def _match_markers_to_slots(
@@ -527,15 +335,10 @@ def build_homography(
     px_per_mm: float,
     raw_gray: Optional[np.ndarray] = None,
     manual_markers: Optional[List[List[float]]] = None,
-    qr_preknown: Optional[Dict[str, Any]] = None,
-    markers_preknown: Optional[List[Tuple[float, float, float]]] = None,
 ) -> Tuple[Optional[np.ndarray], np.ndarray, Dict[str, Any]]:
     """Estimate image→canonical-page homography from markers and/or QR corners.
     Returns (H, page_size_px, diag). Strategies (best first):
-      manual(4 user-clicked) > markers(4) > markers+qr(≥4 pairs) > qr(4 pairs) > quad > fullframe.
-
-    PERF: `qr_preknown` (a try_qr result already computed on THIS image, e.g.
-    by the pre-rotation step) skips the redundant full-frame QR decode."""
+      manual(4 user-clicked) > markers(4) > markers+qr(≥4 pairs) > qr(4 pairs) > quad > fullframe."""
     page = (template or {}).get("page") or A4
     W = int(round(page["widthMm"] * px_per_mm))
     Hpx = int(round(page["heightMm"] * px_per_mm))
@@ -563,20 +366,13 @@ def build_homography(
         diag["qrRawDecoded"] = False
         return M, np.array([W, Hpx]), diag
 
-    markers = markers_preknown if markers_preknown is not None else find_corner_markers(gray)
-    diag["markersFound"] = len(markers or [])
-    if qr_preknown is not None:
-        # reuse the pre-rotation decode result (identical coordinate frame)
-        qr = qr_preknown if qr_preknown.get("parsed") else None
-        diag["qrRawDecoded"] = bool(qr)
-        diag["qrRawParsed"] = qr["parsed"] if qr else None
+    markers = find_corner_markers(gray)
+    qr = try_qr(gray, raw_gray)
+    if qr:
+        diag["qrRawDecoded"] = True
+        diag["qrRawParsed"] = qr["parsed"]
     else:
-        qr = try_qr(gray, raw_gray)
-        if qr:
-            diag["qrRawDecoded"] = True
-            diag["qrRawParsed"] = qr["parsed"]
-        else:
-            diag["qrRawDecoded"] = False
+        diag["qrRawDecoded"] = False
 
     src_pts: List[List[float]] = []
     dst_pts: List[List[float]] = []
@@ -590,17 +386,12 @@ def build_homography(
             src_pts.append([m[0], m[1]])
             dx, dy = dst_marker(slot)
             dst_pts.append([dx, dy])
-        if qr and qr.get("parsed") and len(markers) == 3:
-            # 3-marker rescue: the QR corners provide the missing 4th+
-            # correspondences. IMPORTANT: NEVER add them with 4 markers —
-            # OpenCV's QR corner ORDER is orientation-dependent (verified:
-            # a 90°-rotated sheet decoded with image-axes ordering instead
-            # of the code's local TL,TR,BR,BL), so with 4 precise printed
-            # markers they only POLLUTE the least-squares homography.
+        if qr and qr.get("parsed"):
             qx, qy = (template or {}).get("qr", {}).get("x", 24.0), (template or {}).get("qr", {}).get("y", 24.0)
             qsize = (template or {}).get("qr", {}).get("sizeMm", 18.0)
             for px, py in qr["pts"]:
                 src_pts.append([float(px), float(py)])
+            # qr['pts'] are in the code's local order TL,TR,BR,BL (rotation-invariant)
             dst_pts.extend(
                 [
                     [qx * px_per_mm, qy * px_per_mm],
@@ -660,6 +451,11 @@ def warp_with(
     gray: np.ndarray, M: np.ndarray, size_px: np.ndarray
 ) -> np.ndarray:
     W, Hpx = int(size_px[0]), int(size_px[1])
+    # build_homography can return a 2x3 AFFINE matrix (3-point strategy:
+    # cv2.getAffineTransform). warpPerspective needs a 3x3 homography —
+    # promote it (affine is a homography with last row [0,0,1]).
+    if M is not None and getattr(M, "shape", None) == (2, 3):
+        M = np.vstack([M, np.array([[0.0, 0.0, 1.0]], dtype=M.dtype)])
     return cv2.warpPerspective(gray, M, (W, Hpx), flags=cv2.INTER_LINEAR, borderValue=255)
 
 
@@ -669,73 +465,22 @@ def refine_homography(
     px_per_mm: float,
 ) -> Tuple[np.ndarray, Dict[str, Any]]:
     """Second pass: verify alignment inside the warped page and self-heal.
-    PERF: re-detects each printed marker LOCALLY (crop windows around the
-    canonical slots) instead of re-running the full marker+QR detection over
-    the whole page (~5x cheaper, no redundant QR decode). When the local
-    windows cannot produce 4 correspondences, falls back to the full
-    build_homography so recall never drops."""
+    Detects markers near their canonical slots + QR position; if ≥4 precise
+    correspondences exist and they deviate, re-estimate homography and rewarp."""
     diag: Dict[str, Any] = {"refined": False}
-    page = (template or {}).get("page") or A4
-    tmarks = {m["id"]: m for m in ((template or {}).get("markers") or CANONICAL_MARKERS)}
-    src_pts: List[List[float]] = []
-    dst_pts: List[List[float]] = []
-    H, W = warped.shape[:2]
-    for slot in ("TL", "TR", "BR", "BL"):
-        m = tmarks.get(slot)
-        if not m:
-            continue
-        ecx, ecy = float(m["x"]) * px_per_mm, float(m["y"]) * px_per_mm
-        r = int(9.0 * px_per_mm)  # ±9mm window covers 7mm markers + drift
-        x0, x1 = max(0, int(ecx - r)), min(W, int(ecx + r))
-        y0, y1 = max(0, int(ecy - r)), min(H, int(ecy + r))
-        crop = warped[y0:y1, x0:x1]
-        if crop.size == 0:
-            continue
-        thr = cv2.threshold(crop, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
-        contours = _find_contours(thr, cv2.RETR_EXTERNAL)
-        best_c, best_area = None, 0.0
-        for c in contours:
-            a = cv2.contourArea(c)
-            # plausible printed marker: 3.5..9.5mm square (excludes QR finder
-            # rings ~1.5mm and any stray marks)
-            if a < (3.5 * px_per_mm) ** 2 * 0.6 or a > (9.5 * px_per_mm) ** 2:
-                continue
-            if a > best_area:
-                best_c, best_area = c, a
-        if best_c is None:
-            continue
-        mz = cv2.moments(best_c)
-        if mz["m00"] <= 0:
-            continue
-        src_pts.append([mz["m10"] / mz["m00"] + x0, mz["m01"] / mz["m00"] + y0])
-        dst_pts.append([ecx, ecy])
-
-    if len(src_pts) < 4:
-        # rare: local windows failed (heavy occlusion/drift) — full fallback
-        M2, _size2, _ = build_homography(warped, template, px_per_mm)
-        if M2 is None:
-            return np.eye(3), diag
-        h, w = warped.shape[:2]
-        corners = np.array([[0, 0], [w, 0], [w, h], [0, h]], dtype=np.float32).reshape(-1, 1, 2)
-        proj = cv2.perspectiveTransform(corners, M2).reshape(-1, 2)
-        ideal = np.array([[0, 0], [w, 0], [w, h], [0, h]], dtype=np.float32)
-        dev = float(np.max(np.linalg.norm(proj - ideal, axis=1)))
-        diag["refineDeviationPx"] = round(dev, 1)
-        if dev > 6:
-            diag["refined"] = True
-            return M2, diag
+    M2, size2, _ = build_homography(warped, template, px_per_mm)
+    if M2 is None:
         return np.eye(3), diag
-
-    devs = [math.hypot(s[0] - d[0], s[1] - d[1]) for s, d in zip(src_pts, dst_pts)]
-    med_dev = float(np.median(devs))
-    diag["refineDeviationPx"] = round(med_dev, 1)
-    if med_dev > 4.0:
-        M2, _ = cv2.findHomography(
-            np.array(src_pts, dtype=np.float32), np.array(dst_pts, dtype=np.float32), 0
-        )
-        if M2 is not None:
-            diag["refined"] = True
-            return M2, diag
+    # deviation of the estimated mapping from identity around the page
+    h, w = warped.shape[:2]
+    corners = np.array([[0, 0], [w, 0], [w, h], [0, h]], dtype=np.float32).reshape(-1, 1, 2)
+    proj = cv2.perspectiveTransform(corners, M2).reshape(-1, 2)
+    ideal = np.array([[0, 0], [w, 0], [w, h], [0, h]], dtype=np.float32)
+    dev = float(np.max(np.linalg.norm(proj - ideal, axis=1)))
+    diag["refineDeviationPx"] = round(dev, 1)
+    if dev > 6:
+        diag["refined"] = True
+        return M2, diag
     return np.eye(3), diag
 
 
@@ -777,8 +522,8 @@ def fix_orientation(
     W_mm = (template or {}).get("page", A4)["widthMm"]
     H_mm = (template or {}).get("page", A4)["heightMm"]
 
-    # --- primary: QR position cue (crop-first: the QR is printed top-left) ---
-    qr = try_qr(warped, prefer_crop=True)
+    # --- primary: QR position cue ---
+    qr = try_qr(warped)
     if qr and qr.get("parsed"):
         diag["qrDecoded"] = True
         diag["qrPayload"] = qr["payload"]
@@ -797,7 +542,7 @@ def fix_orientation(
             diag["rotationDeg"] = k * 90
             diag["warnings"].append(f"rotated {k*90}° (QR-position cue) — corrected")
             warped = np.rot90(warped, k=k).copy()
-            qr2 = try_qr(warped, prefer_crop=True)
+            qr2 = try_qr(warped)
             if qr2 and qr2.get("parsed"):
                 diag["qrPayload"] = qr2["payload"]
                 diag["qrParsed"] = qr2["parsed"]
@@ -816,7 +561,7 @@ def fix_orientation(
             warped = np.rot90(warped, k=k).copy()
             sizes2 = _marker_sizes_at_slots(warped, px_per_mm)
             diag["markerSizesAfterMm"] = {kk: round(v, 1) for kk, v in sizes2.items()}
-        qr2 = try_qr(warped, prefer_crop=True)
+        qr2 = try_qr(warped)
         if qr2 and qr2.get("parsed"):
             diag["qrDecoded"] = True
             diag["qrPayload"] = qr2["payload"]
@@ -827,311 +572,68 @@ def fix_orientation(
     return warped, diag
 
 
-# ---------------- PDF input (pymupdf) ----------------
-
-def pdf_pages(pdf_b64: str, dpi: int = 200, from_page: int = 0, max_pages: int = 30, quality: int = 85) -> Dict[str, Any]:
-    """Rasterize PDF pages → JPEG base64 list. Used by /pdf_pages and /process.
-    200dpi keeps a 2mm bubble at ~16px radius (ample for fill analysis) and
-    bounds memory/CPU for 100-page batch uploads."""
-    try:
-        import fitz  # pymupdf
-    except ImportError as e:
-        raise ValueError(f"pymupdf not installed: {e}")
-    if not pdf_b64 or not isinstance(pdf_b64, str):
-        raise ValueError("pdfBase64 is required")
-    if "," in pdf_b64 and pdf_b64.strip().startswith("data:"):
-        pdf_b64 = pdf_b64.split(",", 1)[1]
-    try:
-        buf = base64.b64decode(pdf_b64, validate=False)
-    except Exception as e:
-        raise ValueError(f"invalid base64 pdf: {e}")
-    if len(buf) < 8 or not buf.startswith(b"%PDF"):
-        raise ValueError("not a PDF file (missing %PDF header)")
-    try:
-        doc = fitz.open(stream=buf, filetype="pdf")
-    except Exception as e:
-        raise ValueError(f"could not open pdf: {e}")
-    # Encrypted/password-protected PDFs fail later with a confusing crypt
-    # error — reject them here with an explicit, actionable message.
-    if getattr(doc, "needs_pass", False) or getattr(doc, "is_encrypted", False):
-        try:
-            doc.close()
-        except Exception:  # noqa: BLE001
-            pass
-        raise ValueError("pdf is encrypted or password-protected — remove the password before uploading")
-    total = int(doc.page_count)
-    if total <= 0:
-        try:
-            doc.close()
-        except Exception:  # noqa: BLE001
-            pass
-        raise ValueError("pdf contains no pages")
-    dpi = max(72, min(300, int(dpi)))
-    zoom = dpi / 72.0
-    pages: List[str] = []
-    start = max(0, int(from_page))
-    end = min(total, start + max(1, int(max_pages)))
-    for i in range(start, end):
-        pix = doc[i].get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
-        img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
-        if pix.n == 4:
-            img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
-        elif pix.n == 3:
-            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-        else:
-            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-        ok, jbuf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, quality])
-        if not ok:
-            raise ValueError(f"failed to rasterize page {i}")
-        pages.append(base64.b64encode(jbuf.tobytes()).decode())
-    doc.close()
-    return {"total": total, "fromPage": start, "pages": pages, "truncated": end < total}
-
-
 # ---------------- Stage 8: bubble fill analysis ----------------
-# Normalized mean-darkness measurement (aligned with the strongest open
-# implementations: OMRChecker mean-intensity + largest-gap thresholding,
-# open-mcr inward-cropped circular masks, Loke 2018 background-context
-# marks). For every template bubble:
-#
-#   bg      = median gray of an annulus r*1.15..r*1.45 (local paper level)
-#   mean_in = mean gray inside disc r*0.82 (inward of the printed ring)
-#   ratio   = (bg - mean_in) / max(bg - ink_ref, 60)   clipped to 0..1.15
-#
-# ink_ref is a per-sheet blackness estimate (15th percentile of Otsu-dark
-# pixels, clamped 35..60). Because the metric is RELATIVE to the paper
-# level around each bubble, it is insensitive to illumination gradients,
-# shadows, low-light shots, gray photocopies and JPEG exposure shifts —
-# the failure modes of binary dark-pixel counting. Physical calibration:
-# empty ~0.02-0.10, light pencil ~0.25-0.35, HB pencil ~0.45-0.70,
-# black pen ~0.80-1.00, erased ghost ~0.04-0.10.
 
-CROP_PAD_MM = 2.2          # crop half-width beyond the annulus (mm)
-MASK_FACTOR = 0.82         # measurement disc radius = r * MASK_FACTOR
-ANN_IN, ANN_OUT = 1.15, 1.45  # local paper reference annulus (multiples of r)
-INK_REF_MIN, INK_REF_MAX = 35.0, 160.0  # upper bound lets faint photocopies keep scale
-EMPTY_FLOOR = 0.20         # metric-consistent minimum for the `empty` threshold
-
-
-def estimate_ink_ref(warped: np.ndarray) -> float:
-    """Per-sheet ink blackness estimate (gray level of true print)."""
-    small = cv2.resize(warped, None, fx=0.25, fy=0.25, interpolation=cv2.INTER_AREA)
-    t, _ = cv2.threshold(small, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-    dark = small[small < t]
-    if dark.size > 500:
-        return float(np.clip(np.percentile(dark, 15), INK_REF_MIN, INK_REF_MAX))
-    return 45.0
+def _adaptive(warped: np.ndarray, px_per_mm: float) -> np.ndarray:
+    # blockSize must exceed the bubble diameter (~4mm) so the local mean stays
+    # dominated by paper even at the center of a SOLID fill (else solid marks
+    # self-normalize and vanish). 81px@300dpi ≈ 6.9mm window.
+    scale = px_per_mm / (300 / 25.4)
+    block = max(41, int(81 * scale) | 1)
+    return cv2.adaptiveThreshold(warped, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, block, 15)
 
 
 def bubble_fill_ratios(
+    binary: np.ndarray,
     warped: np.ndarray,
     bubbles_mm: List[Tuple[float, float, float]],  # (x, y, r) mm
     px_per_mm: float,
-    ink_ref: Optional[float] = None,
-) -> List[Tuple[float, float, float]]:
-    """Normalized fill measurement. Returns [(fillRatio, meanIntensity, strokeCover)].
-
-    strokeCover = fraction of the disc at least 35% as dark as ink vs local
-    paper — near-zero for broad faint fills (eraser ghosts), meaningful for
-    thin intentional strokes (cross-outs, ticks) that dilute in mean
-    darkness. Used by decide_answer to rescue such marks into review.
-
-    PERF: bubbles sharing a radius share the crop geometry, so crops are
-    stacked per radius group and measured vectorized (one np.mgrid per
-    group instead of per bubble)."""
-    n = len(bubbles_mm)
-    if n == 0:
-        return []
-    if ink_ref is None:
-        ink_ref = estimate_ink_ref(warped)
-
-    WH, WW = warped.shape[:2]
-    by_r: Dict[float, List[int]] = {}
-    for i, (xmm, ymm, rmm) in enumerate(bubbles_mm):
-        by_r.setdefault(round(float(rmm), 3), []).append(i)
-
-    r_max_mm = max(rmm for _, _, rmm in bubbles_mm)
-    pad = max(3, int(math.ceil(CROP_PAD_MM + ANN_OUT * r_max_mm) * px_per_mm))
-    work = cv2.copyMakeBorder(warped, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=255)
-
-    out: List[Optional[Tuple[float, float]]] = [None] * n
-    for r_mm, idxs in by_r.items():
-        r_px = r_mm * px_per_mm
-        half = int(math.ceil(ANN_OUT * r_px)) + 2
-        size = 2 * half + 1
-        stack = np.empty((len(idxs), size, size), dtype=np.float32)
-        for row, i in enumerate(idxs):
-            xmm, ymm, _ = bubbles_mm[i]
-            cx = int(round(xmm * px_per_mm)) + pad
-            cy = int(round(ymm * px_per_mm)) + pad
-            crop = work[max(0, cy - half) : min(WH + 2 * pad, cy + half + 1),
-                        max(0, cx - half) : min(WW + 2 * pad, cx + half + 1)]
-            if crop.shape != (size, size):
-                # bubble near/over the page edge (deformed warp) — pad the
-                # missing border with paper white instead of crashing
-                crop = cv2.copyMakeBorder(
-                    crop,
-                    max(0, half - (cy - max(0, cy - half))),
-                    max(0, (cy + half + 1) - min(WH + 2 * pad, cy + half + 1)),
-                    max(0, half - (cx - max(0, cx - half))),
-                    max(0, (cx + half + 1) - min(WW + 2 * pad, cx + half + 1)),
-                    cv2.BORDER_CONSTANT, value=255,
-                )
-                if crop.shape != (size, size):
-                    # still clipped (bubble center beyond the padded edge):
-                    # treat as clean paper so the vectorized pass stays sane
-                    stack[row] = 255.0
-                    continue
-            stack[row] = crop
-
-        yy, xx = np.mgrid[-half : half + 1, -half : half + 1]
-        dist = np.sqrt((xx * xx + yy * yy).astype(np.float32))
-        inner = (dist <= MASK_FACTOR * r_px).astype(np.float32)
-        ann = (dist >= ANN_IN * r_px) & (dist <= ANN_OUT * r_px)
-        inner_sum = float(inner.sum())
-
-        if ann.any():
-            masked = np.where(ann[None, :, :], stack, np.nan)
-            with np.errstate(all="ignore"):
-                bg = np.nanmedian(masked.reshape(len(idxs), -1), axis=1)
-            bg = np.nan_to_num(bg, nan=255.0)
-        else:
-            bg = np.full(len(idxs), 255.0)
-        bg = np.clip(bg, 40.0, 255.0)
-
-        mean_in = (stack * inner[None, :, :]).sum(axis=(1, 2)) / max(inner_sum, 1.0)
-        denom = np.maximum(bg - ink_ref, 60.0)
-        ratio = np.clip((bg - mean_in) / denom, 0.0, 1.15)
-        stroke_t = (bg - 0.35 * (bg - ink_ref))[:, None, None]
-        cover = ((stack < stroke_t) * inner[None, :, :]).sum(axis=(1, 2)) / max(inner_sum, 1.0)
-
-        for row, i in enumerate(idxs):
-            out[i] = (float(ratio[row]), float(mean_in[row]), float(min(1.0, cover[row])))
-
-    return [(o if o is not None else (0.0, 255.0, 0.0)) for o in out]
-
-
-def calibrate_thresholds(
-    all_ratios: List[float], th: Dict[str, float]
-) -> Tuple[Dict[str, float], Optional[Dict[str, Any]]]:
-    """Page-adaptive threshold calibration (OMRChecker largest-gap method).
-
-    The template/request thresholds remain the fallback rails. When the
-    page's bubble ratios are clearly bimodal (paper cluster vs ink cluster)
-    we place empty/filled INSIDE the largest separating gap, preferring a
-    gap whose low side looks like paper (p95 <= 0.20) and whose high side
-    looks like ink (>= 0.30). This rescues faint photocopies, light pens
-    and varying exposures that absolute
-    thresholds misread — while degenerate sheets (blank, fully-marked,
-    smeared) naturally fail the gap test and keep the base thresholds."""
-    vals = np.sort(np.asarray(all_ratios, dtype=np.float64))
-    n = int(vals.size)
-    if n < 20:
-        return th, None
-    min_left = max(4, int(n * 0.15))
-    min_right = max(1, int(n * 0.05))
-    candidates = []
-    for i in range(min_left, n - min_right):
-        gap = float(vals[i + 1] - vals[i])
-        if gap >= 0.09:
-            # p95 of the LOW cluster (vals[0..i]). NOTE: the previous formula
-            # vals[int(i*0.95)-1] evaluated the percentile at the wrong index
-            # (~i itself, not (i+1)*0.95) — for a gap sitting between a small
-            # faint-mark cluster and the pen cluster it returned the LAST PAPER
-            # value, so an ink cluster passed the paper test and `filled` was
-            # calibrated ABOVE faint-but-real marks (they all read "unclear").
-            low_p95 = float(vals[max(0, int((i + 1) * 0.95) - 1)])
-            candidates.append((i, gap, low_p95))
-    if not candidates:
-        return th, None
-    # The low cluster must look like paper (p95 <= 0.20) and the high side
-    # must look like real ink (>= 0.30 in the normalized metric — even light
-    # photocopy marks measure >= 0.30). This rejects noise "gaps" inside
-    # uniform populations (blank sheets, erased ghosts, smeared pages).
-    paper_like = [c for c in candidates if c[2] <= 0.20 and float(vals[c[0] + 1]) >= 0.30]
-    # Fallback: relax the paper test but NEVER accept a gap whose low side is
-    # itself ink (>= 0.35) — a pencil cluster (~0.5-0.7) mistaken for paper
-    # pushes `filled` ABOVE real pencil marks and turns them into "unclear".
-    # The relaxed bound still covers heavy photocopies where paper measures
-    # up to ~0.30 in the normalized metric.
-    relaxed = [
-        c for c in candidates
-        if 0.20 < c[2] <= 0.32 and float(vals[c[0] + 1]) >= 0.38
-    ]
-    pool = paper_like if paper_like else relaxed
-    if not pool:
-        return th, None
-    i, gap, _ = max(pool, key=lambda c: (c[1], c[0]))
-    low_v, high_v = float(vals[i]), float(vals[i + 1])
-    filled_t = float(np.clip(low_v + 0.72 * gap, 0.28, 0.70))
-    empty_t = float(np.clip(low_v + 0.28 * gap, 0.06, 0.30))
-    if filled_t - empty_t < 0.10:
-        return th, None
-    new_th = dict(th)
-    new_th["filled"] = round(filled_t, 3)
-    new_th["empty"] = round(empty_t, 3)
-    info = {
-        "applied": True,
-        "gap": round(gap, 3),
-        "paperLevel": round(low_v, 3),
-        "inkLevel": round(high_v, 3),
-        "filled": new_th["filled"],
-        "empty": new_th["empty"],
-    }
-    return new_th, info
+) -> List[Tuple[float, float]]:
+    """Deterministic template-driven fill analysis. Returns [(fillRatio, meanIntensity)]."""
+    out = []
+    H, W = binary.shape[:2]
+    for (xmm, ymm, rmm) in bubbles_mm:
+        cx = int(round(xmm * px_per_mm))
+        cy = int(round(ymm * px_per_mm))
+        r = rmm * px_per_mm
+        r_in = max(2.0, r * 0.9)
+        x0, y0 = max(0, int(cx - r_in)), max(0, int(cy - r_in))
+        x1, y1 = min(W, int(cx + r_in) + 1), min(H, int(cy + r_in) + 1)
+        if x1 <= x0 or y1 <= y0:
+            out.append((0.0, 255.0))
+            continue
+        crop = binary[y0:y1, x0:x1]
+        gray_crop = warped[y0:y1, x0:x1]
+        yy, xx = np.mgrid[y0:y1, x0:x1]
+        mask = (xx - cx) ** 2 + (yy - cy) ** 2 <= r_in**2
+        total = int(mask.sum())
+        if total == 0:
+            out.append((0.0, 255.0))
+            continue
+        dark = int(np.count_nonzero(crop & mask.astype(np.uint8) if crop.dtype == np.uint8 else (crop > 0) & mask))
+        mean_i = float(gray_crop[mask].mean()) if gray_crop.size else 255.0
+        out.append((dark / total, mean_i))
+    return out
 
 
 def decide_answer(
     ratios: Dict[str, float],
     th: Dict[str, float],
-    covers: Optional[Dict[str, float]] = None,
 ) -> Dict[str, Any]:
     """Answer determination with calibrated thresholds.
-    States: selected / unanswered / multiple / unclear — never force ambiguity.
-
-    Rules (in order):
-    1. top1 < empty -> unanswered, UNLESS a thin intentional stroke is
-       present (stroke-cover high while mean darkness is low — cross-outs,
-       ticks): then unclear for human review instead of a silent blank.
-    2. top1 & top2 both >= filled           -> multiple
-    3. near-tie at the top (top2 within
-       ambiguousMargin of filled and top1
-       within ambiguousMargin of top2)      -> unclear (human review)
-    4. top1 straddles the filled threshold
-       (±borderZone)                        -> unclear (human review)
-    5. top1 >= filled                      -> selected, confidence from
-       the margin over the runner-up."""
+    States: selected / unanswered / multiple / unclear — never force ambiguity."""
     filled = th["filled"]
     empty = th["empty"]
     min_abs = th.get("minAbsoluteFill", 0.08)
-    amb = float(th.get("ambiguousMargin", 0.10))
-    border = float(th.get("borderZone", 0.02))
     items = sorted(ratios.items(), key=lambda kv: -kv[1])
     top1_letter, top1 = items[0]
     top2 = items[1][1] if len(items) > 1 else 0.0
     margin = top1 - top2
 
     if top1 < empty:
-        cov = covers or {}
-        cov1 = float(cov.get(top1_letter, 0.0))
-        cov2 = float(cov.get(items[1][0], 0.0)) if len(items) > 1 else 0.0
-        stroke1 = cov1 >= 0.12 and top1 >= 0.045
-        stroke2 = cov2 >= 0.12 and top2 >= 0.045
-        # A genuine thin mark stands out from the row BOTH in mean darkness
-        # and in stroke coverage. Warp misalignment leaves ring fragments on
-        # EVERY bubble (similar cover, near-tie ratios) — that noise must
-        # stay unanswered, not flood the review queue.
-        if stroke1 and (stroke2 or (margin >= 0.03 and cov1 - cov2 >= 0.06)):
-            # thin intentional mark below the fill threshold — send to review
-            return {"detected": None, "status": "unclear", "confidence": 0.3}
-        return {"detected": None, "status": "unanswered", "confidence": round(max(0.0, min(1.0, 1.0 - top1 / max(empty, 1e-6))), 3)}
+        return {"detected": None, "status": "unanswered", "confidence": max(0.0, min(1.0, 1.0 - top1 / max(empty, 1e-6)))}
     if top1 >= filled and top2 >= filled:
-        return {"detected": None, "status": "multiple", "confidence": round(max(0.5, min(1.0, 0.5 + margin / 0.4)), 3)}
-    if top1 >= filled and margin < amb and top2 >= filled - amb:
-        # near-tie single mark — genuinely ambiguous, never force a letter
-        return {"detected": None, "status": "unclear", "confidence": round(float(np.clip(0.5 - margin / max(amb, 1e-6) * 0.25, 0.25, 0.5)), 3)}
-    if abs(top1 - filled) <= border:
-        return {"detected": None, "status": "unclear", "confidence": 0.35}
+        return {"detected": None, "status": "multiple", "confidence": max(0.0, min(1.0, 0.2 + margin / filled * 0.3))}
     if top1 >= filled:
         if top1 < min_abs:
             return {"detected": None, "status": "unclear", "confidence": 0.3}
@@ -1146,11 +648,11 @@ def decide_answer(
 # ---------------- Student ID ----------------
 
 def analyze_student_id(
+    binary: np.ndarray,
     warped: np.ndarray,
     sid: Optional[Dict[str, Any]],
     th: Dict[str, float],
     px_per_mm: float,
-    ink_ref: Optional[float] = None,
 ) -> Optional[Dict[str, Any]]:
     if not sid:
         return None
@@ -1158,17 +660,15 @@ def analyze_student_id(
     for x in sid["digitColumnXs"]:
         for y in sid["valueYs"]:
             bubbles.append((x, y, sid["bubbleRMm"]))
-    ratios = bubble_fill_ratios(warped, bubbles, px_per_mm, ink_ref)
+    ratios = bubble_fill_ratios(binary, warped, bubbles, px_per_mm)
     per_digit = []
     digits = ""
     confs = []
     for d, x in enumerate(sid["digitColumnXs"]):
         col = {}
-        cov_col = {}
         for v, y in enumerate(sid["valueYs"]):
             col[str(v)] = ratios[d * len(sid["valueYs"]) + v][0]
-            cov_col[str(v)] = ratios[d * len(sid["valueYs"]) + v][2]
-        dec = decide_answer(col, th, cov_col)
+        dec = decide_answer(col, th)
         status = dec["status"]
         if status == "unanswered":
             value = ""  # nothing marked in this column
@@ -1267,8 +767,6 @@ def render_corrected(warped: np.ndarray, max_w: int = 1200) -> str:
 
 def process(payload: Dict[str, Any]) -> Dict[str, Any]:
     t0 = time.time()
-    global _QR_SECRET
-    _QR_SECRET = payload.get("qrSecret") if isinstance(payload.get("qrSecret"), str) else None
     stages = {
         "imageLoaded": False, "preprocessed": False, "sheetDetected": False,
         "perspectiveCorrected": False, "orientationFixed": False, "templateIdentified": False,
@@ -1279,10 +777,6 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
     req_th = payload.get("thresholds")
     if req_th:
         th.update({k: float(v) for k, v in req_th.items() if v is not None})
-    # Metric-consistency floor: in the normalized mean-darkness metric paper
-    # noise tops out ~0.18 while the lightest real marks start ~0.25 — keep
-    # `empty` at least EMPTY_FLOOR so erased ghosts never read as answers.
-    th["empty"] = max(float(th.get("empty", 0.17)), EMPTY_FLOOR)
     debug = bool(payload.get("debug", False))
     warnings: List[str] = []
     errors: List[str] = []
@@ -1317,21 +811,7 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     _debug_b64 = None
     try:
-        raw_b64 = payload.get("imageBase64", "")
-        pdf_b64 = payload.get("pdfBase64", "")
-        if (not raw_b64 or not isinstance(raw_b64, str)) and pdf_b64:
-            # PDF input: rasterize ONE page (pageIndex, default 0) → process.
-            page_index = int(payload.get("pageIndex") or 0)
-            dpi = int(payload.get("pdfDpi") or 220)
-            rendered = pdf_pages(pdf_b64, dpi=dpi, from_page=page_index, max_pages=1)
-            if not rendered["pages"]:
-                return {"ok": False, "stage": "imageLoaded",
-                        "error": f"pageIndex {page_index} out of range (pdf has {rendered['total']} pages)",
-                        "stages": stages, "diagnostics": diag}
-            raw_b64 = rendered["pages"][0]
-            diag["pdfPage"] = page_index
-            diag["pdfTotalPages"] = rendered["total"]
-        img = load_image_b64(raw_b64)
+        img = load_image_b64(payload.get("imageBase64", ""))
         stages["imageLoaded"] = True
     except ValueError as e:
         return {"ok": False, "stage": "imageLoaded", "error": str(e), "stages": stages, "diagnostics": diag}
@@ -1346,151 +826,29 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:  # noqa: BLE001
         return fail("preprocessed", f"preprocessing failed: {e}")
 
-    # ---- Pre-rotation (90° multiples, order-independent cue) ----
-    # Primary cue: the QR CENTER QUADRANT relative to the printed-marker
-    # centroid. The QR is ALWAYS printed top-left (24,24)mm on the sheet, so
-    # its position tells the rotation WITHOUT relying on OpenCV's QR corner
-    # ORDER (verified orientation-dependent: a 90°-rotated sheet decoded with
-    # image-axes corner ordering, which made the old angle cue misread 90°
-    # as 0° and polluted the homography).
-    # Residual skew (any angle) is then corrected by the marker homography.
-    # Fallbacks: QR-corner angle (only when markers are absent entirely) and
-    # printed-marker geometry (BR is the smallest marker). Skipped in manual
-    # mode: the user's 4 clicks define the upright frame.
-    markers_pre: Optional[List[Tuple[float, float, float]]] = (
-        None if manual_markers else find_corner_markers(gray)
-    )
+    # ---- Pre-rotation from the QR local frame (rotation-invariant cue) ----
+    # Skipped in manual mode: the user's 4 clicks define the upright frame.
     qr_pre = None if manual_markers else try_qr(gray, raw_gray)
-    pre_rot = 0.0
-    qr_known: Optional[Dict[str, Any]] = None
-
-    def carry_across_rot(k: int, h0: int, w0: int) -> None:
-        """Carry the decoded QR pts AND detected marker centers across a
-        lossless rot90 so build_homography needs no re-decode/re-detection."""
-        nonlocal qr_known, markers_pre
-        if qr_pre and qr_pre.get("parsed"):
-            qr_known = {
-                **qr_pre,
-                "pts": _rot90_pts(qr_pre["pts"], k, w0, h0).astype(np.float32),
-            }
-        if markers_pre:
-            carried: List[Tuple[float, float, float]] = []
-            for mx, my, msz in markers_pre:
-                p = _rot90_pts(np.array([[mx, my]], dtype=np.float32), k, w0, h0)
-                carried.append((float(p[0, 0]), float(p[0, 1]), msz))
-            markers_pre = carried
-
-    if qr_pre and qr_pre.get("parsed") and markers_pre and len(markers_pre) >= 2:
-        mcx = float(np.mean([m[0] for m in markers_pre]))
-        mcy = float(np.mean([m[1] for m in markers_pre]))
-        qcx = float(np.mean(qr_pre["pts"][:, 0]))
-        qcy = float(np.mean(qr_pre["pts"][:, 1]))
-        if qcx < mcx and qcy < mcy:
-            k = 0
-        elif qcx >= mcx and qcy < mcy:
-            k = 1
-        elif qcx >= mcx and qcy >= mcy:
-            k = 2
-        else:
-            k = 3
-        h0, w0 = gray.shape[:2]
-        if k:
-            gray = np.rot90(gray, k=k).copy()
-            if raw_gray is not None:
-                raw_gray = np.rot90(raw_gray, k=k).copy()
-            diag["preRotationDeg"] = (k * 90) % 360
-            carry_across_rot(k, h0, w0)
-        elif qr_pre and qr_pre.get("parsed"):
-            qr_known = {
-                **qr_pre,
-                "pts": qr_pre["pts"].astype(np.float32),
-            }
-    elif qr_pre and qr_pre.get("parsed") and not markers_pre:
-        # no markers at all: fall back to the QR corner-angle cue (ordering
-        # is unreliable but it is the only rotation evidence available)
+    if qr_pre and qr_pre.get("parsed"):
         v = qr_pre["pts"][1] - qr_pre["pts"][0]
         ang = math.degrees(math.atan2(float(v[1]), float(v[0])))
         j = int(round(ang / 90.0)) % 4
-        h0, w0 = gray.shape[:2]
-        if abs(ang - j * 90) <= 2.0:
-            pre_rot = float(j * 90)
-            if j:
-                gray = np.rot90(gray, k=j).copy()
-                if raw_gray is not None:
-                    raw_gray = np.rot90(raw_gray, k=j).copy()
-                diag["preRotationDeg"] = (j * 90) % 360
-            qr_known = {
-                **qr_pre,
-                "pts": _rot90_pts(qr_pre["pts"], j, w0, h0).astype(np.float32),
-            }
-        else:
-            # exact-angle warp (45° and friends)
-            gray, Mrot = _rotate_bound(gray, ang)
+        if j:
+            gray = np.rot90(gray, k=j).copy()
             if raw_gray is not None:
-                raw_gray, _ = _rotate_bound(raw_gray, ang)
-            pre_rot = ang
-            diag["preRotationDeg"] = round(ang % 360, 1)
-            diag["warnings"].append(f"تم تدوير الصورة مسبقًا بمقدار {round(ang, 1)}° (توجيه QR)")
-            pts_t = cv2.perspectiveTransform(
-                qr_pre["pts"].reshape(-1, 1, 2).astype(np.float32), Mrot
-            ).reshape(-1, 2)
-            qr_known = {**qr_pre, "pts": pts_t.astype(np.float32)}
-    elif not manual_markers and not (qr_pre and qr_pre.get("parsed")):
-        # QR unreadable: printed-marker geometry cue (BR is the smallest)
-        mrot = _orientation_from_markers(gray, markers_pre)
-        if mrot:
-            gray, _ = _rotate_bound(gray, mrot)
-            if raw_gray is not None:
-                raw_gray, _ = _rotate_bound(raw_gray, mrot)
-            pre_rot = mrot
-            diag["preRotationDeg"] = round(mrot % 360, 1)
-            diag["warnings"].append(f"تم تدوير الصورة مسبقًا بمقدار {round(mrot, 1)}° (توجيه العلامات)")
-            # markers were detected pre-warp — force re-detection on the
-            # rotated frame (positions no longer match)
-            markers_pre = None
+                raw_gray = np.rot90(raw_gray, k=j).copy()
+            diag["preRotationDeg"] = (j * 90) % 360
 
     # Sheet detection + perspective correction (manual > markers + QR-assisted).
     px_per_mm = 300 / 25.4
-    M, size_px, wdiag = build_homography(
-        gray, template, px_per_mm, raw_gray=raw_gray, manual_markers=manual_markers,
-        qr_preknown=qr_known, markers_preknown=markers_pre,
-    )
+    M, size_px, wdiag = build_homography(gray, template, px_per_mm, raw_gray=raw_gray, manual_markers=manual_markers)
     diag.update(wdiag)
     if wdiag.get("strategy"):
         diag["strategy"] = wdiag["strategy"]
-    diag["markersFound"] = 4 if manual_markers else int(wdiag.get("markersFound") or 0)
-
-    # No alignment cues at all (no markers, no QR, no visible page boundary):
-    # fullframe mapping is only trustworthy for PDF input (page == frame
-    # exactly) — for photos it produces silently-garbled bubble reads. Fail
-    # with an actionable message instead of returning a wrong result.
-    if (
-        not manual_markers
-        and wdiag.get("strategy") == "fullframe"
-        and diag.get("pdfPage") is None
-    ):
-        stages["sheetDetected"] = False
-        return fail(
-            "sheetDetected",
-            "لم يتمكن المحرك من تحديد حدود الورقة — تأكد من ظهور الورقة كاملة داخل الكادر (العلامات المرجعية الأربع ورمز QR) وإعادة التصوير بإضاءة جيدة",
-        )
-
+    diag["markersFound"] = 4 if manual_markers else len(find_corner_markers(gray) or [])
     stages["sheetDetected"] = True
     warped = warp_with(gray, M, size_px) if M is not None else cv2.resize(gray, (int(size_px[0]), int(size_px[1])))
     stages["perspectiveCorrected"] = True
-
-    # Aspect guard: a 90°-off quad/marker matching warps the page landscape
-    # (or portrait where landscape was expected). If the warped aspect
-    # contradicts the template page, rotate losslessly before measurement —
-    # else every bubble coordinate would be out of page bounds.
-    if template:
-        pg = template.get("page") or A4
-        pw_mm, ph_mm = float(pg.get("widthMm") or 210), float(pg.get("heightMm") or 297)
-        w_h, w_w = warped.shape[:2]
-        if (w_w > w_h) != (pw_mm > ph_mm):
-            warped = np.rot90(warped).copy()
-            diag["aspectRot90"] = True
-            warnings.append("تم تدوير الورقة المصححة هندسيًا لتطابق اتجاه القالب")
 
     if manual_markers:
         # Trust the user's clicks: no self-heal (it would override their exact
@@ -1588,6 +946,7 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
     sheet_questions = [q for q in all_q if q.get("sheet", 0) == sheet]
     if not sheet_questions:
         return fail("bubblesLoaded", f"no questions found for sheet {sheet}")
+    binary = _adaptive(warped, px_per_mm)
     stages["bubblesLoaded"] = True
 
     # Question bubbles
@@ -1597,31 +956,16 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
         for letter, pos in q["options"].items():
             bubbles.append((pos["x"], pos["y"], q["radiusMm"]))
             idx_map.append((q["number"], letter))
-    ink_ref = estimate_ink_ref(warped)
-    diag["inkRef"] = round(float(ink_ref), 1)
-    ratios = bubble_fill_ratios(warped, bubbles, px_per_mm, ink_ref)
+    ratios = bubble_fill_ratios(binary, warped, bubbles, px_per_mm)
 
     per_q: Dict[int, Dict[str, float]] = {}
-    per_cov: Dict[int, Dict[str, float]] = {}
-    for (num, letter), (r, _mean, cov_v) in zip(idx_map, ratios):
+    for (num, letter), (r, mean_i) in zip(idx_map, ratios):
         per_q.setdefault(num, {})[letter] = r
-        per_cov.setdefault(num, {})[letter] = cov_v
-
-    # Page-adaptive threshold calibration (largest bimodal gap) — falls back
-    # to the template/request rails on degenerate sheets.
-    if payload.get("pageCalibration") is not False:
-        th, cal = calibrate_thresholds([r for r, _m, _c in ratios], th)
-        if cal:
-            diag["pageCalibration"] = cal
-            warnings.append(
-                f"تمت معايرة العتبات تلقائيًا لهذه الورقة (filled={cal['filled']}, empty={cal['empty']})"
-            )
-    diag["thresholdsUsed"] = th
 
     answers = []
     confs = []
     for num in sorted(per_q.keys()):
-        dec = decide_answer(per_q[num], th, per_cov.get(num))
+        dec = decide_answer(per_q[num], th)
         answers.append({
             "number": num,
             "ratios": {k: round(v, 4) for k, v in per_q[num].items()},
@@ -1633,7 +977,7 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
             confs.append(dec["confidence"])
 
     # Global sanity
-    all_ratios = [r for r, _m, _c in ratios]
+    all_ratios = [r for r, _ in ratios]
     median_fill = float(np.median(all_ratios)) if all_ratios else 0.0
     p95 = float(np.percentile(all_ratios, 95)) if all_ratios else 0.0
     diag["fillStats"] = {"medianEmpty": round(median_fill, 4), "p95Empty": round(p95, 4)}
@@ -1648,7 +992,7 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
     # Student ID (sheet 0 only)
     student_id = None
     if sheet == 0:
-        student_id = analyze_student_id(warped, template.get("studentId"), th, px_per_mm, ink_ref)
+        student_id = analyze_student_id(binary, warped, template.get("studentId"), th, px_per_mm)
 
     # Grade
     answer_key = payload.get("answerKey")
@@ -1688,13 +1032,41 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def ocr(image_b64: str, lang: str) -> Dict[str, Any]:
-    """Delegate to the dedicated engine.ocr module.
+    import os
+    import subprocess
+    import tempfile
 
-    The full implementation (bundled tessdata with Arabic `ara`, mixed
-    `ara+eng` passes, TSV word-confidence self-assessment) lives in
-    engine/ocr.py — see that file. Kept as a thin re-export so the
-    server import path `from engine.pipeline import ocr` stays stable.
-    """
-    from engine.ocr import ocr as _tesseract_ocr
-
-    return _tesseract_ocr(image_b64, lang)
+    if lang not in ("eng", "ara"):
+        return {"ok": False, "error": "lang must be 'eng' or 'ara'", "engine": "tesseract"}
+    tesseract_cmd = os.environ.get("TESSERACT_CMD", "tesseract")
+    tessdata_dir = os.environ.get("TESSDATA_DIR")
+    list_cmd = [tesseract_cmd]
+    if tessdata_dir:
+        list_cmd.extend(["--tessdata-dir", tessdata_dir])
+    list_cmd.append("--list-langs")
+    try:
+        lang_result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=15)
+    except FileNotFoundError:
+        return {"ok": False, "error": "Tesseract executable is not installed", "engine": "tesseract"}
+    if lang_result.returncode != 0:
+        return {"ok": False, "error": lang_result.stderr.strip()[:400] or "Tesseract could not load language data", "engine": "tesseract"}
+    installed = {line.strip() for line in lang_result.stdout.splitlines()}
+    if lang not in installed:
+        return {"ok": False, "error": f"tesseract language '{lang}' not installed", "engine": "tesseract"}
+    if "," in image_b64 and image_b64.strip().startswith("data:"):
+        image_b64 = image_b64.split(",", 1)[1]
+    buf = base64.b64decode(image_b64)
+    with tempfile.TemporaryDirectory() as td:
+        inp = os.path.join(td, "in.png")
+        out = os.path.join(td, "out")
+        with open(inp, "wb") as f:
+            f.write(buf)
+        cmd = [tesseract_cmd, inp, out, "-l", lang, "--psm", "6"]
+        if tessdata_dir:
+            cmd.extend(["--tessdata-dir", tessdata_dir])
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        if proc.returncode != 0:
+            return {"ok": False, "error": proc.stderr.strip()[:400], "engine": "tesseract"}
+        with open(out + ".txt", "r", encoding="utf-8") as f:
+            text = f.read()
+    return {"ok": True, "engine": "tesseract", "text": text}

@@ -1,0 +1,17 @@
+# OMR recognition engine runtime dependencies — ROOT-LEVEL manifest.
+#
+# Why two requirements files?
+#   - THIS file is consumed by the self-hosting flow in .zscripts/
+#     (.zscripts/dev.sh pip-installs it into the sandbox venv;
+#     .zscripts/python-runtime-build.sh freezes it into the Python
+#     runtime bundle). It only lists the engine's hard runtime deps.
+#   - mini-services/omr-engine/requirements.txt is the manifest baked
+#     into the deployable engine image (Dockerfile COPY requirements.txt;
+#     Tesseract itself is installed there via apt, not pip).
+#
+# Vercel never reads this file (the app itself is Next.js/Node); a root
+# Python manifest does not switch Vercel's build detection. If a future
+# Vercel build log ever shows Python detection, delete this file and
+# point .zscripts at the engine-local manifest instead.
+numpy>=2.0,<3
+opencv-python-headless>=4.10,<5

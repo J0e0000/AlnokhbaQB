@@ -14,30 +14,18 @@ import {
   type AttemptQuestion,
 } from '@/lib/qb/online';
 import { readJsonBody, serverError } from '../../_lib/shared';
-import { requireSession } from '../../_lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 type Ctx = { params: Promise<{ id: string }> };
 
-// NOTE: min role 'viewer' — attempt state / autosave are STUDENT-side actions
-// of the online exam flow (any authenticated org member may take an exam).
-export async function GET(req: Request, ctx: Ctx) {
+export async function GET(_req: Request, ctx: Ctx) {
   try {
-    const g = await requireSession('viewer', req);
-    if ('error' in g) return g.error;
     const { id } = await ctx.params;
     let attempt = await db.examAttempt.findUnique({ where: { id } });
     if (!attempt) {
       return NextResponse.json({ error: 'المحاولة غير موجودة' }, { status: 404 });
-    }
-    const exam = await db.exam.findUnique({ where: { id: attempt.examId } });
-    if (g.session.role !== 'super_admin' && exam?.organizationId !== g.session.orgId) {
-      return NextResponse.json(
-        { error: 'غير موجود أو لا تملك صلاحية الوصول' },
-        { status: 404 }
-      );
     }
     if (attempt.status === 'active' && isExpired(attempt.expiresAt)) {
       await finalizeAttempt(attempt.id, 'expired');
@@ -47,6 +35,7 @@ export async function GET(req: Request, ctx: Ctx) {
       }
     }
     const questions = JSON.parse(attempt.questionsJson) as AttemptQuestion[];
+    const exam = await db.exam.findUnique({ where: { id: attempt.examId } });
     return NextResponse.json({
       serverNow: new Date().toISOString(),
       attempt: {
@@ -72,19 +61,10 @@ export async function GET(req: Request, ctx: Ctx) {
 
 export async function PATCH(req: Request, ctx: Ctx) {
   try {
-    const g = await requireSession('viewer', req);
-    if ('error' in g) return g.error;
     const { id } = await ctx.params;
     const attempt = await db.examAttempt.findUnique({ where: { id } });
     if (!attempt) {
       return NextResponse.json({ error: 'المحاولة غير موجودة' }, { status: 404 });
-    }
-    const exam = await db.exam.findUnique({ where: { id: attempt.examId } });
-    if (g.session.role !== 'super_admin' && exam?.organizationId !== g.session.orgId) {
-      return NextResponse.json(
-        { error: 'غير موجود أو لا تملك صلاحية الوصول' },
-        { status: 404 }
-      );
     }
 
     // ---- expiry enforcement (authoritative) ----
@@ -108,6 +88,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     }
 
     const body = await readJsonBody(req);
+    const exam = await db.exam.findUnique({ where: { id: attempt.examId } });
 
     // ---- security event (PHASE 4) ----
     const eventType = normalizeSecurityType(body?.securityEvent);

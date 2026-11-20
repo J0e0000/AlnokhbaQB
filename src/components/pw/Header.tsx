@@ -10,9 +10,13 @@ export function Header() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setDark(document.documentElement.classList.contains('dark'));
-    setRtl(document.documentElement.dir === 'rtl');
-    setMounted(true);
+    // Defer sync-with-DOM state out of the effect body (no cascading render).
+    const t = setTimeout(() => {
+      setDark(document.documentElement.classList.contains('dark'));
+      setRtl(document.documentElement.dir === 'rtl');
+      setMounted(true);
+    }, 0);
+    return () => clearTimeout(t);
   }, []);
 
   const toggleTheme = () => {

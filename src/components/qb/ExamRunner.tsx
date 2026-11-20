@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
@@ -248,7 +248,7 @@ export default function ExamRunner({ attempt, onExit }: { attempt: StartedAttemp
   return (
     <div className="mx-auto max-w-3xl space-y-3" dir="rtl">
       {/* sticky status bar */}
-      <div className="sticky top-16 z-30 rounded-2xl border bg-white/95 p-4 shadow-sm backdrop-blur">
+      <div className="sticky top-16 z-30 rounded-xl border bg-white/95 p-3 shadow-sm backdrop-blur">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <div className="truncate text-sm font-bold">{attempt.examTitle}</div>
@@ -272,7 +272,7 @@ export default function ExamRunner({ attempt, onExit }: { attempt: StartedAttemp
 
       {/* question card */}
       {question && (
-        <div className="rounded-2xl border bg-white p-4">
+        <div className="rounded-xl border bg-white p-4">
           <div className="mb-3 flex items-center justify-between">
             <Badge className="bg-emerald-600">سؤال {question.number} من {attempt.questions.length}</Badge>
             <Badge variant="outline">{question.marks} درجة</Badge>
@@ -312,7 +312,7 @@ export default function ExamRunner({ attempt, onExit }: { attempt: StartedAttemp
             التالي <ChevronLeft className="h-4 w-4" />
           </Button>
         ) : (
-          <Button size="sm" className="btn-primary-grad gap-1 border-0 text-white" onClick={() => setConfirmOpen(true)}>
+          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setConfirmOpen(true)}>
             <Send className="h-4 w-4" /> تسليم
           </Button>
         )}
@@ -324,17 +324,14 @@ export default function ExamRunner({ attempt, onExit }: { attempt: StartedAttemp
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent className="max-w-sm" dir="rtl">
-          <DialogHeader>
-            <DialogTitle className="text-right">تأكيد التسليم</DialogTitle>
-            <DialogDescription className="text-right">راجع عدد الأسئلة المُجابة قبل تسليم محاولتك نهائيًا.</DialogDescription>
-          </DialogHeader>
+          <DialogHeader><DialogTitle className="text-right">تأكيد التسليم</DialogTitle></DialogHeader>
           <p className="text-sm text-slate-600">
             أجبت على {answeredCount} من {attempt.questions.length} سؤال.
             {answeredCount < attempt.questions.length && ' الأسئلة غير المجابة ستُحسب فارغة.'}
             بعد التسليم لا يمكن التعديل.
           </p>
           <div className="flex gap-2">
-            <Button className="btn-primary-grad flex-1 border-0 text-white" disabled={submitBusy} onClick={() => { setConfirmOpen(false); void doSubmit(false); }}>
+            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" disabled={submitBusy} onClick={() => { setConfirmOpen(false); void doSubmit(false); }}>
               {submitBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'تسليم نهائي'}
             </Button>
             <Button variant="outline" onClick={() => setConfirmOpen(false)}>متابعة الحل</Button>
@@ -376,7 +373,7 @@ function ResultScreen({ result, attempt, onExit }: { result: SubmitResult; attem
       {result.review && Object.keys(result.review).length > 0 && (
         <div className="rounded-2xl border bg-white p-4">
           <div className="mb-2 text-sm font-bold">مراجعة الإجابات</div>
-          <div className="max-h-96 space-y-2 overflow-y-auto pe-1">
+          <div className="max-h-96 space-y-2 overflow-y-auto pl-1">
             {attempt.questions.map((q) => {
               const mine = result.answers[String(q.number)];
               const key = result.review[String(q.number)];

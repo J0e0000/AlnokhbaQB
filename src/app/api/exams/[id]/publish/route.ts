@@ -6,32 +6,24 @@
 
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { audit } from '@/lib/auth';
 import { buildOmrTemplate } from '@/lib/qb/omr-template';
 import { sanitizeAnswerKey, sanitizeDocument } from '@/lib/qb/schema';
 import type { OMRTemplate } from '@/lib/qb/types';
-import { requireSession } from '../../../_lib/auth-guard';
 import { serverError } from '../../../_lib/shared';
+
+export const maxDuration = 60;
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function POST(req: Request, ctx: Ctx) {
+export async function POST(_req: Request, ctx: Ctx) {
   try {
-    const g = await requireSession('teacher', req);
-    if ('error' in g) return g.error;
     const { id } = await ctx.params;
     const exam = await db.exam.findUnique({ where: { id } });
     if (!exam) {
       return NextResponse.json({ error: 'الامتحان غير موجود' }, { status: 404 });
-    }
-    if (g.session.role !== 'super_admin' && exam.organizationId !== g.session.orgId) {
-      return NextResponse.json(
-        { error: 'غير موجود أو لا تملك صلاحية الوصول' },
-        { status: 404 }
-      );
     }
     if (exam.status === 'ARCHIVED') {
       return NextResponse.json({ error: 'لا يمكن نشر امتحان مؤرشف' }, { status: 409 });
@@ -89,15 +81,6 @@ export async function POST(req: Request, ctx: Ctx) {
         status: 'PUBLISHED',
         omrEnabled: document.omr.enabled,
       },
-    });
-
-    await audit({
-      session: g.session,
-      action: 'exam.publish',
-      entity: 'exam',
-      entityId: exam.id,
-      meta: { title: exam.title, version: versionNumber },
-      req,
     });
 
     return NextResponse.json({

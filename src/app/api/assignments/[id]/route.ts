@@ -9,7 +9,6 @@ import path from 'path';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { readJsonBody, serverError } from '../../_lib/shared';
-import { requireSession } from '../../_lib/auth-guard';
 import { parseDueDate, publicAssignment, publicSubmission } from '@/lib/qb/assignments';
 
 export const runtime = 'nodejs';
@@ -17,10 +16,8 @@ export const dynamic = 'force-dynamic';
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function GET(req: Request, ctx: Ctx) {
+export async function GET(_req: Request, ctx: Ctx) {
   try {
-    const g = await requireSession('viewer', req);
-    if ('error' in g) return g.error;
     const { id } = await ctx.params;
     const a = await db.assignment.findUnique({
       where: { id },
@@ -31,12 +28,6 @@ export async function GET(req: Request, ctx: Ctx) {
     });
     if (!a) {
       return NextResponse.json({ error: 'الواجب غير موجود' }, { status: 404 });
-    }
-    if (g.session.role !== 'super_admin' && a.organizationId !== g.session.orgId) {
-      return NextResponse.json(
-        { error: 'غير موجود أو لا تملك صلاحية الوصول' },
-        { status: 404 }
-      );
     }
     return NextResponse.json({
       assignment: publicAssignment({ ...a, _count: { submissions: a.submissions.length } }),
@@ -50,8 +41,6 @@ export async function GET(req: Request, ctx: Ctx) {
 
 export async function PATCH(req: Request, ctx: Ctx) {
   try {
-    const g = await requireSession('teacher', req);
-    if ('error' in g) return g.error;
     const { id } = await ctx.params;
     const body = await readJsonBody(req);
     if (!body) {
@@ -61,12 +50,6 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const existing = await db.assignment.findUnique({ where: { id } });
     if (!existing) {
       return NextResponse.json({ error: 'الواجب غير موجود' }, { status: 404 });
-    }
-    if (g.session.role !== 'super_admin' && existing.organizationId !== g.session.orgId) {
-      return NextResponse.json(
-        { error: 'غير موجود أو لا تملك صلاحية الوصول' },
-        { status: 404 }
-      );
     }
 
     const data: {
@@ -108,10 +91,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 }
 
-export async function DELETE(req: Request, ctx: Ctx) {
+export async function DELETE(_req: Request, ctx: Ctx) {
   try {
-    const g = await requireSession('teacher', req);
-    if ('error' in g) return g.error;
     const { id } = await ctx.params;
     const existing = await db.assignment.findUnique({
       where: { id },
@@ -119,12 +100,6 @@ export async function DELETE(req: Request, ctx: Ctx) {
     });
     if (!existing) {
       return NextResponse.json({ error: 'الواجب غير موجود' }, { status: 404 });
-    }
-    if (g.session.role !== 'super_admin' && existing.organizationId !== g.session.orgId) {
-      return NextResponse.json(
-        { error: 'غير موجود أو لا تملك صلاحية الوصول' },
-        { status: 404 }
-      );
     }
     await db.assignment.delete({ where: { id } });
     // best-effort disk cleanup (DB cascade removes the rows; files follow)

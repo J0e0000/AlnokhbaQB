@@ -6,17 +6,23 @@
 
 import { NextResponse } from 'next/server';
 import { processDocument } from '@/lib/qb/ocr/engine';
+import { clientIp, rateLimit } from '@/lib/auth/ratelimit';
 import { readJsonBody, serverError, stripDataUrl } from '../_lib/shared';
-import { requireSession } from '../_lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// NOTE: role check only — OCR produces no persisted org data (extraction → teacher).
 export async function POST(req: Request) {
+  // heavy OCR route — 30 req/min per client (auth gate)
+  const rl = await rateLimit(`ocr:${clientIp(req)}`, 30, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'عدد كبير من الطلبات — خفّف السرعة وحاول بعد قليل' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+    );
+  }
+
   try {
-    const g = await requireSession('teacher', req);
-    if ('error' in g) return g.error;
     const body = await readJsonBody(req);
     const rawImage = typeof body?.imageBase64 === 'string' ? body.imageBase64 : '';
     if (!rawImage) {
@@ -44,15 +50,9 @@ export async function POST(req: Request) {
         error:
           lang === 'ara'
             ? 'فشل التعرف الضوئي باللغة العربية في المحرك وفي النموذج البديل'
-            : result.stage === 'engineError' || result.stage === 'engineEmpty'
-              ? 'فشل التعرف الضوئي — تعذر الوصول إلى محرك OCR من هذه الاستضافة'
-              : result.error || 'فشل التعرف الضوئي في المحرك',
+            : result.error || 'فشل التعرف الضوئي في المحرك',
         stage: result.stage ?? 'engineError',
         details: result.error,
-        hint:
-          result.stage === 'engineError' || result.stage === 'engineEmpty'
-            ? 'تعذر الوصول إلى محرك OCR من هذه الاستضافة — اضبط OMR_ENGINE_URL على مضيف يحتوي tesseract (انظر mini-services/omr-engine/Dockerfile) أو استخدم استضافة تدعم نموذج الرؤية.'
-            : undefined,
         needsReview: true,
       },
       result.stage === 'noProcessor' || result.stage === 'engineUnreachable' ? { status: 503 } : { status: 502 }

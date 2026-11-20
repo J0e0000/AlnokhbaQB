@@ -1,35 +1,16 @@
 import type { NextConfig } from "next";
 
-// `output: "standalone"` serves the SELF-HOSTED artifact (z.ai publish flow,
-// VPS /app/next-service-dist, Docker). On Vercel the platform bundles server
-// functions itself and the runtime FS is read-only — keep the default output
-// there so its builder behaves normally.
-const isVercel = !!process.env.VERCEL;
-
 const nextConfig: NextConfig = {
-  ...(isVercel ? {} : { output: "standalone" as const }),
-  // OMR batch uploads ship whole scanned-stacks as base64 PDFs (40MB cap in
-  // the route) — raise the middleware body limit so they aren't truncated.
-  experimental: {
-    middlewareClientMaxBodySize: "50mb",
-  },
-  // Files read at RUNTIME via fs.* (invisible to static import tracing):
-  //  - db/custom.db          → serverless bootstrap copies it into /tmp
-  //                            (src/lib/db.ts)
-  //  - public/fonts/*.woff2  → PDF renderer inlines them as data: URLs
-  //                            (src/lib/pdf/pool.ts)
-  //  - @sparticuz/chromium   → serverless Chromium ships as compressed assets
-  //                            inside its package dir, extracted to /tmp on
-  //                            first launch (src/lib/pdf/pool.ts)
+  output: "standalone",
+  serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
   outputFileTracingIncludes: {
-    "/**": ["./db/custom.db", "./public/fonts/**"],
-    "/api/health": ["./node_modules/@sparticuz/chromium/**"],
-    "/api/exams/[id]/pdf": ["./node_modules/@sparticuz/chromium/**"],
-    "/api/versions/[id]/pdf": ["./node_modules/@sparticuz/chromium/**"],
-    "/api/versions/[id]/omr-png": ["./node_modules/@sparticuz/chromium/**"],
+    "/api/**": ["./node_modules/@sparticuz/chromium/bin/**", "./public/fonts/**"],
   },
+  /* config options here */
   typescript: {
-    ignoreBuildErrors: true,
+    // CI runs `tsc --noEmit` as a blocking gate (see .github/workflows/ci.yml);
+    // build must NOT silently ignore type errors anymore.
+    ignoreBuildErrors: false,
   },
   reactStrictMode: false,
 };

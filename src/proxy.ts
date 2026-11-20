@@ -1,54 +1,50 @@
 // ============================================================
-// ALNOKHBA QB — proxy (Next.js 16 convention, Node runtime)
-// Authenticates every /api/* request (except public endpoints)
-// with the session JWT. Page requests fall through — the client
-// app shows the login view when unauthenticated.
-// (renamed from middleware.ts — Node-native proxy is also REQUIRED
-// for Vercel Services mode, which rejects Edge runtime output)
+// ALNOKHBA QB — proxy (Next.js 16 file convention, Node runtime)
+//
+// Shared-password gate. Every /api/* request and every page request
+// needs a valid qb_session cookie, except:
+//   • /login                 (the gate page itself)
+//   • /api/auth/*            (login/logout)
+//   • /api/health            (public — the route strips internals itself)
+//
+// Unauthenticated /api/* → 401 JSON; pages → redirect to /login.
+// FAIL-OPEN: when APP_PASSWORD/SESSION_SECRET are not set yet the gate
+// is open so a deploy never locks the owner out before the env vars
+// exist. Set both env vars to activate the gate.
+//
+// Matcher note: all of /_next is excluded (not just _next/static and
+// _next/image) — dev-mode HMR endpoints and build assets carry no app
+// data and must never be caught by the redirect.
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { jwtVerify } from 'jose';
+import { authConfigured, verifySessionToken, SESSION_COOKIE } from '@/lib/auth/session';
 
-const SESSION_COOKIE = 'anqb_session';
-const PUBLIC_API = new Set<string>([
-  '/api/auth/login',
-  '/api/auth/register',
-  '/api/auth/me',
-  '/api/health',
-]);
-
-// Pagewise toolkit endpoints are public by design (no account required);
-// queue-level rate limiting still protects them.
-const PUBLIC_PREFIXES = ['/api/pw/'];
-
-const SECRET = new TextEncoder().encode(
-  process.env.AUTH_SECRET || 'alnokhba-qb-dev-secret-change-me-please-32ch'
-);
+const PUBLIC_PATHS = new Set(['/login']);
+const PUBLIC_API_PREFIXES = ['/api/auth/', '/api/health'];
 
 export async function proxy(req: NextRequest) {
+  if (!authConfigured()) return NextResponse.next(); // fail-open until env vars exist
+
   const { pathname } = req.nextUrl;
+  if (PUBLIC_PATHS.has(pathname) || PUBLIC_API_PREFIXES.some((p) => pathname.startsWith(p))) {
+    return NextResponse.next();
+  }
 
-  if (PUBLIC_API.has(pathname)) return NextResponse.next();
-  if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
-
-  const token = req.cookies.get(SESSION_COOKIE)?.value;
-  if (token) {
-    try {
-      await jwtVerify(token, SECRET);
-      return NextResponse.next();
-    } catch {
-      // fall through to 401
-    }
+  if (await verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value)) {
+    return NextResponse.next();
   }
 
   if (pathname.startsWith('/api/')) {
-    return NextResponse.json({ error: 'يجب تسجيل الدخول للمتابعة' }, { status: 401 });
+    return NextResponse.json({ error: 'غير مصرح' }, { status: 401 });
   }
 
-  return NextResponse.next();
+  const url = req.nextUrl.clone();
+  url.pathname = '/login';
+  url.search = `next=${encodeURIComponent(pathname + req.nextUrl.search)}`;
+  return NextResponse.redirect(url);
 }
 
 export const config = {
-  matcher: ['/api/:path*'],
+  matcher: ['/((?!_next|favicon.ico).*)'],
 };

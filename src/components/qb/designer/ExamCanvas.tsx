@@ -258,7 +258,7 @@ export default function ExamCanvas({ page }: { page: number }) {
   };
 
   return (
-    <div className="flex justify-center overflow-auto rounded-2xl bg-slate-200/70 p-6">
+    <div className="flex justify-center overflow-auto rounded-lg bg-secondary/70 p-6">
       <div style={{ width: pageW * scale + 24, height: pageH * scale + 24, position: 'relative', flexShrink: 0 }}>
         <div
           ref={surfaceRef}

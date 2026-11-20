@@ -25,7 +25,7 @@ const safeDataUrl = z
 
 const hexColor = z
   .string()
-  .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|transparent)$/, 'Invalid color')
+  .regex(/^(#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|transparent)$/, 'Invalid color')
   .default('#000000');
 
 const textStyleSchema = z.object({

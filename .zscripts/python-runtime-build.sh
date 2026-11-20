@@ -98,30 +98,6 @@ else
     echo "⚠️  检测到 Python 源码，但没有 requirements.txt 或 pyproject.toml；仅支持 Python 标准库"
 fi
 
-# ---------------------------------------------------------------------------
-# OMR engine (mini-services/omr-engine) — ALWAYS install its pinned deps.
-#
-# WHY: the engine is a Python service started from server.py (spawned by the
-# bundled mini-service-omr-engine.js). Its dependencies live in
-# mini-services/omr-engine/requirements.txt (cv2/numpy/pymupdf), which the
-# app-level requirements handling above never sees (mini-services/ is pruned
-# from the source scan AND the root has no requirements.txt of its own).
-# Without this block the artifact ships a Python runtime WITHOUT OpenCV and
-# server.py dies at import time — every /api/scan request then fails with
-# "engineUnreachable" while /health reports the engine down.
-#
-# start.sh exports /app/python-runtime/site-packages into PYTHONPATH, which
-# the spawned server.py inherits, so installing into $PYTHON_PACKAGES_DIR is
-# sufficient for both the artifact path and manual runs of the bundle.
-# ---------------------------------------------------------------------------
-OMR_ENGINE_REQ="$PROJECT_DIR/mini-services/omr-engine/requirements.txt"
-if [ -f "$OMR_ENGINE_REQ" ]; then
-    echo "📦 安装 OMR engine Python 依赖 (mini-services/omr-engine)..."
-    install_requirements "$OMR_ENGINE_REQ" "$PYTHON_PACKAGES_DIR"
-else
-    echo "ℹ️  未找到 mini-services/omr-engine/requirements.txt — 跳过 OMR engine 依赖"
-fi
-
 if has_python_sources; then
     echo "📄 复制 Python 源码到部署项目，保持相对路径..."
     (

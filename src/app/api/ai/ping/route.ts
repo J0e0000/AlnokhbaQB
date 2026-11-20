@@ -17,7 +17,6 @@
 // backend is dev-only and always reachable locally.
 
 import { NextResponse } from 'next/server';
-import { requireSession } from '../../_lib/auth-guard';
 import { aiStatus } from '@/lib/ai/client';
 
 export const runtime = 'nodejs';
@@ -97,9 +96,6 @@ async function pingModel(
 }
 
 export async function GET(req: Request) {
-  const g = await requireSession('teacher', req);
-  if ('error' in g) return g.error;
-
   const url = new URL(req.url);
   const status = aiStatus();
   if (status.mode !== 'env' || !process.env.AI_API_KEY?.trim()) {

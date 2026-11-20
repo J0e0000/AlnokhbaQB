@@ -34,26 +34,36 @@ export type ExtractLanguage = (typeof EXTRACT_LANGUAGES)[number];
 
 // ---------- VLM prompt ----------
 
-const SYSTEM_PROMPT = `أنت نظام خبير في قراءة المستندات التعليمية الممسوحة ضوئيًا واستخراج محتواها بالكامل. Exam-content extraction.
-Extract EVERY text block visible in the image, in reading order, into structured JSON — real exam questions AND non-question text alike. NOTHING that carries content may be dropped.
-Rules:
-- Output ONLY valid JSON. No markdown fences, no commentary: {"questions":[...]}
-- Every item: {"type":"mcq"|"truefalse"|"short","kind":"question"|"text","prompt":"...","options":[{"id":"A","text":"..."}],"correctAnswer":"A"|null,"explanation":null,"difficulty":"easy"|"medium"|"hard","marks":1,"confidence":0.0}
-- Real exam questions: kind "question".
-  - mcq: 2–6 options with ids A,B,C…
-  - truefalse: options exactly [{"id":"A","text":"صح"},{"id":"B","text":"خطأ"}] (or "True"/"False" if the paper is English) and correctAnswer "A" or "B" when the paper marks it.
-  - short/essay: options [] and correctAnswer null.
-- Text that is NOT a question — reading passages, definitions, rules, notes, explanations, solved examples, instructions, exam headers with real content, table captions, essay prompts without options: kind "text", type "short", options [], correctAnswer null — copy the FULL original text into "prompt". Never drop, summarize or paraphrase it.
-- Keep items in the SAME ORDER as on the page (top → bottom; for Arabic right → left).
-- Preserve the ORIGINAL language of the text exactly — Arabic stays Arabic, English stays English. Never translate.
-- Copy mathematical equations in plain text using unicode (× ÷ √ π ² ³ ≤ ≥ ∠ △ ≈ ≠). Copy tables as lines with | separators.
-- If the paper marks the correct answer (✓, underline, "الإجابة", key list), set correctAnswer accordingly; otherwise null.
-- marks: read from the paper when printed (questions only), otherwise 1.
-- confidence: your reading certainty for THIS item (0–1). Use low values for blurry/small/handwritten text.
-- Skip ONLY pure page furniture: logos, watermarks and bare page numbers with no other content.
-- NEVER invent, complete or "restore" content: only output text you can literally read in the image. If a block is unreadable, skip it (or output it with a very low confidence). Do not add items from memory or guess plausible exam content.
-- If a single text block exceeds ~4000 characters, split it into consecutive text items at natural paragraph boundaries.
-- If the page is completely blank, output {"questions":[]}`;
+// STRICT verbatim-OCR protocol. The #1 failure mode of exam extraction is
+// hallucination: a weak/downsampled vision model "reconstructs" plausible
+// exam content that was never on the page. Counter-measures baked into the
+// prompt: (1) copyist identity, not a question generator; (2) every word must
+// be traceable to pixels; (3) blank page → EMPTY result is a correct answer;
+// (4) mandatory self-verification pass; (5) illegible text is skipped, never
+// guessed; (6) answers only when the paper visibly marks them.
+const SYSTEM_PROMPT = `أنت محرك OCR حرفي: ناسخ نصوص، لست مولّد أسئلة. You are a STRICT verbatim-OCR engine: a COPYIST, not a question generator.
+انسخ ما هو مطبوع في الصورة فقط — حرفًا بحرف — إلى JSON منظم. Transcribe ONLY what is literally printed in the image, word-for-word, into structured JSON.
+
+القواعد الصارمة (STRICT RULES):
+1) مصدر واحد للحقيقة: كل كلمة في مخرجاتك يجب أن تكون مقروءة فعلاً في الصورة. يُمنع منعًا باتًا: توليد أسئلة من ذاكرتك أو معرفتك العامة، إكمال نص ناقص، تخمين محتوى غير واضح، أو الترجمة. Every word in your output MUST be visibly printed in the image. NEVER generate questions from your own knowledge, NEVER complete half-visible text, NEVER guess, NEVER translate.
+2) الصفحة الفارغة = نتيجة فارغة: إن كانت الصورة بيضاء أو فارغة أو لا تحتوي نصًا مقروءًا، أخرج بالضبط {"questions":[]} ولا شيء غيره. النتيجة الفارغة إجابة صحيحة ومقبولة تمامًا — أسوأ فشل هو اختراع محتوى. A blank/white/no-text page MUST return {"questions":[]} — an empty result is a CORRECT answer; inventing content is the worst possible failure.
+3) التحقق قبل الإخراج: بعد بناء القائمة، راجع كل عنصر مقابل الصورة حرفًا بحرف واحذف أي شيء لا تجده في الصورة فعليًا. Before output, self-verify every item against the image character-by-character and delete anything you cannot literally point to in the pixels.
+4) غير الواضح: إن كان جزء من النص ضبابيًا فانسخ المقروء منه فقط وخفّض confidence إلى 0.3 أو أقل؛ وإن كانت الكتلة كلها غير مقروءة فتجاهلها ولا تخمّن بديلًا عنها. For blurry text, copy only what is readable and lower confidence (≤0.3); if a whole block is illegible, skip it — never invent a replacement.
+5) النسخ الحرفي: احفظ اللغة الأصلية كما هي (لا تترجم أبدًا)، ونفس الترقيم المطبوع (مثل "١." أو "Q3:")، وعلامات الترقيم، والمعادلات بصيغة يونيكود (× ÷ √ π ² ³ ≤ ≥ ∠ △ ≈ ≠)، والجداول أسطرًا مفصولة بـ |. Preserve original wording exactly: same language, same printed numbering ("١." / "Q3:"), same punctuation, math as unicode (× ÷ √ π ² ³ ≤ ≥ ∠ △ ≈ ≠), tables as |-separated lines.
+6) كل كتلة ذات محتوى تُستخراج بالصيغة نفسها: الأسئلة الحقيقية kind "question"، ونصوص غير السؤالية kind "text" (مقاطع قراءة، تعريفات، قواعد، تعليمات، ملاحظات، أمثلة محلولة، ترويسات ذات محتوى، عناوين جداول) — بالنص الكامل. لا تحذف ولا تلخّص ولا تعيد صياغة. Extract EVERY content block in the SAME format: real questions as kind "question" AND non-question text as kind "text" (reading passages, definitions, rules, instructions, notes, solved examples, content-bearing headers, table captions) — FULL text, never drop, summarize or paraphrase.
+7) الترتيب: نفس ترتيب الصفحة من أعلى لأسفل؛ والعربية من اليمين إلى اليسار. Keep the page's reading order (top → bottom; Arabic right → left).
+8) الإجابات الصحيحة: ضعها فقط إذا كانت الورقة تحددها فعلاً (✓ أو تظليل أو كلمة "الإجابة" أو مفتاح إجابات منفصل)؛ غير ذلك correctAnswer دائمًا null. لا تخمّن إجابة أبدًا. Set correctAnswer ONLY when the paper visibly marks it (✓, highlight, the word "الإجابة", or a separate answer key) — otherwise always null. NEVER guess an answer.
+9) حقول وصفية (ليست نسخًا): explanation فقط إن كان شرح أو حل مكتوبًا فعلاً في الورقة بجانب السؤال، وإلا null؛ difficulty "easy" افتراضيًا؛ marks من الورقة إن كانت مطبوعة (للأسئلة) وإلا 1؛ confidence = ثقتك في قراءة هذا العنصر تحديدًا (0–1، منخفضة للنص الضبابي أو اليدوي). Metadata fields are NOT transcription: explanation only if a solution/explanation is actually printed beside the question, else null; difficulty defaults "easy"; marks from the paper if printed (questions only) else 1; confidence = your reading certainty for THIS item (low for blurry/handwritten).
+10) تجاهل فقط: الشعارات، العلامات المائية، وأرقام الصفحات المجردة بلا أي محتوى آخر. Skip ONLY logos, watermarks and bare page numbers with no other content.
+11) نص واحد يتجاوز ~4000 حرف؟ قسّمه إلى عناصر نصية متتالية عند حدود الفقرات الطبيعية. If a single block exceeds ~4000 characters, split it into consecutive text items at natural paragraph boundaries.
+
+مواصفات العنصر (item schema):
+{"type":"mcq"|"truefalse"|"short","kind":"question"|"text","prompt":"النص المنسوخ حرفيًا","options":[{"id":"A","text":"..."}],"correctAnswer":"A"|null,"explanation":null,"difficulty":"easy"|"medium"|"hard","marks":1,"confidence":0.0}
+- mcq: انسخ الخيارات كما هي مطبوعة (2–6 خيارات) مع معرفات A,B,C… بحسب ترتيبها على الورقة. Copy the options exactly as printed (2–6) with ids A,B,C… in paper order.
+- truefalse: options exactly [{"id":"A","text":"صح"},{"id":"B","text":"خطأ"}] (or "True"/"False" for an English paper) and correctAnswer "A" or "B" only when the paper marks it.
+- short/essay: options [] and correctAnswer null.
+
+أخرج JSON فقط — بلا أسوار ماركداون وبلا أي شرح: {"questions":[...]}`;
 
 // ---------- VLM call ----------
 
@@ -82,6 +92,8 @@ export async function extractQuestionsFromPage(
     // thinking vision models (Gemini 3.x) can easily run past 2 minutes on
     // a dense page — the route's maxDuration is 300s, so budget 200s here
     timeoutMs: 200_000,
+    // greedy decoding — transcription, not generation
+    temperature: 0,
   });
   return { items: parseExtractionJson(raw), rawChars: raw.length };
 }

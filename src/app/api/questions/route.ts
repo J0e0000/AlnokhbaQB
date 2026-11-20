@@ -15,8 +15,6 @@ import {
   type BankQuestion,
 } from '@/lib/qb/bank';
 import { readJsonBody, serverError, zodMessage } from '../_lib/shared';
-import { requireSession } from '../_lib/auth-guard';
-import { orgFilter } from '@/lib/auth';
 import type { Prisma } from '@prisma/client';
 
 export const runtime = 'nodejs';
@@ -62,8 +60,6 @@ function serialize(row: {
 
 export async function GET(req: Request) {
   try {
-    const g = await requireSession('viewer', req);
-    if ('error' in g) return g.error;
     const url = new URL(req.url);
     const q = url.searchParams.get('q')?.trim() ?? '';
     const subject = url.searchParams.get('subject')?.trim() ?? '';
@@ -74,7 +70,7 @@ export async function GET(req: Request) {
     const page = Math.max(1, Number(url.searchParams.get('page') ?? '1') || 1);
     const pageSize = Math.min(100, Math.max(5, Number(url.searchParams.get('pageSize') ?? '50') || 50));
 
-    const where: Prisma.QuestionWhereInput = { organizationId: orgFilter(g.session) };
+    const where: Prisma.QuestionWhereInput = {};
     if (q) {
       where.OR = [
         { prompt: { contains: q } },
@@ -98,7 +94,6 @@ export async function GET(req: Request) {
       }),
       db.question.count({ where }),
       db.question.findMany({
-        where,
         select: { subject: true, type: true, difficulty: true, tagsJson: true },
       }),
     ]);
@@ -134,8 +129,6 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const g = await requireSession('teacher', req);
-    if ('error' in g) return g.error;
     const body = await readJsonBody(req);
     const parsed = questionInputSchema.safeParse(body);
     if (!parsed.success) {
@@ -147,7 +140,6 @@ export async function POST(req: Request) {
 
     const row = await db.question.create({
       data: {
-        organizationId: g.session.orgId ?? null,
         subject: input.subject?.trim() || null,
         chapter: input.chapter?.trim() || null,
         topic: input.topic?.trim() || null,

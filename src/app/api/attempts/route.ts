@@ -8,10 +8,8 @@
 
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { orgFilter } from '@/lib/auth';
 import { sanitizeDocument } from '@/lib/qb/schema';
 import { buildAttemptQuestions, finalizeAttempt, isExpired, type AttemptQuestion } from '@/lib/qb/online';
-import { requireSession } from '../_lib/auth-guard';
 import { readJsonBody, serverError } from '../_lib/shared';
 import type { QBDocument } from '@/lib/qb/types';
 
@@ -48,13 +46,8 @@ function publicAttempt(a: {
   };
 }
 
-// NOTE: min role is 'viewer' (not 'teacher') — starting an attempt is the
-// STUDENT-side action of the online exam flow; any authenticated org member
-// may take an exam. Authenticated-only was already enforced by middleware.
 export async function POST(req: Request) {
   try {
-    const g = await requireSession('viewer', req);
-    if ('error' in g) return g.error;
     const body = await readJsonBody(req);
     const examId = typeof body?.examId === 'string' ? body.examId : '';
     const studentName = typeof body?.studentName === 'string' ? body.studentName.trim() : '';
@@ -69,12 +62,7 @@ export async function POST(req: Request) {
     let assignment: { id: string; dueAt: Date; latePolicy: string; status: string } | null = null;
     if (assignmentId) {
       const a = await db.assignment.findUnique({ where: { id: assignmentId } });
-      if (
-        !a ||
-        a.mode !== 'graded' ||
-        a.examId !== examId ||
-        (g.session.role !== 'super_admin' && a.organizationId !== g.session.orgId)
-      ) {
+      if (!a || a.mode !== 'graded' || a.examId !== examId) {
         return NextResponse.json({ error: 'الواجب غير صالح لهذا الامتحان' }, { status: 400 });
       }
       if (a.status !== 'open') {
@@ -92,12 +80,6 @@ export async function POST(req: Request) {
     const exam = await db.exam.findUnique({ where: { id: examId } });
     if (!exam) {
       return NextResponse.json({ error: 'الامتحان غير موجود' }, { status: 404 });
-    }
-    if (g.session.role !== 'super_admin' && exam.organizationId !== g.session.orgId) {
-      return NextResponse.json(
-        { error: 'غير موجود أو لا تملك صلاحية الوصول' },
-        { status: 404 }
-      );
     }
     if (exam.status !== 'PUBLISHED' || !exam.onlineEnabled) {
       return NextResponse.json(
@@ -207,24 +189,18 @@ export async function POST(req: Request) {
 
 export async function GET(req: Request) {
   try {
-    const g = await requireSession('viewer', req);
-    if ('error' in g) return g.error;
     const url = new URL(req.url);
     const examId = url.searchParams.get('examId')?.trim() ?? '';
     if (!examId) {
       return NextResponse.json({ error: 'examId مطلوب' }, { status: 400 });
     }
-    const org = orgFilter(g.session);
-    const orgScope = org !== undefined ? { exam: { organizationId: org } } : {};
     // lazily finalize stale active attempts so the monitor always tells the truth
-    const stale = await db.examAttempt.findMany({
-      where: { examId, status: 'active', ...orgScope },
-    });
+    const stale = await db.examAttempt.findMany({ where: { examId, status: 'active' } });
     for (const a of stale) {
       if (isExpired(a.expiresAt)) await finalizeAttempt(a.id, 'expired');
     }
     const rows = await db.examAttempt.findMany({
-      where: { examId, ...orgScope },
+      where: { examId },
       orderBy: { startedAt: 'desc' },
       take: 200,
     });

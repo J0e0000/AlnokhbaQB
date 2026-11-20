@@ -6,7 +6,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: Cairo, Tajawal, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: 'Tajawal', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Amiri', serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -37,91 +38,73 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --color-gold: var(--gold);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-desk: var(--desk);
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-brass: var(--brass);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* ============================================================
-   ALNOKHBA QB — "AMETHYST ROYALE" design system
-   Dark-first luxury identity for the elite brand (النخبة):
-   deep plum-charcoal surfaces, royal amethyst primary,
-   champagne-gold accents, glassmorphism and soft aurora.
-   Light mode ("Royal Ivory") stays fully supported and refined.
-   Hue geometry:  violet ~300 · gold ~80 · red ~25 · neutral ~295
-   ============================================================ */
-
+/*
+  النخبة QB — design tokens (docs/design-plan.md)
+  Ink   #14213D  structure
+  Desk  #E9ECF1  app background
+  Paper #FFFFFF  content surfaces
+  Brass #A9822A  primary action + selected state ONLY (Ink text on brass = 4.5:1)
+  Pen   #B3261E  errors / wrong answers
+  Marker#1B7A4B  success / correct answers
+*/
 :root {
-  --radius: 0.75rem;
-  --background: oklch(0.975 0.008 300);
-  --foreground: oklch(0.22 0.025 300);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.025 300);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.025 300);
-  --primary: oklch(0.52 0.16 300);
-  --primary-foreground: oklch(0.985 0.01 300);
-  --secondary: oklch(0.955 0.01 300);
-  --secondary-foreground: oklch(0.3 0.025 300);
-  --muted: oklch(0.955 0.01 300);
-  --muted-foreground: oklch(0.52 0.02 298);
-  --accent: oklch(0.94 0.025 300);
-  --accent-foreground: oklch(0.3 0.03 300);
-  --destructive: oklch(0.55 0.21 27);
-  --border: oklch(0.9 0.015 300);
-  --input: oklch(0.9 0.015 300);
-  --ring: oklch(0.68 0.13 80);
-  --gold: oklch(0.7 0.12 80);
-  --chart-1: oklch(0.52 0.16 300);
-  --chart-2: oklch(0.7 0.12 80);
-  --chart-3: oklch(0.58 0.18 340);
-  --chart-4: oklch(0.62 0.1 195);
-  --chart-5: oklch(0.62 0.16 45);
-  --sidebar: oklch(0.985 0.006 300);
-  --sidebar-foreground: oklch(0.22 0.025 300);
-  --sidebar-primary: oklch(0.52 0.16 300);
-  --sidebar-primary-foreground: oklch(0.985 0.01 300);
-  --sidebar-accent: oklch(0.94 0.025 300);
-  --sidebar-accent-foreground: oklch(0.3 0.03 300);
-  --sidebar-border: oklch(0.9 0.015 300);
-  --sidebar-ring: oklch(0.68 0.13 80);
-}
+  --radius: 0.5rem; /* panels 8px; inputs/buttons -2px = 6px; dialogs +4px = 12px */
+  --ink: #14213d;
+  --desk: #e9ecf1;
+  --paper: #ffffff;
+  --brass: #a9822a;
+  --pen-red: #b3261e;
+  --marker-green: #1b7a4b;
 
-.dark {
-  --background: oklch(0.16 0.016 300);
-  --foreground: oklch(0.955 0.008 295);
-  --card: oklch(0.205 0.018 300);
-  --card-foreground: oklch(0.955 0.008 295);
-  --popover: oklch(0.222 0.018 300);
-  --popover-foreground: oklch(0.955 0.008 295);
-  --primary: oklch(0.72 0.15 300);
-  --primary-foreground: oklch(0.17 0.035 300);
-  --secondary: oklch(0.265 0.018 300);
-  --secondary-foreground: oklch(0.955 0.008 295);
-  --muted: oklch(0.265 0.018 300);
-  --muted-foreground: oklch(0.71 0.015 295);
-  --accent: oklch(0.29 0.022 300);
-  --accent-foreground: oklch(0.955 0.008 295);
-  --destructive: oklch(0.68 0.19 25);
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 13%);
-  --ring: oklch(0.85 0.12 80);
-  --gold: oklch(0.85 0.115 80);
-  --chart-1: oklch(0.72 0.15 300);
-  --chart-2: oklch(0.85 0.115 80);
-  --chart-3: oklch(0.72 0.16 340);
-  --chart-4: oklch(0.75 0.1 195);
-  --chart-5: oklch(0.74 0.14 45);
-  --sidebar: oklch(0.205 0.018 300);
-  --sidebar-foreground: oklch(0.955 0.008 295);
-  --sidebar-primary: oklch(0.72 0.15 300);
-  --sidebar-primary-foreground: oklch(0.17 0.035 300);
-  --sidebar-accent: oklch(0.29 0.022 300);
-  --sidebar-accent-foreground: oklch(0.955 0.008 295);
-  --sidebar-border: oklch(1 0 0 / 9%);
-  --sidebar-ring: oklch(0.85 0.12 80);
+  --background: var(--desk);
+  --foreground: var(--ink);
+  --card: var(--paper);
+  --card-foreground: var(--ink);
+  --popover: var(--paper);
+  --popover-foreground: var(--ink);
+  --primary: var(--brass);
+  --primary-foreground: var(--ink);
+  --secondary: #e2e7ef;
+  --secondary-foreground: var(--ink);
+  --muted: #f1f3f7;
+  --muted-foreground: #4a5468;
+  --accent: #e7ebf2;
+  --accent-foreground: var(--ink);
+  --destructive: var(--pen-red);
+  --border: #d3d9e3;
+  --input: #c6ceda;
+  --ring: var(--ink);
+  --success: var(--marker-green);
+  --success-foreground: #ffffff;
+  --warning: #9a6700;
+  --warning-foreground: #ffffff;
+  --chart-1: var(--brass);
+  --chart-2: var(--marker-green);
+  --chart-3: var(--ink);
+  --chart-4: #6b7690;
+  --chart-5: var(--pen-red);
+  --sidebar: var(--ink);
+  --sidebar-foreground: #e8ecf3;
+  --sidebar-primary: var(--brass);
+  --sidebar-primary-foreground: var(--ink);
+  --sidebar-accent: rgba(232, 236, 243, 0.08);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(232, 236, 243, 0.14);
+  --sidebar-ring: var(--brass);
 }
 
 @layer base {
@@ -129,426 +112,52 @@
     @apply border-border outline-ring/50;
   }
   html {
-    color-scheme: light;
-  }
-  html.dark {
-    color-scheme: dark;
+    @apply bg-background;
   }
   body {
     @apply bg-background text-foreground;
+    line-height: 1.7; /* Arabic body rhythm */
   }
-  ::selection {
-    background: color-mix(in oklab, var(--primary) 30%, transparent);
+  /* Visible focus that survives the sticky header: offset keeps the ring
+     outside the element box, never clipped by scroll containers. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
-  h1, h2, h3 {
-    letter-spacing: -0.01em;
+  .sidebar-nav :focus-visible {
+    outline-color: var(--brass);
   }
 }
 
-/* ============================================================
-   LEGACY PALETTE REDIRECT — emerald/teal → Amethyst violet
-   Older panes still use raw `emerald-*` utilities. Rather than
-   editing thousands of class names, the palette itself is
-   remapped to the royal-violet family (hue ~300) so every
-   shade + alpha variant follows the theme automatically.
-   ============================================================ */
-@theme {
-  --color-emerald-50: oklch(0.962 0.02 300);
-  --color-emerald-100: oklch(0.935 0.032 300);
-  --color-emerald-200: oklch(0.885 0.06 300);
-  --color-emerald-300: oklch(0.82 0.09 300);
-  --color-emerald-400: oklch(0.74 0.13 300);
-  --color-emerald-500: oklch(0.64 0.17 300);
-  --color-emerald-600: oklch(0.555 0.185 300);
-  --color-emerald-700: oklch(0.49 0.165 300);
-  --color-emerald-800: oklch(0.43 0.14 300);
-  --color-emerald-900: oklch(0.38 0.115 300);
-  --color-teal-50: oklch(0.962 0.02 305);
-  --color-teal-300: oklch(0.82 0.09 305);
-  --color-teal-700: oklch(0.49 0.165 305);
+/* The printed voice: exam titles, paper preview header, wordmark. */
+.font-print {
+  font-family: 'Amiri', serif;
 }
 
-/* ---------- global thin scrollbar ---------- */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklab, var(--primary) 45%, transparent) transparent;
-}
-*::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
-}
-*::-webkit-scrollbar-track {
-  background: transparent;
-}
-*::-webkit-scrollbar-thumb {
-  background-color: color-mix(in oklab, var(--primary) 40%, transparent);
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-*::-webkit-scrollbar-thumb:hover {
-  background-color: color-mix(in oklab, var(--primary) 65%, transparent);
+/* Paper-on-desk presentation for the Designer/Preview sheet surfaces. */
+.desk-surface {
+  background-color: var(--desk);
+  background-image: none;
 }
 
-/* ---------- ambient aurora + grid backdrop ---------- */
-.app-aurora {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  overflow: hidden;
-  pointer-events: none;
-}
-.app-aurora::before,
-.app-aurora::after {
-  content: "";
-  position: absolute;
-  width: 46rem;
-  height: 46rem;
-  border-radius: 9999px;
-  filter: blur(90px);
-  opacity: 0.5;
-  will-change: transform;
-}
-.app-aurora::before {
-  top: -18rem;
-  inset-inline-start: -12rem;
-  background: radial-gradient(circle at center, oklch(0.55 0.18 300 / 0.5), transparent 65%);
-  animation: aurora-a 26s ease-in-out infinite alternate;
-}
-.app-aurora::after {
-  bottom: -20rem;
-  inset-inline-end: -14rem;
-  background: radial-gradient(circle at center, oklch(0.8 0.12 80 / 0.3), transparent 65%);
-  animation: aurora-b 32s ease-in-out infinite alternate;
-}
-html:not(.dark) .app-aurora::before,
-html:not(.dark) .app-aurora::after {
-  opacity: 0.26;
-}
-@keyframes aurora-a {
-  0% { transform: translate3d(0, 0, 0) scale(1); }
-  100% { transform: translate3d(6rem, 4rem, 0) scale(1.15); }
-}
-@keyframes aurora-b {
-  0% { transform: translate3d(0, 0, 0) scale(1.1); }
-  100% { transform: translate3d(-7rem, -3rem, 0) scale(1); }
-}
-.app-grid {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-image:
-    linear-gradient(to left, color-mix(in oklab, var(--foreground) 4%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in oklab, var(--foreground) 4%, transparent) 1px, transparent 1px);
-  background-size: 44px 44px;
-  mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 30%, transparent 75%);
-}
-
-/* ---------- reusable premium primitives ---------- */
-.glass {
-  background: color-mix(in oklab, var(--card) 78%, transparent);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+.paper-sheet {
+  background: var(--paper);
   border: 1px solid var(--border);
-}
-.text-gradient {
-  background: linear-gradient(100deg, oklch(0.7 0.17 305) 10%, oklch(0.72 0.15 330) 45%, oklch(0.85 0.12 82) 90%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-html:not(.dark) .text-gradient {
-  background: linear-gradient(100deg, oklch(0.48 0.17 300) 10%, oklch(0.5 0.15 330) 45%, oklch(0.58 0.13 80) 90%);
-  -webkit-background-clip: text;
-  background-clip: text;
-}
-.logo-glow {
-  box-shadow:
-    0 0 0 1px oklch(1 0 0 / 18%) inset,
-    0 8px 28px -8px oklch(0.55 0.18 300 / 0.6),
-    0 4px 18px -6px oklch(0.82 0.12 80 / 0.4);
-}
-.btn-primary-grad {
-  background-image: linear-gradient(120deg, oklch(0.55 0.17 300), oklch(0.5 0.16 320));
-  box-shadow: 0 6px 20px -8px oklch(0.55 0.18 300 / 0.65);
-}
-.btn-primary-grad:hover {
-  filter: brightness(1.09);
-}
-html:not(.dark) .btn-primary-grad {
-  background-image: linear-gradient(120deg, oklch(0.5 0.16 300), oklch(0.46 0.15 320));
-}
-.card-hover {
-  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
-}
-.card-hover:hover {
-  transform: translateY(-2px);
-  border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
-  box-shadow: 0 14px 38px -18px oklch(0 0 0 / 0.5);
-}
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.animate-fade-up {
-  animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-@keyframes pop-in {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
-}
-.animate-pop-in {
-  animation: pop-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+  box-shadow: 0 1px 2px rgba(20, 33, 61, 0.06), 0 4px 16px rgba(20, 33, 61, 0.07);
 }
 
-/* Thin custom scrollbar for long OMR answer-key lists */
-.omr-key-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklab, var(--primary) 45%, transparent) transparent;
-}
-.omr-key-scroll::-webkit-scrollbar {
-  width: 8px;
-}
-.omr-key-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.omr-key-scroll::-webkit-scrollbar-thumb {
-  background-color: color-mix(in oklab, var(--primary) 45%, transparent);
-  border-radius: 8px;
-}
-.omr-key-scroll::-webkit-scrollbar-thumb:hover {
-  background-color: color-mix(in oklab, var(--primary) 65%, transparent);
+/* Floating layers are the ONLY other shadowed surfaces. */
+.floating-layer {
+  box-shadow: 0 4px 20px rgba(20, 33, 61, 0.14);
 }
 
-/* ============================================================
-   DARK-MODE BRIDGE LAYER
-   Most panes hardcode light utility colors (bg-white, text-slate-600,
-   bg-emerald-50 …). This layer re-maps those exact utilities under
-   `html.dark` so the WHOLE app inherits the Amethyst Royale identity
-   without touching every component. Semantic tokens + inline styles
-   (exam paper) are untouched — paper stays white like a real sheet.
-   Hue translations: emerald→violet(300) · slate→plum-grey(295)
-   ============================================================ */
-html.dark .bg-white {
-  background-color: var(--card);
-}
-html.dark .bg-white\/90,
-html.dark .bg-white\/80 {
-  background-color: color-mix(in oklab, var(--card) 88%, transparent);
-}
-html.dark .bg-white\/70,
-html.dark .bg-white\/60 {
-  background-color: color-mix(in oklab, var(--card) 72%, transparent);
-}
-html.dark .bg-slate-50,
-html.dark .hover\:bg-slate-50:hover {
-  background-color: oklch(0.245 0.017 300);
-}
-html.dark .bg-slate-100,
-html.dark .hover\:bg-slate-100:hover {
-  background-color: oklch(0.27 0.018 300);
-}
-html.dark .bg-slate-200,
-html.dark .hover\:bg-slate-200:hover {
-  background-color: oklch(0.32 0.02 300);
-}
-html.dark .hover\:bg-slate-300:hover {
-  background-color: oklch(0.37 0.02 300);
-}
-html.dark .border-slate-100,
-html.dark .border-slate-200,
-html.dark .border-slate-300 {
-  border-color: oklch(1 0 0 / 11%);
-}
-html.dark .text-slate-300,
-html.dark .text-slate-400 {
-  color: oklch(0.62 0.015 295);
-}
-html.dark .text-slate-500 {
-  color: oklch(0.7 0.015 295);
-}
-html.dark .text-slate-600,
-html.dark .text-slate-700 {
-  color: oklch(0.87 0.01 295);
-}
-html.dark .text-slate-800,
-html.dark .text-slate-900 {
-  color: oklch(0.96 0.007 295);
-}
-html.dark .bg-emerald-50,
-html.dark .hover\:bg-emerald-50:hover {
-  background-color: oklch(0.72 0.15 300 / 13%);
-}
-html.dark .bg-emerald-100 {
-  background-color: oklch(0.72 0.15 300 / 18%);
-}
-html.dark .text-emerald-600,
-html.dark .text-emerald-700 {
-  color: oklch(0.8 0.14 300);
-}
-html.dark .text-emerald-800,
-html.dark .text-emerald-900 {
-  color: oklch(0.85 0.12 298);
-}
-html.dark .border-emerald-100,
-html.dark .border-emerald-200 {
-  border-color: oklch(0.72 0.15 300 / 28%);
-}
-html.dark .bg-amber-50 {
-  background-color: oklch(0.85 0.115 80 / 12%);
-}
-html.dark .bg-amber-100 {
-  background-color: oklch(0.85 0.115 80 / 17%);
-}
-html.dark .text-amber-600,
-html.dark .text-amber-700,
-html.dark .text-amber-800 {
-  color: oklch(0.87 0.11 84);
-}
-html.dark .border-amber-200 {
-  border-color: oklch(0.85 0.115 80 / 28%);
-}
-html.dark .bg-red-50,
-html.dark .hover\:bg-red-50:hover {
-  background-color: oklch(0.65 0.2 25 / 12%);
-}
-html.dark .bg-red-100 {
-  background-color: oklch(0.65 0.2 25 / 17%);
-}
-html.dark .text-red-500,
-html.dark .text-red-600,
-html.dark .text-red-700 {
-  color: oklch(0.75 0.17 25);
-}
-html.dark .hover\:text-red-500:hover,
-html.dark .hover\:text-red-600:hover,
-html.dark .hover\:text-red-700:hover {
-  color: oklch(0.8 0.17 25);
-}
-html.dark .bg-gradient-to-br.from-slate-50,
-html.dark .from-slate-50 {
-  --tw-gradient-from: oklch(0.245 0.017 300);
-}
-
-/* ============================================================
-   PAGEWISE (embedded PDF toolkit) — shared classes
-   The toolkit renders with the QB design tokens above; only its
-   helper classes are appended here (fonts, scrollbars, paper).
-   ============================================================ */
-@theme inline {
-  --font-body: Cairo, Tajawal, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-serif: Georgia, "Times New Roman", Amiri, serif;
-}
-
-.pw-serif {
-  font-family: Georgia, "Times New Roman", Amiri, serif;
-}
-
-.pw-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
-}
-.pw-scroll::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-.pw-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.pw-scroll::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 8px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-.pw-scroll::-webkit-scrollbar-thumb:hover {
-  background: var(--muted-foreground);
-  background-clip: content-box;
-}
-
-.pw-paper {
-  background-image:
-    radial-gradient(circle at 15% 10%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 40%),
-    radial-gradient(circle at 85% 0%, color-mix(in srgb, var(--gold, #b45309) 8%, transparent), transparent 45%);
-}
-
-/* ============================================================
-   AMETHYST ROYALE — shell, landing & motion extensions
-   ============================================================ */
-
-/* Brand display serif — single source of truth (replaces inline styles) */
-.brand-serif {
-  font-family: 'Amiri', Georgia, 'Times New Roman', serif;
-}
-
-/* Floating accent (landing hero mock badges) */
-@keyframes float-y {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
-}
-.animate-float {
-  animation: float-y 5s ease-in-out infinite;
-}
-.animate-float-slow {
-  animation: float-y 7s ease-in-out infinite;
-}
-
-/* Shimmering gradient sweep for landing feature cards */
-.shine {
-  position: relative;
-  overflow: hidden;
-}
-.shine::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(115deg, transparent 30%, color-mix(in oklab, var(--primary) 14%, transparent) 48%, transparent 62%);
-  transform: translateX(-120%);
-  transition: transform 0.9s ease;
-  pointer-events: none;
-}
-[dir="ltr"] .shine::after {
-  transform: translateX(120%);
-}
-.shine:hover::after {
-  transform: translateX(0);
-}
-
-/* Hero mock window (pure CSS app preview on the landing page) */
-.hero-mock {
-  background: color-mix(in oklab, var(--card) 86%, transparent);
-  border: 1px solid var(--border);
-  box-shadow:
-    0 30px 80px -30px oklch(0 0 0 / 0.55),
-    0 0 0 1px oklch(1 0 0 / 6%) inset,
-    0 20px 60px -30px oklch(0.55 0.18 300 / 0.4);
-}
-
-/* Landing section anchor offset under the sticky glass navbar */
-.anchor-scroll {
-  scroll-margin-top: 5.5rem;
-}
-
-/* Count-up-style big numbers on the landing stats band */
-.stat-number {
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-}
-
-/* Landing halo — soft violet/gold radial glow behind hero content */
-.hero-halo {
-  background:
-    radial-gradient(ellipse 60% 55% at 50% 0%, oklch(0.55 0.18 300 / 0.16), transparent 70%),
-    radial-gradient(ellipse 45% 40% at 78% 30%, oklch(0.82 0.12 80 / 0.1), transparent 70%);
-}
-html:not(.dark) .hero-halo {
-  background:
-    radial-gradient(ellipse 60% 55% at 50% 0%, oklch(0.5 0.17 300 / 0.1), transparent 70%),
-    radial-gradient(ellipse 45% 40% at 78% 30%, oklch(0.7 0.12 80 / 0.08), transparent 70%);
-}
-
-/* Dotted connector for the "how it works" timeline */
-.timeline-dot {
-  box-shadow: 0 0 0 6px color-mix(in oklab, var(--primary) 15%, transparent);
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -118,10 +118,8 @@ export function renderOmrSheetInner(template: OMRTemplate, sheet: number): strin
   // Student name line (sheet 0 only)
   if (isMain) {
     html.push(txt('اسم الطالب:', { size: 14, right: W - 26, top: 38 }));
-    // width 78mm (was 88) so the writing line ends at x=74mm — clear of the
-    // digit-position headers that sit above the student-ID columns (x ≤ 69mm).
     html.push(
-      `<div style="position:absolute;top:41.5mm;right:${(210 - (W - 58)).toFixed(2)}mm;width:78mm;border-bottom:0.3mm dashed #000;height:5mm"></div>`
+      `<div style="position:absolute;top:41.5mm;right:${(210 - (W - 58)).toFixed(2)}mm;width:88mm;border-bottom:0.3mm dashed #000;height:5mm"></div>`
     );
   }
 
@@ -132,12 +130,8 @@ export function renderOmrSheetInner(template: OMRTemplate, sheet: number): strin
   // Student ID grid (sheet 0 only)
   if (isMain && template.studentId) {
     const sid = template.studentId;
-    // Label below the name line (y 47.4) — was y 43 where it collided with
-    // the dashed writing line; digit headers moved up to 43.4 so the label's
-    // band (47.4–51.1) and the headers' band (43.4–46.5) never overlap, and
-    // both stay clear of the first bubble row (paper annulus starts 51.8).
     html.push(
-      txt('رقم الطالب — ظلّل رقمًا واحدًا في كل عمود', { size: 10, right: 138, top: 47.4 })
+      txt('رقم الطالب — ظلّل رقمًا واحدًا في كل عمود', { size: 12, right: 108, top: 43 })
     );
     // value labels 0..9
     for (let v = 0; v < sid.valueYs.length; v++) {
@@ -147,7 +141,7 @@ export function renderOmrSheetInner(template: OMRTemplate, sheet: number): strin
     // digit position labels + bubbles
     for (let d = 0; d < sid.digits; d++) {
       const cx = sid.digitColumnXs[d];
-      html.push(txt(String(d + 1), { size: 8, color: '#555555', center: cx, top: 43.4 }));
+      html.push(txt(String(d + 1), { size: 8, color: '#555555', center: cx, top: 44.6 }));
       for (let v = 0; v < sid.valueYs.length; v++) {
         svg.push(
           `<circle cx="${cx.toFixed(2)}" cy="${sid.valueYs[v].toFixed(2)}" r="${sid.bubbleRMm.toFixed(2)}" fill="none" stroke="#000000" stroke-width="0.30"/>`

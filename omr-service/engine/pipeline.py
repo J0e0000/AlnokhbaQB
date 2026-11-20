@@ -1182,6 +1182,43 @@ def analyze_student_id(
     return {"digits": digits, "perDigit": per_digit, "confidence": round(float(np.mean(confs)) if confs else 0.0, 3)}
 
 
+# ---------------- Exam version question (سؤال النسخة) ----------------
+
+def analyze_version(
+    warped: np.ndarray,
+    vm: Optional[Dict[str, Any]],
+    th: Dict[str, float],
+    px_per_mm: float,
+    ink_ref: Optional[float] = None,
+) -> Optional[Dict[str, Any]]:
+    """Decode the version bubble row (main sheet). Bubble index i (in the
+    template's PRINTED xsMm order) maps to version i+1 — the builder keeps
+    that mapping for both RTL and LTR sheets."""
+    if not vm:
+        return None
+    xs = vm.get("xsMm") or []
+    if not xs:
+        return None
+    r_mm = float(vm.get("bubbleRMm", 2.0))
+    y_mm = float(vm.get("yMm"))
+    bubbles = [(float(x), y_mm, r_mm) for x in xs]
+    ratios = bubble_fill_ratios(warped, bubbles, px_per_mm, ink_ref)
+    col = {str(i + 1): ratios[i][0] for i in range(len(xs))}
+    cov_col = {str(i + 1): ratios[i][2] for i in range(len(xs))}
+    dec = decide_answer(col, th, cov_col)
+    status = dec["status"]
+    if status == "selected" and dec["detected"] is not None:
+        value: Optional[int] = int(dec["detected"])
+    else:
+        value = None
+    return {
+        "value": value,
+        "status": status,
+        "confidence": dec["confidence"],
+        "ratios": {k: round(v, 4) for k, v in col.items()},
+    }
+
+
 # ---------------- Grading ----------------
 
 def grade_answers(answers: List[Dict[str, Any]], answer_key: Dict[str, str], marks_map: Optional[Dict[str, float]], marks_default: float) -> Optional[Dict[str, Any]]:
@@ -1647,8 +1684,10 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     # Student ID (sheet 0 only)
     student_id = None
+    version = None
     if sheet == 0:
         student_id = analyze_student_id(warped, template.get("studentId"), th, px_per_mm, ink_ref)
+        version = analyze_version(warped, template.get("versionMarks"), th, px_per_mm, ink_ref)
 
     # Grade
     answer_key = payload.get("answerKey")
@@ -1673,6 +1712,7 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
         "sheet": sheet,
         "sheets": sheets,
         "studentId": student_id,
+        "version": version,
         "answers": answers,
         "grade": grade,
         "diagnostics": diag,

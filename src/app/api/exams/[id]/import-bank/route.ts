@@ -6,10 +6,8 @@
 
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { audit, orgFilter } from '@/lib/auth';
 import { parseOptions, toQBQuestion, type BankQuestion } from '@/lib/qb/bank';
 import { sanitizeAnswerKey, sanitizeDocument } from '@/lib/qb/schema';
-import { requireSession } from '../../../_lib/auth-guard';
 import { serverError } from '../../../_lib/shared';
 import type { QBDocument, QBElement, QBQuestion } from '@/lib/qb/types';
 
@@ -20,18 +18,10 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(req: Request, ctx: Ctx) {
   try {
-    const g = await requireSession('teacher', req);
-    if ('error' in g) return g.error;
     const { id } = await ctx.params;
     const exam = await db.exam.findUnique({ where: { id } });
     if (!exam) {
       return NextResponse.json({ error: 'الامتحان غير موجود' }, { status: 404 });
-    }
-    if (g.session.role !== 'super_admin' && exam.organizationId !== g.session.orgId) {
-      return NextResponse.json(
-        { error: 'غير موجود أو لا تملك صلاحية الوصول' },
-        { status: 404 }
-      );
     }
     if (exam.status !== 'DRAFT') {
       return NextResponse.json(
@@ -51,9 +41,7 @@ export async function POST(req: Request, ctx: Ctx) {
     const doc = sanitizeDocument(JSON.parse(exam.documentJson)) as QBDocument;
     const key = JSON.parse(exam.answerKeyJson) as Record<string, string>;
 
-    const bankRows = await db.question.findMany({
-      where: { id: { in: ids }, organizationId: orgFilter(g.session) },
-    });
+    const bankRows = await db.question.findMany({ where: { id: { in: ids } } });
     const byId = new Map(bankRows.map((r) => [r.id, r]));
     const ordered = ids.map((q) => byId.get(q)).filter((r): r is (typeof bankRows)[number] => Boolean(r));
     if (ordered.length === 0) {
@@ -146,15 +134,6 @@ export async function POST(req: Request, ctx: Ctx) {
         documentJson: JSON.stringify(updated),
         answerKeyJson: JSON.stringify(sanitizeAnswerKey(key)),
       },
-    });
-
-    await audit({
-      session: g.session,
-      action: 'question.import',
-      entity: 'exam',
-      entityId: exam.id,
-      meta: { title: exam.title, added: addedQuestions.length },
-      req,
     });
 
     return NextResponse.json({

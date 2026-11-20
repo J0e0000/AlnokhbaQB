@@ -16,9 +16,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { audit, orgFilter } from '@/lib/auth';
 import { sanitizeDocument, starterDocument } from '@/lib/qb/schema';
-import { requireSession } from '../../_lib/auth-guard';
 import { serverError } from '../../_lib/shared';
 
 export const runtime = 'nodejs';
@@ -64,8 +62,6 @@ export function parseNumberedQuestions(text: string): string[] {
 
 export async function POST(req: Request) {
   try {
-    const g = await requireSession('teacher', req);
-    if ('error' in g) return g.error;
     const body = await req.json().catch(() => null);
     const parsedBody = bodySchema.safeParse(body);
     if (!parsedBody.success) {
@@ -88,7 +84,6 @@ export async function POST(req: Request) {
     // ---- PHASE 8: straight into the Question Bank as pending_review ----
     if (parsedBody.data.target === 'bank') {
       const rows = prompts.slice(0, 200).map((prompt) => ({
-        organizationId: g.session.orgId ?? null,
         prompt,
         type: 'mcq',
         optionsJson: JSON.stringify([
@@ -105,13 +100,6 @@ export async function POST(req: Request) {
         status: 'pending_review', // never auto-published
       }));
       const created = await db.question.createMany({ data: rows });
-      await audit({
-        session: g.session,
-        action: 'question.import',
-        entity: 'question',
-        meta: { count: created.count, source: 'ocr' },
-        req,
-      });
       return NextResponse.json({
         target: 'bank',
         bankCreated: created.count,
@@ -120,7 +108,7 @@ export async function POST(req: Request) {
     }
 
     const exam = await db.exam.create({
-      data: { organizationId: g.session.orgId ?? null, title, status: 'DRAFT', direction: 'rtl' },
+      data: { title, status: 'DRAFT', direction: 'rtl' },
     });
 
     // Build the canonical document: starter chrome (header + name fields) +
@@ -197,15 +185,6 @@ export async function POST(req: Request) {
     await db.exam.update({
       where: { id: exam.id },
       data: { documentJson: JSON.stringify(documentJson) },
-    });
-
-    await audit({
-      session: g.session,
-      action: 'question.import',
-      entity: 'exam',
-      entityId: exam.id,
-      meta: { title, questionCount: questions.length, source: 'ocr' },
-      req,
     });
 
     return NextResponse.json({

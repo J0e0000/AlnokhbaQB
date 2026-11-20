@@ -1,7 +1,4 @@
-// POST /api/scan { imageBase64 | pdfBase64+pageIndex, examVersionIdHint?,
-//                   manualMarkers?, debug?, idempotencyKey? }
-//            OR multipart/form-data (binary `image` file + scalar fields) —
-//            the preferred transport: no base64 overhead, correct sizes.
+// POST /api/scan { imageBase64, examVersionIdHint?, manualMarkers?, debug? }
 // Full OMR scan pipeline:
 //   1. load (or seed) the active CalibrationProfile → thresholds
 //   2. engine /process WITHOUT template (engine QR-decodes the sheet)
@@ -12,16 +9,14 @@
 //   4. grade SERVER-SIDE via gradeScan (engine grade is advisory only)
 //   5. persist Scan (answers, grade, confidence, diagnostics; debug/corrected
 //      JPEGs go to db/scans/<scanId>_*.jpg — only PATHS are stored in DB)
-//   6. link Student by decoded student code; uncertain identity/answers →
-//      reviewStatus=PENDING (never auto-finalized)
-//   7. idempotent retries: imageHash (+ optional client idempotencyKey) returns
-//      the existing PROCESSED scan instead of creating a duplicate
+//   6. link Student by decoded student code
 // Engine down → clean 503. Unknown QR → 404. Template mismatch → 409.
 
-import { createHash } from 'crypto';
+import { mkdirSync, writeFileSync } from 'fs';
+import path from 'path';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { audit } from '@/lib/auth';
+import { clientIp, rateLimit } from '@/lib/auth/ratelimit';
 import { gradeScan } from '@/lib/qb/grading';
 import {
   isTransportError,
@@ -36,27 +31,29 @@ import type {
 } from '@/lib/qb/types';
 import {
   ensureActiveCalibration,
-  imageSignature,
-  rateLimit,
   readJsonBody,
-  scanMaxImageBytes,
   serverError,
   stripDataUrl,
   thresholdsFromConfig,
 } from '../_lib/shared';
-import { persistScanImage } from '@/lib/omr/scan-store';
-import { requireSession } from '../_lib/auth-guard';
-import { loadVersion, loadVersionHint } from '../_lib/version';
+import { loadVersion } from '../_lib/version';
+
+export const maxDuration = 60;
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-// Server-to-server OMR processing runs TWO engine calls (identity + full);
-// each is CPU-bound OpenCV. 60s covers the slowest serverless CPU class.
-export const maxDuration = 60;
 
-/** Persist via disk + Vercel Blob (canonical on serverless) — see scan-store.ts. */
-function decodeImage(base64: string, scanId: string, kind: 'debug' | 'corrected'): Promise<string | null> {
-  return persistScanImage(scanId, kind, base64);
+const SCANS_DIR = path.join(process.cwd(), 'db', 'scans');
+
+function decodeImage(base64: string, scanId: string, kind: 'debug' | 'corrected'): string | null {
+  try {
+    mkdirSync(SCANS_DIR, { recursive: true });
+    const filePath = path.join(SCANS_DIR, `${scanId}_${kind}.jpg`);
+    writeFileSync(filePath, Buffer.from(base64, 'base64'));
+    return `db/scans/${scanId}_${kind}.jpg`;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeStudentCode(raw: unknown): string | null {
@@ -101,185 +98,25 @@ function imagesPayload(scanId: string, debugPath: string | null, correctedPath: 
   };
 }
 
-/** Parse stored diagnostics JSON defensively (never throw on legacy rows). */
-function safeParseDiag(raw: string | null | undefined): Record<string, unknown> {
-  try {
-    const parsed = raw ? JSON.parse(raw) : null;
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-}
-
-/** Human-readable Arabic message for engine transport failures.
- *  The raw client error (English, e.g. "OMR engine unreachable — is the
- *  service running?") is kept in `details.rawError` for support. */
-function transportArabic(stage: string, rawError: string): string {
-  switch (stage) {
-    case 'engineUnreachable':
-      return 'محرك المسح الضوئي (OMR) غير متصل حاليًا. تتم إعادة تشغيله تلقائيًا — انتظر لحظات وحاول مسح الورقة مرة أخرى.';
-    case 'timeout':
-      return 'استغرق تحليل الورقة وقتًا أطول من المسموح — حاول مرة أخرى، وإن تكرر الأمر استخدم صورة أوضح أو أصغر حجمًا.';
-    case 'engineHttpError':
-      return 'واجه محرك المسح الضوئي خطأً داخليًا — حاول مرة أخرى.';
-    case 'engineProtocol':
-      return 'رد غير صالح من محرك المسح الضوئي — حاول مرة أخرى.';
-    default:
-      return rawError;
-  }
-}
-
-interface ScanInput {
-  /** raw base64 (no data: prefix) of the sheet image or single-page PDF */
-  base64: string;
-  isPdf: boolean;
-  pageIndex: number | null;
-  hint?: string;
-  manualMarkers: number[][] | null;
-  idempotencyKey: string | null;
-}
-
-/**
- * Accept the sheet from EITHER a multipart/form-data upload (binary `image`
- * file — preferred transport: ~33% smaller than base64 JSON and no JSON
- * escaping cost) or the legacy JSON body. Returns raw base64 + all fields.
- */
-async function readScanInput(req: Request): Promise<
-  { ok: true; input: ScanInput } | { ok: false; status: number; error: string }
-> {
-  const maxImageBytes = scanMaxImageBytes();
-  const contentType = req.headers.get('content-type') ?? '';
-  if (contentType.toLowerCase().includes('multipart/form-data')) {
-    let form: FormData;
-    try {
-      form = await req.formData();
-    } catch {
-      return { ok: false, status: 400, error: 'تعذر قراءة البيانات المرفوعة (multipart)' };
-    }
-    const file = form.get('image');
-    if (!(file instanceof File)) {
-      return { ok: false, status: 400, error: 'صورة الورقة مطلوبة (الحقل image)' };
-    }
-    if (file.size > maxImageBytes) {
-      return {
-        ok: false,
-        status: 413,
-        error: `حجم الصورة كبير جدًا (الحد ${Math.round(maxImageBytes / 1024 / 1024)} ميجابايت)`,
-      };
-    }
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    if (!imageSignature(bytes)) {
-      return {
-        ok: false,
-        status: 415,
-        error: 'الملف ليس صورة صالحة — استخدم JPEG أو PNG',
-      };
-    }
-    const markersRaw = form.get('manualMarkers');
-    let manualMarkers: number[][] | null = null;
-    if (typeof markersRaw === 'string' && markersRaw.trim()) {
-      try {
-        manualMarkers = parseManualMarkers(JSON.parse(markersRaw));
-      } catch {
-        manualMarkers = null;
-      }
-    }
-    const hintRaw = form.get('examVersionIdHint');
-    const keyRaw = form.get('idempotencyKey');
-    return {
-      ok: true,
-      input: {
-        base64: Buffer.from(bytes).toString('base64'),
-        isPdf: false,
-        pageIndex: null,
-        hint: typeof hintRaw === 'string' && hintRaw ? hintRaw : undefined,
-        manualMarkers,
-        idempotencyKey:
-          typeof keyRaw === 'string' && keyRaw.length >= 8 && keyRaw.length <= 128
-            ? keyRaw
-            : null,
-      },
-    };
-  }
-
-  // legacy JSON body (base64 data-URL or bare base64)
-  const body = await readJsonBody(req);
-  const rawImage = typeof body?.imageBase64 === 'string' ? body.imageBase64 : '';
-  const rawPdf = typeof body?.pdfBase64 === 'string' ? body.pdfBase64 : '';
-  if (!rawImage && !rawPdf) {
-    return {
-      ok: false,
-      status: 400,
-      error: 'صورة الورقة أو ملف PDF مطلوب (الحقل image أو imageBase64/pdfBase64)',
-    };
-  }
-  const isPdf = !rawImage && !!rawPdf;
-  const sourceB64 = isPdf ? rawPdf : rawImage;
-  const { base64 } = stripDataUrl(sourceB64);
-  if (!isPdf && base64.length / 4 * 3 > maxImageBytes) {
-    return {
-      ok: false,
-      status: 413,
-      error: `حجم الصورة كبير جدًا (الحد ${Math.round(maxImageBytes / 1024 / 1024)} ميجابايت)`,
-    };
-  }
-  return {
-    ok: true,
-    input: {
-      base64,
-      isPdf,
-      pageIndex: isPdf ? Math.max(0, Math.min(2000, Number(body?.pageIndex) || 0)) : null,
-      hint: typeof body?.examVersionIdHint === 'string' ? body.examVersionIdHint : undefined,
-      manualMarkers: parseManualMarkers(body?.manualMarkers),
-      idempotencyKey:
-        typeof body?.idempotencyKey === 'string' &&
-        body.idempotencyKey.length >= 8 &&
-        body.idempotencyKey.length <= 128
-          ? body.idempotencyKey
-          : null,
-    },
-  };
-}
-
 export async function POST(req: Request) {
+  // heavy OMR route — 30 req/min per client (auth gate)
+  const rl = await rateLimit(`scan:${clientIp(req)}`, 30, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'عدد كبير من الطلبات — خفّف السرعة وحاول بعد قليل' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+    );
+  }
+
   try {
-    const g = await requireSession('teacher', req);
-    if ('error' in g) return g.error;
-    if (!rateLimit(`scan:${g.session.uid}`, 60, 60_000)) {
-      return NextResponse.json(
-        { error: 'عدد كبير من عمليات المسح — انتظر لحظة ثم أعد المحاولة' },
-        { status: 429 }
-      );
+    const body = await readJsonBody(req);
+    const rawImage = typeof body?.imageBase64 === 'string' ? body.imageBase64 : '';
+    if (!rawImage) {
+      return NextResponse.json({ error: 'صورة الورقة مطلوبة (imageBase64)' }, { status: 400 });
     }
-    const input = await readScanInput(req);
-    if (!input.ok) {
-      return NextResponse.json({ error: input.error }, { status: input.status });
-    }
-    const sourceBase64 = input.input.base64;
-    const imageHash = createHash('sha256').update(sourceBase64).digest('hex');
-    const isPdf = input.input.isPdf;
-    const pageIndex = input.input.pageIndex;
-    const idempotencyKey = input.input.idempotencyKey;
-    // idempotent retry: same bytes already finalized → return that scan
-    if (idempotencyKey) {
-      const existing = await db.scan.findUnique({ where: { idempotencyKey } });
-      if (existing && (existing.status === 'PROCESSED' || existing.status === 'REVIEWED')) {
-        return NextResponse.json({
-          scanId: existing.id,
-          duplicate: true,
-          status: existing.status,
-          reviewStatus: existing.reviewStatus,
-          grade: JSON.parse(existing.gradeJson || '{}'),
-          answers: (JSON.parse(existing.answersJson || '{"answers":[]}').answers ?? []) as QBScannedAnswer[],
-          overallConfidence: existing.overallConfidence ?? 0,
-          diagnostics: safeParseDiag(existing.diagnosticsJson),
-          studentCode: existing.studentCode,
-          studentId: existing.studentId,
-        });
-      }
-    }
-    const hint = input.input.hint;
-    const manualMarkers = input.input.manualMarkers;
+    const { base64: imageBase64 } = stripDataUrl(rawImage);
+    const hint = typeof body?.examVersionIdHint === 'string' ? body.examVersionIdHint : undefined;
+    const manualMarkers = parseManualMarkers(body?.manualMarkers);
 
     // ---- 1. calibration thresholds (seeds the default profile on first call)
     const profile = await ensureActiveCalibration();
@@ -307,18 +144,8 @@ export async function POST(req: Request) {
     };
 
     if (manualMarkers && hint) {
-      // hint may be an ExamVersion id (new clients) or an Exam id (legacy picker)
-      const loaded = await loadVersionHint(hint);
+      const loaded = await loadVersion(hint);
       if (!loaded || !loaded.omrTemplate) {
-        return NextResponse.json(
-          { error: 'لا توجد نسخة امتحان مطابقة', stage: 'noMatchingVersion' },
-          { status: 404 }
-        );
-      }
-      if (
-        g.session.role !== 'super_admin' &&
-        loaded.row.exam.organizationId !== g.session.orgId
-      ) {
         return NextResponse.json(
           { error: 'لا توجد نسخة امتحان مطابقة', stage: 'noMatchingVersion' },
           { status: 404 }
@@ -329,9 +156,7 @@ export async function POST(req: Request) {
       versionKey = loaded.answerKey;
       const { answerKeyByNumber, marksMap } = buildEngineKey(versionDoc, versionKey);
       result = await processScan({
-        imageBase64: isPdf ? undefined : sourceBase64,
-        pdfBase64: isPdf ? sourceBase64 : undefined,
-        pageIndex: pageIndex ?? undefined,
+        imageBase64,
         template,
         answerKey: answerKeyByNumber,
         marksMap,
@@ -342,9 +167,7 @@ export async function POST(req: Request) {
       engineCalls++;
     } else {
       result = await processScan({
-        imageBase64: isPdf ? undefined : sourceBase64,
-        pdfBase64: isPdf ? sourceBase64 : undefined,
-        pageIndex: pageIndex ?? undefined,
+        imageBase64,
         template: null,
         thresholds,
         debug: true,
@@ -355,12 +178,7 @@ export async function POST(req: Request) {
 
     if (isTransportError(result)) {
       return NextResponse.json(
-        {
-          error: transportArabic(result.stage, result.error),
-          stage: result.stage,
-          details: result.details ?? null,
-          rawError: result.error,
-        },
+        { error: result.error, stage: result.stage, details: result.details ?? null },
         { status: 503 }
       );
     }
@@ -381,20 +199,8 @@ export async function POST(req: Request) {
           { status: 404 }
         );
       }
-      // A client-supplied hint may be an EXAM id (legacy picker) → tolerant
-      // resolution; a QR-decoded id is always an ExamVersion id → strict load.
-      const loaded = hint ? await loadVersionHint(qrVersionId) : await loadVersion(qrVersionId);
+      const loaded = await loadVersion(qrVersionId);
       if (!loaded) {
-        return NextResponse.json(
-          { error: 'لا توجد نسخة امتحان مطابقة لرمز QR', stage: 'noMatchingVersion' },
-          { status: 404 }
-        );
-      }
-      if (
-        g.session.role !== 'super_admin' &&
-        loaded.row.exam.organizationId !== g.session.orgId
-      ) {
-        // another organisation's version → behave exactly like an unknown QR
         return NextResponse.json(
           { error: 'لا توجد نسخة امتحان مطابقة لرمز QR', stage: 'noMatchingVersion' },
           { status: 404 }
@@ -420,9 +226,7 @@ export async function POST(req: Request) {
 
       if (engineCalls < 2) {
         const second = await processScan({
-          imageBase64: isPdf ? undefined : sourceBase64,
-          pdfBase64: isPdf ? sourceBase64 : undefined,
-          pageIndex: pageIndex ?? undefined,
+          imageBase64,
           template,
           answerKey: answerKeyByNumber,
           marksMap,
@@ -433,12 +237,7 @@ export async function POST(req: Request) {
         engineCalls++;
         if (isTransportError(second)) {
           return NextResponse.json(
-            {
-              error: transportArabic(second.stage, second.error),
-              stage: second.stage,
-              details: second.details ?? null,
-              rawError: second.error,
-            },
+            { error: second.error, stage: second.stage, details: second.details ?? null },
             { status: 503 }
           );
         }
@@ -471,10 +270,10 @@ export async function POST(req: Request) {
         },
       });
       const debugPath = result.debugImage
-        ? await decodeImage(stripDataUrl(result.debugImage).base64, scan.id, 'debug')
+        ? decodeImage(stripDataUrl(result.debugImage).base64, scan.id, 'debug')
         : null;
       const correctedPath = result.correctedImage
-        ? await decodeImage(stripDataUrl(result.correctedImage).base64, scan.id, 'corrected')
+        ? decodeImage(stripDataUrl(result.correctedImage).base64, scan.id, 'corrected')
         : null;
       return NextResponse.json(
         {
@@ -512,47 +311,12 @@ export async function POST(req: Request) {
       overrides: {},
     });
 
-    // ---- 5. persist (idempotent on identical bytes)
+    // ---- 5. persist
     const studentCode = normalizeStudentCode(result.studentId?.digits);
     const student = studentCode
       ? await db.student.findUnique({ where: { code: studentCode } })
       : null;
     const overallConfidence = meanConfidence(answers);
-
-    // Identity/answer uncertainty routes to manual review — never silently
-    // finalized: unknown student code, ambiguous answers, low confidence.
-    const ambiguousCount = grade.ambiguous.length;
-    const needsReview =
-      ambiguousCount > 0 ||
-      (studentCode !== null && !student) ||
-      overallConfidence < 0.6;
-    const reviewStatus = needsReview ? 'PENDING' : 'NONE';
-
-    if (!idempotencyKey) {
-      const dup = await db.scan.findFirst({
-        where: {
-          imageHash,
-          examVersionId: template.examVersionId,
-          status: { in: ['PROCESSED', 'REVIEWED'] },
-        },
-        select: { id: true },
-      });
-      if (dup) {
-        const dupRow = await db.scan.findUnique({ where: { id: dup.id } });
-        return NextResponse.json({
-          scanId: dup.id,
-          duplicate: true,
-          status: 'PROCESSED',
-          reviewStatus: dupRow?.reviewStatus ?? null,
-          grade: JSON.parse(dupRow?.gradeJson || '{}'),
-          answers: (JSON.parse(dupRow?.answersJson || '{"answers":[]}').answers ?? []) as QBScannedAnswer[],
-          overallConfidence: dupRow?.overallConfidence ?? 0,
-          diagnostics: safeParseDiag(dupRow?.diagnosticsJson),
-          studentCode,
-          studentId: student?.id ?? null,
-        });
-      }
-    }
 
     const scan = await db.scan.create({
       data: {
@@ -566,17 +330,14 @@ export async function POST(req: Request) {
         status: 'PROCESSED',
         overallConfidence,
         diagnosticsJson: '{}',
-        imageHash,
-        ...(idempotencyKey ? { idempotencyKey } : {}),
-        reviewStatus,
       },
     });
 
     const debugPath = result.debugImage
-      ? await decodeImage(stripDataUrl(result.debugImage).base64, scan.id, 'debug')
+      ? decodeImage(stripDataUrl(result.debugImage).base64, scan.id, 'debug')
       : null;
     const correctedPath = result.correctedImage
-      ? await decodeImage(stripDataUrl(result.correctedImage).base64, scan.id, 'corrected')
+      ? decodeImage(stripDataUrl(result.correctedImage).base64, scan.id, 'corrected')
       : null;
 
     const diagnostics = {
@@ -589,27 +350,14 @@ export async function POST(req: Request) {
       data: { diagnosticsJson: JSON.stringify(diagnostics) },
     });
 
-    await audit({
-      session: g.session,
-      action: 'scan.process',
-      entity: 'scan',
-      entityId: scan.id,
-      meta: { examVersionId: template.examVersionId },
-      req,
-    });
-
     // ---- 6. response
     return NextResponse.json({
       scanId: scan.id,
-      duplicate: false,
       answers,
       grade,
       diagnostics,
       studentCode,
       studentId: student?.id ?? null,
-      studentName: student?.name ?? null,
-      needsReview,
-      reviewStatus,
       status: 'PROCESSED',
       overallConfidence,
       template: {

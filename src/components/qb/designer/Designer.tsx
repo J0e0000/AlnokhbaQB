@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -41,7 +41,6 @@ export default function Designer({ examId }: DesignerProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [bankOpen, setBankOpen] = useState(false);
-  const publishedVersionId = useDesignerStore((s) => s.publishedVersionId);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,13 +51,7 @@ export default function Designer({ examId }: DesignerProps) {
         const data = await r.json();
         if (cancelled) return;
         const doc = data.document ?? starterDocument(data.exam?.title ?? 'امتحان', 'مدرسة النخبة');
-        // published exam → remember the current frozen version so saving also
-        // syncs the guide answer key into it (OMR grading reads the version key)
-        const publishedVersionId =
-          data.exam?.status === 'PUBLISHED'
-            ? (data.versions?.[0]?.id as string | undefined) ?? null
-            : null;
-        store.loadExam(examId, data.exam?.title ?? '', doc, data.answerKey ?? {}, { publishedVersionId });
+        store.loadExam(examId, data.exam?.title ?? '', doc, data.answerKey ?? {});
         setLoading(false);
       } catch {
         if (!cancelled) {
@@ -222,39 +215,32 @@ export default function Designer({ examId }: DesignerProps) {
   };
 
   if (loading) {
-    return <div className="flex h-64 items-center justify-center text-sm text-slate-500">جارٍ تحميل المحرر…</div>;
+    return <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">جارٍ تحميل المحرر…</div>;
   }
   if (error) {
-    return <div className="flex h-64 flex-col items-center justify-center gap-3 text-sm text-red-600">{error}<Button variant="outline" size="sm" onClick={() => window.location.reload()}>إعادة المحاولة</Button></div>;
+    return <div className="flex h-64 flex-col items-center justify-center gap-3 text-sm text-destructive">{error}<Button variant="outline" size="sm" onClick={() => window.location.reload()}>إعادة المحاولة</Button></div>;
   }
 
   return (
     <TooltipProvider delayDuration={200}>
       <div className="flex h-[calc(100vh-8.5rem)] flex-col gap-2">
-        {/* Published-exam notice: saving syncs the guide answer key into the frozen version */}
-        {publishedVersionId && (
-          <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-            <Save className="h-3.5 w-3.5 shrink-0" />
-            هذا الامتحان <span className="font-bold">منشور</span> — عند الحفظ سيتم تحديث مفتاح الإجابة النموذجية في النسخة المنشورة أيضًا، فتصحيح أوراق OMR سيستخدم المفتاح المحدّث فورًا (الأوراق المطبوعة تبقى صالحة).
-          </div>
-        )}
         {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-1.5 rounded-2xl border bg-white p-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-1.5 rounded-xl border bg-card p-2 shadow-sm">
           <Button variant="ghost" size="icon" onClick={() => store.undo()} className="h-8 w-8"><Undo2 className="h-4 w-4" /></Button>
           <Button variant="ghost" size="icon" onClick={() => store.redo()} className="h-8 w-8"><Redo2 className="h-4 w-4" /></Button>
-          <div className="mx-1 h-6 w-px bg-slate-200" />
+          <div className="mx-1 h-6 w-px bg-secondary" />
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => store.setZoom(zoom - 0.1)}><Minus className="h-4 w-4" /></Button>
-          <span className="w-12 text-center text-xs text-slate-600">{Math.round(zoom * 100)}%</span>
+          <span className="w-12 text-center text-[13px] text-muted-foreground">{Math.round(zoom * 100)}%</span>
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => store.setZoom(zoom + 0.1)}><Plus className="h-4 w-4" /></Button>
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => store.setZoom(0.75)}><Minimize2 className="h-4 w-4" /></Button>
           <Button variant={gridSnap ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8" onClick={() => store.setGridSnap(!gridSnap)}><Magnet className="h-4 w-4" /></Button>
-          <div className="mx-1 h-6 w-px bg-slate-200" />
+          <div className="mx-1 h-6 w-px bg-secondary" />
           {/* pages */}
           {Array.from({ length: doc.pageCount }).map((_, i) => (
             <button
               key={i}
               onClick={() => store.setActivePage(i)}
-              className={`h-8 rounded-lg px-3 text-xs font-medium ${i === activePage ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              className={`h-8 rounded-lg px-3 text-[13px] font-medium ${i === activePage ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-secondary'}`}
             >
               صفحة {i + 1}
             </button>
@@ -262,21 +248,19 @@ export default function Designer({ examId }: DesignerProps) {
           {doc.pageCount < 10 && (
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => store.setPageCount(doc.pageCount + 1)}><Plus className="h-4 w-4" /></Button>
           )}
-          <div className="mx-1 h-6 w-px bg-slate-200" />
+          <div className="mx-1 h-6 w-px bg-secondary" />
           <QuestionBankDialog open={bankOpen} onOpenChange={setBankOpen} />
           <div className="ms-auto flex items-center gap-2">
-            {dirty && <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" title="تغييرات غير محفوظة" />}
-            {lastSavedAt && !dirty && <span className="text-[10px] text-slate-400">محفوظ</span>}
+            {dirty && <span className="h-2 w-2 animate-pulse rounded-full bg-warning/100" title="تغييرات غير محفوظة" />}
+            {lastSavedAt && !dirty && <span className="text-[13px] text-muted-foreground">محفوظ</span>}
             <Button
               size="sm"
-              className="btn-primary-grad h-8 gap-1 border-0 text-white"
+              className="h-8 gap-1 bg-primary text-primary-foreground hover:bg-primary/90"
               disabled={saving}
               onClick={async () => {
-                const res = await store.save();
-                if (!res.ok) toast.error('فشل الحفظ');
-                else if (res.keySyncFailed) toast.warning('تم حفظ المسودة، لكن تعذّر تحديث مفتاح النسخة المنشورة — أعد المحاولة');
-                else if (res.keySynced) toast.success('تم الحفظ وتحديث مفتاح الإجابة في النسخة المنشورة');
-                else toast.success('تم حفظ الامتحان');
+                const ok = await store.save();
+                if (ok) toast.success('تم حفظ الامتحان');
+                else toast.error('فشل الحفظ');
               }}
             >
               <Save className="h-4 w-4" /> حفظ
@@ -286,8 +270,8 @@ export default function Designer({ examId }: DesignerProps) {
 
         <div className="flex min-h-0 flex-1 gap-2">
           {/* Add-elements panel */}
-          <div className="w-40 shrink-0 space-y-1 overflow-y-auto rounded-2xl border bg-white p-2 shadow-sm">
-            <div className="px-1 pb-1 text-[11px] font-semibold text-slate-400">إضافة عنصر</div>
+          <div className="w-40 shrink-0 space-y-1 overflow-y-auto rounded-xl border bg-card p-2 shadow-sm">
+            <div className="px-1 pb-1 text-[13px] font-semibold text-muted-foreground">إضافة عنصر</div>
             <AddBtn icon={<Type className="h-4 w-4" />} label="نص" onClick={addText} />
             <AddBtn icon={<Heading1 className="h-4 w-4" />} label="عنوان" onClick={addHeader} />
             <AddBtn icon={<Sigma className="h-4 w-4" />} label="سؤال" onClick={() => { store.addQuestion(); }} />
@@ -306,7 +290,7 @@ export default function Designer({ examId }: DesignerProps) {
           </div>
 
           {/* Properties */}
-          <div className="w-64 shrink-0 overflow-hidden rounded-2xl border bg-white shadow-sm">
+          <div className="w-64 shrink-0 overflow-hidden rounded-xl border bg-card shadow-sm">
             <PropertiesPanel />
           </div>
         </div>
@@ -319,7 +303,7 @@ function AddBtn({ icon, label, onClick }: { icon: React.ReactNode; label: string
   return (
     <button
       onClick={onClick}
-      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-slate-700 transition hover:bg-emerald-50 hover:text-emerald-700"
+      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] text-foreground transition hover:bg-success/10 hover:text-success"
     >
       {icon} {label}
     </button>
@@ -366,14 +350,13 @@ function QuestionBankDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8 gap-1 text-xs"><Sigma className="h-4 w-4" /> بنك الأسئلة</Button>
+        <Button variant="outline" size="sm" className="h-8 gap-1 text-[13px]"><Sigma className="h-4 w-4" /> بنك الأسئلة</Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl" dir="rtl">
         <DialogHeader>
-          <DialogTitle className="text-right">بنك الأسئلة ({doc.questions.length})</DialogTitle>
-          <DialogDescription className="text-right">أسئلة هذا الامتحان — أضفها إلى الصفحات أو عدّلها.</DialogDescription>
+          <DialogTitle className="text-start">بنك الأسئلة ({doc.questions.length})</DialogTitle>
         </DialogHeader>
-        <div className="max-h-[50vh] space-y-2 overflow-y-auto pe-1">
+        <div className="max-h-[50vh] space-y-2 overflow-y-auto ps-1">
           {doc.questions.map((q) => (
             <div key={q.id} className="rounded-lg border p-3">
               <div className="flex items-start justify-between gap-2">
@@ -381,42 +364,42 @@ function QuestionBankDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                 <div className="flex shrink-0 gap-1">
                   <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => store.updateQuestion(q.id, { number: Math.max(1, q.number - 1) })}><ChevronRight className="h-3 w-3" /></Button>
                   <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => store.updateQuestion(q.id, { number: q.number + 1 })}><ChevronLeft className="h-3 w-3" /></Button>
-                  <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => store.deleteQuestion(q.id)}><Trash2 className="h-3 w-3" /></Button>
+                  <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => store.deleteQuestion(q.id)}><Trash2 className="h-3 w-3" /></Button>
                 </div>
               </div>
-              <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-slate-600">
+              <div className="mt-2 grid grid-cols-2 gap-1 text-[13px] text-muted-foreground">
                 {q.options.map((o) => (
-                  <label key={o.id} className="flex items-center gap-2 rounded px-1 py-0.5 hover:bg-slate-50">
+                  <label key={o.id} className="flex items-center gap-2 rounded px-1 py-0.5 hover:bg-muted/60">
                     <RadioGroup value={answerKey[q.id] ?? ''} onValueChange={(v) => store.setAnswerKey(q.id, v)} className="flex gap-1">
                       <RadioGroupItem value={o.id} id={`${q.id}-${o.id}`} className="h-3.5 w-3.5" />
                     </RadioGroup>
-                    <span className="font-semibold text-emerald-700">{o.id})</span> {o.text}
+                    <span className="font-semibold text-success">{o.id})</span> {o.text}
                   </label>
                 ))}
               </div>
             </div>
           ))}
-          {doc.questions.length === 0 && <div className="py-8 text-center text-sm text-slate-400">لا توجد أسئلة بعد</div>}
+          {doc.questions.length === 0 && <div className="py-8 text-center text-sm text-muted-foreground">لا توجد أسئلة بعد</div>}
         </div>
-        <div className="rounded-lg border bg-slate-50 p-3">
+        <div className="rounded-lg border bg-muted/60 p-3">
           {draft ? (
             <div className="space-y-2">
               <div className="flex gap-2">
                 <div className="flex-1">
-                  <Label className="text-[10px]">نص السؤال</Label>
+                  <Label className="text-[13px]">نص السؤال</Label>
                   <Textarea className="h-16 text-sm" value={draft.prompt} onChange={(e) => setDraft({ ...draft, prompt: e.target.value })} />
                 </div>
                 <div className="w-20">
-                  <Label className="text-[10px]">الدرجة</Label>
+                  <Label className="text-[13px]">الدرجة</Label>
                   <Input type="number" min={0} value={draft.marks} onChange={(e) => setDraft({ ...draft, marks: parseFloat(e.target.value) || 1 })} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {draft.options.map((o, i) => (
                   <div key={o.id} className="flex items-center gap-1">
-                    <span className="w-5 text-xs font-bold text-emerald-700">{o.id})</span>
+                    <span className="w-5 text-[13px] font-bold text-success">{o.id})</span>
                     <Input
-                      className="h-8 text-xs"
+                      className="h-8 text-[13px]"
                       value={o.text}
                       placeholder={`الخيار ${o.id}`}
                       onChange={(e) => {
@@ -429,10 +412,10 @@ function QuestionBankDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                 ))}
               </div>
               <div className="flex items-center justify-between">
-                <Label className="text-[10px] text-slate-500">اختر الإجابة الصحيحة بعد الحفظ من القائمة</Label>
+                <Label className="text-[13px] text-muted-foreground">اختر الإجابة الصحيحة بعد الحفظ من القائمة</Label>
                 <div className="flex gap-2">
                   <Button size="sm" variant="ghost" onClick={() => setDraft(null)}>إلغاء</Button>
-                  <Button size="sm" className="btn-primary-grad border-0 text-white" onClick={commit}>إضافة السؤال</Button>
+                  <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={commit}>إضافة السؤال</Button>
                 </div>
               </div>
             </div>

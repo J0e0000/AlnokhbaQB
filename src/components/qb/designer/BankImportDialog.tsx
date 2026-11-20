@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Loader2, Search, FolderDown } from 'lucide-react';
 import { useDesignerStore } from '@/lib/qb/designer-store';
@@ -23,7 +23,7 @@ export function BankImportButton() {
   return (
     <>
       <Button size="sm" variant="outline" className="w-full" onClick={() => setOpen(true)}>
-        <FolderDown className="mr-1 h-4 w-4" /> استيراد من بنك الأسئلة
+        <FolderDown className="me-1 h-4 w-4" /> استيراد من بنك الأسئلة
       </Button>
       <BankImportDialog open={open} onOpenChange={setOpen} />
     </>
@@ -120,35 +120,34 @@ function BankImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] max-w-xl overflow-y-auto" dir="rtl">
         <DialogHeader>
-          <DialogTitle className="text-right">استيراد من بنك الأسئلة</DialogTitle>
-          <DialogDescription className="text-right">ابحث في بنك الأسئلة واختر الأسئلة لاستيرادها إلى الامتحان.</DialogDescription>
+          <DialogTitle className="text-start">استيراد من بنك الأسئلة</DialogTitle>
         </DialogHeader>
         <div className="relative">
-          <Search className="absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input className="h-9 ps-8 text-sm" placeholder="بحث…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Search className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input className="h-9 pe-8 text-sm" placeholder="بحث…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         {loading ? (
-          <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-emerald-600" /></div>
+          <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-success" /></div>
         ) : questions.length === 0 ? (
-          <div className="py-8 text-center text-sm text-slate-400">البنك فارغ — أضف أسئلة من صفحة «بنك الأسئلة»</div>
+          <div className="py-8 text-center text-sm text-muted-foreground">البنك فارغ — أضف أسئلة من صفحة «بنك الأسئلة»</div>
         ) : (
-          <div className="max-h-80 space-y-2 overflow-y-auto pe-1">
+          <div className="max-h-80 space-y-2 overflow-y-auto ps-1">
             {questions.map((b) => (
-              <label key={b.id} className="flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 hover:bg-slate-50">
+              <label key={b.id} className="flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 hover:bg-muted/60">
                 <Checkbox className="mt-1" checked={selected.has(b.id)} onCheckedChange={() => toggle(b.id)} />
                 <div className="min-w-0 flex-1">
                   <div className="line-clamp-2 text-sm">{b.prompt}</div>
                   <div className="mt-1 flex flex-wrap gap-1">
-                    {b.subject && <Badge variant="outline" className="text-[10px]">{b.subject}</Badge>}
-                    <Badge variant="outline" className="text-[10px]">{b.marks} درجة</Badge>
-                    {b.correctAnswer ? <Badge className="bg-emerald-100 text-[10px] text-emerald-700">مفتاح ✓</Badge> : <Badge className="bg-amber-100 text-[10px] text-amber-800">بلا مفتاح</Badge>}
+                    {b.subject && <Badge variant="outline" className="text-[13px]">{b.subject}</Badge>}
+                    <Badge variant="outline" className="text-[13px]">{b.marks} درجة</Badge>
+                    {b.correctAnswer ? <Badge className="bg-success/10 text-[13px] text-success">مفتاح ✓</Badge> : <Badge className="bg-warning/10 text-[13px] text-warning">بلا مفتاح</Badge>}
                   </div>
                 </div>
               </label>
             ))}
           </div>
         )}
-        <Button className="btn-primary-grad w-full border-0 text-white" disabled={busy || selected.size === 0} onClick={importSelected}>
+        <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy || selected.size === 0} onClick={importSelected}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : `إضافة ${selected.size || ''} إلى الامتحان`}
         </Button>
       </DialogContent>

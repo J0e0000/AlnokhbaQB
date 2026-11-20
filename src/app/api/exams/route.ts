@@ -3,20 +3,15 @@
 
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { orgFilter } from '@/lib/auth';
 import { sanitizeDocument, starterDocument } from '@/lib/qb/schema';
-import { requireSession } from '../_lib/auth-guard';
 import { readJsonBody, serverError, zodMessage } from '../_lib/shared';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
-    const g = await requireSession('viewer', req);
-    if ('error' in g) return g.error;
     const exams = await db.exam.findMany({
-      where: { organizationId: orgFilter(g.session) },
       orderBy: { updatedAt: 'desc' },
       take: 200,
     });
@@ -52,8 +47,6 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const g = await requireSession('teacher', req);
-    if ('error' in g) return g.error;
     const body = await readJsonBody(req);
     const title = typeof body?.title === 'string' ? body.title.trim() : '';
     if (!title) {
@@ -71,7 +64,6 @@ export async function POST(req: Request) {
 
     const exam = await db.exam.create({
       data: {
-        organizationId: g.session.orgId ?? null,
         title,
         subject: typeof body?.subject === 'string' ? body.subject.trim() : null,
         gradeLevel: typeof body?.gradeLevel === 'string' ? body.gradeLevel.trim() : null,

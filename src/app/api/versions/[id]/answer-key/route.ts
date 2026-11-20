@@ -10,10 +10,8 @@
 
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { audit } from '@/lib/auth';
 import { sanitizeAnswerKey } from '@/lib/qb/schema';
 import { keyFingerprint } from '@/lib/qb/key-fingerprint';
-import { requireSession } from '../../../_lib/auth-guard';
 import { readJsonBody, serverError, zodMessage } from '../../../_lib/shared';
 
 export const runtime = 'nodejs';
@@ -27,19 +25,14 @@ function isZodError(err: unknown): boolean {
 
 export async function PATCH(req: Request, ctx: Ctx) {
   try {
-    const g = await requireSession('teacher', req);
-    if ('error' in g) return g.error;
     const { id } = await ctx.params;
 
     const version = await db.examVersion.findUnique({
       where: { id },
-      select: { id: true, examId: true, version: true, exam: { select: { organizationId: true, status: true } } },
+      select: { id: true, examId: true, version: true },
     });
     if (!version) {
       return NextResponse.json({ error: 'نسخة الامتحان غير موجودة' }, { status: 404 });
-    }
-    if (g.session.role !== 'super_admin' && version.exam.organizationId !== g.session.orgId) {
-      return NextResponse.json({ error: 'غير موجود أو لا تملك صلاحية الوصول' }, { status: 404 });
     }
 
     const body = await readJsonBody(req);
@@ -54,19 +47,6 @@ export async function PATCH(req: Request, ctx: Ctx) {
       select: { id: true, version: true },
     });
 
-    await audit({
-      session: g.session,
-      action: 'version.answerKey.update',
-      entity: 'examVersion',
-      entityId: updated.id,
-      meta: {
-        examId: version.examId,
-        versionNumber: updated.version,
-        keyCount: Object.keys(sanitized).length,
-        keyHash: keyFingerprint(sanitized),
-      },
-      req,
-    });
 
     return NextResponse.json({
       ok: true,

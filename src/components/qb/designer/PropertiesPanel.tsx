@@ -23,15 +23,8 @@ export default function PropertiesPanel() {
   const deleteElement = useDesignerStore((s) => s.deleteElement);
   const duplicateElement = useDesignerStore((s) => s.duplicateElement);
   const reorder = useDesignerStore((s) => s.reorder);
-  const answerKey = useDesignerStore((s) => s.answerKey);
-  const setAnswerKey = useDesignerStore((s) => s.setAnswerKey);
 
   const el = document.elements.find((e) => e.id === selectedId) as QBElement | undefined;
-  // Linked question for `question` elements → enables the guide-answer selector
-  const linkedQuestion =
-    el?.type === 'question'
-      ? document.questions.find((q) => q.id === (el.content as { questionId?: string }).questionId)
-      : undefined;
 
   const num = (v: number, onChange: (n: number) => void, step = 0.5) => (
     <Input
@@ -44,19 +37,19 @@ export default function PropertiesPanel() {
   );
 
   return (
-    <div className="flex h-full flex-col gap-4 overflow-y-auto p-4" dir="rtl">
+    <div className="flex h-full flex-col gap-4 overflow-y-auto p-3" dir="rtl">
       {el ? (
         <>
           <div>
-            <Label className="text-xs text-slate-500">العنصر: {el.type}</Label>
+            <Label className="text-[13px] text-muted-foreground">العنصر: {el.type}</Label>
             <div className="mt-2 grid grid-cols-2 gap-2">
-              <div><Label className="text-[10px]">X (مم)</Label>{num(el.x, (v) => commitGeometry(el.id, { ...el, x: v }))}</div>
-              <div><Label className="text-[10px]">Y (مم)</Label>{num(el.y, (v) => commitGeometry(el.id, { ...el, y: v }))}</div>
-              <div><Label className="text-[10px]">العرض</Label>{num(el.widthMm, (v) => commitGeometry(el.id, { ...el, widthMm: v }))}</div>
-              <div><Label className="text-[10px]">الارتفاع</Label>{num(el.heightMm, (v) => commitGeometry(el.id, { ...el, heightMm: v }))}</div>
+              <div><Label className="text-[13px]">X (مم)</Label>{num(el.x, (v) => commitGeometry(el.id, { ...el, x: v }))}</div>
+              <div><Label className="text-[13px]">Y (مم)</Label>{num(el.y, (v) => commitGeometry(el.id, { ...el, y: v }))}</div>
+              <div><Label className="text-[13px]">العرض</Label>{num(el.widthMm, (v) => commitGeometry(el.id, { ...el, widthMm: v }))}</div>
+              <div><Label className="text-[13px]">الارتفاع</Label>{num(el.heightMm, (v) => commitGeometry(el.id, { ...el, heightMm: v }))}</div>
             </div>
             <div className="mt-2">
-              <Label className="text-[10px]">التدوير: {el.rotation}°</Label>
+              <Label className="text-[13px]">التدوير: {el.rotation}°</Label>
               <Slider
                 value={[el.rotation]}
                 min={-180}
@@ -66,10 +59,10 @@ export default function PropertiesPanel() {
               />
             </div>
             <div className="mt-2 flex gap-1">
-              <Button size="sm" variant="outline" className="h-7 flex-1 text-xs" onClick={() => duplicateElement(el.id)}>تكرار</Button>
-              <Button size="sm" variant="outline" className="h-7 flex-1 text-xs" onClick={() => reorder(el.id, 'front')}>للأمام</Button>
-              <Button size="sm" variant="outline" className="h-7 flex-1 text-xs" onClick={() => reorder(el.id, 'back')}>للخلف</Button>
-              <Button size="sm" variant="destructive" className="h-7 flex-1 text-xs" onClick={() => deleteElement(el.id)}>حذف</Button>
+              <Button size="sm" variant="outline" className="h-7 flex-1 text-[13px]" onClick={() => duplicateElement(el.id)}>تكرار</Button>
+              <Button size="sm" variant="outline" className="h-7 flex-1 text-[13px]" onClick={() => reorder(el.id, 'front')}>للأمام</Button>
+              <Button size="sm" variant="outline" className="h-7 flex-1 text-[13px]" onClick={() => reorder(el.id, 'back')}>للخلف</Button>
+              <Button size="sm" variant="destructive" className="h-7 flex-1 text-[13px]" onClick={() => deleteElement(el.id)}>حذف</Button>
             </div>
           </div>
 
@@ -79,7 +72,7 @@ export default function PropertiesPanel() {
             <>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label className="text-[10px]">الخط</Label>
+                  <Label className="text-[13px]">الخط</Label>
                   <Select value={el.style.fontFamily} onValueChange={(v) => updateElement(el.id, { style: { fontFamily: v } as never })}>
                     <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -89,16 +82,16 @@ export default function PropertiesPanel() {
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-[10px]">الحجم (pt)</Label>
+                  <Label className="text-[13px]">الحجم (pt)</Label>
                   {num(el.style.fontSize, (v) => updateElement(el.id, { style: { fontSize: v } }), 1)}
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-1 text-xs"><Switch checked={el.style.bold} onCheckedChange={(v) => updateElement(el.id, { style: { bold: v } })} /> عريض</label>
-                <label className="flex items-center gap-1 text-xs"><Switch checked={el.style.italic} onCheckedChange={(v) => updateElement(el.id, { style: { italic: v } })} /> مائل</label>
+                <label className="flex items-center gap-1 text-[13px]"><Switch checked={el.style.bold} onCheckedChange={(v) => updateElement(el.id, { style: { bold: v } })} /> عريض</label>
+                <label className="flex items-center gap-1 text-[13px]"><Switch checked={el.style.italic} onCheckedChange={(v) => updateElement(el.id, { style: { italic: v } })} /> مائل</label>
               </div>
               <div>
-                <Label className="text-[10px]">المحاذاة</Label>
+                <Label className="text-[13px]">المحاذاة</Label>
                 <Select value={el.style.align} onValueChange={(v) => updateElement(el.id, { style: { align: v } as never })}>
                   <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -110,7 +103,7 @@ export default function PropertiesPanel() {
                 </Select>
               </div>
               <div className="flex items-center gap-2">
-                <Label className="text-[10px]">اللون</Label>
+                <Label className="text-[13px]">اللون</Label>
                 <input type="color" value={el.style.color} onChange={(e) => updateElement(el.id, { style: { color: e.target.value } })} className="h-8 w-14 rounded border" />
               </div>
             </>
@@ -120,7 +113,7 @@ export default function PropertiesPanel() {
             <>
               <Separator />
               <div>
-                <Label className="text-[10px]">السؤال المرتبط</Label>
+                <Label className="text-[13px]">السؤال المرتبط</Label>
                 <Select
                   value={(el.content as { questionId: string }).questionId}
                   onValueChange={(v) => updateElement(el.id, { content: { questionId: v } })}
@@ -133,7 +126,7 @@ export default function PropertiesPanel() {
                   </SelectContent>
                 </Select>
                 <div className="mt-2">
-                  <Label className="text-[10px]">توزيع الخيارات</Label>
+                  <Label className="text-[13px]">توزيع الخيارات</Label>
                   <Select value={(el.content as { optionLayout: string }).optionLayout} onValueChange={(v) => updateElement(el.id, { content: { optionLayout: v } })}>
                     <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -143,36 +136,6 @@ export default function PropertiesPanel() {
                     </SelectContent>
                   </Select>
                 </div>
-                {/* ---- guide answer (correct answer) selector ---- */}
-                {linkedQuestion && linkedQuestion.type === 'mcq' && linkedQuestion.options.length >= 2 && (
-                  <div className="mt-3 rounded-xl border bg-emerald-50/50 p-2">
-                    <Label className="text-[10px] font-semibold text-emerald-800">الإجابة الصحيحة (دليل التصحيح)</Label>
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {linkedQuestion.options.map((o) => {
-                        const active = answerKey[linkedQuestion.id] === o.id;
-                        return (
-                          <button
-                            key={o.id}
-                            type="button"
-                            onClick={() => setAnswerKey(linkedQuestion.id, active ? '' : o.id)}
-                            aria-pressed={active}
-                            title={o.text || `الخيار ${o.id}`}
-                            className={`h-7 w-7 rounded-full border text-xs font-bold transition ${
-                              active
-                                ? 'border-emerald-600 bg-emerald-600 text-white shadow-sm'
-                                : 'border-slate-300 bg-white text-slate-600 hover:border-emerald-400 hover:text-emerald-700'
-                            }`}
-                          >
-                            {o.id}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p className="mt-1.5 text-[9px] leading-relaxed text-emerald-700">
-                      يُستخدم في التصحيح الآلي (OMR) — يُجمَّد مع النسخة عند النشر.
-                    </p>
-                  </div>
-                )}
               </div>
             </>
           )}
@@ -181,9 +144,9 @@ export default function PropertiesPanel() {
             <>
               <Separator />
               <div>
-                <Label className="text-[10px]">النص</Label>
+                <Label className="text-[13px]">النص</Label>
                 <textarea
-                  className="mt-1 h-24 w-full rounded border p-2 text-xs"
+                  className="mt-1 h-24 w-full rounded border p-2 text-[13px]"
                   value={(el.content as { text: string }).text}
                   onChange={(e) => updateElement(el.id, { content: { text: e.target.value } })}
                 />
@@ -193,13 +156,13 @@ export default function PropertiesPanel() {
         </>
       ) : (
         <>
-          <div className="text-sm font-bold text-slate-500">إعدادات الامتحان</div>
+          <div className="text-[13px] font-semibold text-muted-foreground">إعدادات الامتحان</div>
           <div className="space-y-2">
-            <div><Label className="text-[10px]">اسم المدرسة</Label><Input className="h-8" value={document.branding.institution} onChange={(e) => updateBranding({ institution: e.target.value })} /></div>
-            <div><Label className="text-[10px]">العام الدراسي</Label><Input className="h-8" value={document.branding.academicYear ?? ''} onChange={(e) => updateBranding({ academicYear: e.target.value })} /></div>
-            <div><Label className="text-[10px]">المدة</Label><Input className="h-8" value={document.branding.duration ?? ''} onChange={(e) => updateBranding({ duration: e.target.value })} /></div>
+            <div><Label className="text-[13px]">اسم المدرسة</Label><Input className="h-8" value={document.branding.institution} onChange={(e) => updateBranding({ institution: e.target.value })} /></div>
+            <div><Label className="text-[13px]">العام الدراسي</Label><Input className="h-8" value={document.branding.academicYear ?? ''} onChange={(e) => updateBranding({ academicYear: e.target.value })} /></div>
+            <div><Label className="text-[13px]">المدة</Label><Input className="h-8" value={document.branding.duration ?? ''} onChange={(e) => updateBranding({ duration: e.target.value })} /></div>
             <div className="flex items-center gap-2">
-              <Label className="text-[10px]">الإطار</Label>
+              <Label className="text-[13px]">الإطار</Label>
               <Select value={document.branding.borderStyle} onValueChange={(v) => updateBranding({ borderStyle: v as 'single' })}>
                 <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -212,10 +175,10 @@ export default function PropertiesPanel() {
             </div>
           </div>
           <Separator />
-          <div className="text-sm font-bold text-slate-500">تصميم الورقة</div>
+          <div className="text-[13px] font-semibold text-muted-foreground">تصميم الورقة</div>
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <Label className="text-[10px]">لون التمييز</Label>
+              <Label className="text-[13px]">لون التمييز</Label>
               <input
                 type="color"
                 value={document.branding.accentColor ?? '#16a34a'}
@@ -223,12 +186,12 @@ export default function PropertiesPanel() {
                 className="h-8 w-10 rounded border"
                 title="شريط ملون أعلى كل صفحة"
               />
-              <Button variant="outline" size="sm" className="h-8 text-[10px]" onClick={() => updateBranding({ accentColor: undefined })}>
+              <Button variant="outline" size="sm" className="h-8 text-[13px]" onClick={() => updateBranding({ accentColor: undefined })}>
                 إزالة
               </Button>
             </div>
             <div>
-              <Label className="text-[10px]">حجم خط الأسئلة</Label>
+              <Label className="text-[13px]">حجم خط الأسئلة</Label>
               <Select value={document.branding.fontScale ?? 'm'} onValueChange={(v) => updateBranding({ fontScale: v as 's' | 'm' | 'l' })}>
                 <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -239,7 +202,7 @@ export default function PropertiesPanel() {
               </Select>
             </div>
             <div>
-              <Label className="text-[10px]">نص تذييل الصفحة (اختياري)</Label>
+              <Label className="text-[13px]">نص تذييل الصفحة (اختياري)</Label>
               <Input
                 className="h-8"
                 placeholder="مثال: مدرسة النخبة — الفصل الدراسي الأول"
@@ -249,8 +212,8 @@ export default function PropertiesPanel() {
             </div>
           </div>
           <Separator />
-          <div className="text-sm font-bold text-slate-500">التصحيح</div>
-          <label className="flex items-center gap-2 text-xs">
+          <div className="text-[13px] font-semibold text-muted-foreground">التصحيح</div>
+          <label className="flex items-center gap-2 text-[13px]">
             <Switch
               checked={(document.grading?.negativeMarking ?? 0) > 0}
               onCheckedChange={(v) => setGrading({ negativeMarking: v ? 0.25 : 0 })}
@@ -258,17 +221,17 @@ export default function PropertiesPanel() {
             خصم 0.25 لكل إجابة خاطئة
           </label>
           <Separator />
-          <div className="text-sm font-bold text-slate-500">OMR</div>
-          <label className="flex items-center gap-2 text-xs">
+          <div className="text-[13px] font-semibold text-muted-foreground">OMR</div>
+          <label className="flex items-center gap-2 text-[13px]">
             <Switch checked={document.omr.enabled} onCheckedChange={(v) => updateOmr({ enabled: v })} /> تفعيل التصحيح الآلي
           </label>
           {document.omr.enabled && (
             <div className="grid grid-cols-2 gap-2">
-              <div><Label className="text-[10px]">خيارات/سؤال</Label><Input type="number" min={2} max={6} className="h-8" value={document.omr.optionsPerQuestion} onChange={(e) => updateOmr({ optionsPerQuestion: parseInt(e.target.value) || 4 })} /></div>
-              <div><Label className="text-[10px]">أرقام الطالب</Label><Input type="number" min={4} max={10} className="h-8" value={document.omr.studentIdDigits} onChange={(e) => updateOmr({ studentIdDigits: parseInt(e.target.value) || 6 })} /></div>
+              <div><Label className="text-[13px]">خيارات/سؤال</Label><Input type="number" min={2} max={6} className="h-8" value={document.omr.optionsPerQuestion} onChange={(e) => updateOmr({ optionsPerQuestion: parseInt(e.target.value) || 4 })} /></div>
+              <div><Label className="text-[13px]">أرقام الطالب</Label><Input type="number" min={4} max={10} className="h-8" value={document.omr.studentIdDigits} onChange={(e) => updateOmr({ studentIdDigits: parseInt(e.target.value) || 6 })} /></div>
             </div>
           )}
-          <div className="mt-auto rounded-xl bg-emerald-50 p-3 text-[11px] leading-relaxed text-emerald-800">
+          <div className="mt-auto rounded-lg bg-success/10 p-3 text-[13px] leading-relaxed text-success">
             حدّد عنصرًا من الصفحة لتعديل خصائصه، أو أضف عناصر من اللوحة اليمنى.
           </div>
         </>

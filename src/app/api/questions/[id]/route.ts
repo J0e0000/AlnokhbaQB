@@ -10,7 +10,6 @@ import {
   trueFalseOptions,
 } from '@/lib/qb/bank';
 import { readJsonBody, serverError, zodMessage } from '../../_lib/shared';
-import { requireSession } from '../../_lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,18 +18,10 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: Request, ctx: Ctx) {
   try {
-    const g = await requireSession('teacher', req);
-    if ('error' in g) return g.error;
     const { id } = await ctx.params;
     const existing = await db.question.findUnique({ where: { id } });
     if (!existing) {
       return NextResponse.json({ error: 'السؤال غير موجود' }, { status: 404 });
-    }
-    if (g.session.role !== 'super_admin' && existing.organizationId !== g.session.orgId) {
-      return NextResponse.json(
-        { error: 'غير موجود أو لا تملك صلاحية الوصول' },
-        { status: 404 }
-      );
     }
     const body = await readJsonBody(req);
     const parsed = questionInputSchema.safeParse(body);
@@ -64,21 +55,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 }
 
-export async function DELETE(req: Request, ctx: Ctx) {
+export async function DELETE(_req: Request, ctx: Ctx) {
   try {
-    const g = await requireSession('teacher', req);
-    if ('error' in g) return g.error;
     const { id } = await ctx.params;
-    const existing = await db.question.findUnique({ where: { id }, select: { id: true, organizationId: true } });
-    if (!existing) {
-      return NextResponse.json({ error: 'السؤال غير موجود' }, { status: 404 });
-    }
-    if (g.session.role !== 'super_admin' && existing.organizationId !== g.session.orgId) {
-      return NextResponse.json(
-        { error: 'غير موجود أو لا تملك صلاحية الوصول' },
-        { status: 404 }
-      );
-    }
     await db.question.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch {

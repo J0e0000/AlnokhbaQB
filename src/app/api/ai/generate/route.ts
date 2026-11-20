@@ -8,8 +8,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { orgFilter } from '@/lib/auth';
-import { requireSession } from '../../_lib/auth-guard';
+import { clientIp, rateLimit } from '@/lib/auth/ratelimit';
 import { readJsonBody, serverError, zodMessage } from '../../_lib/shared';
 import {
   normalizeCorrectAnswer,
@@ -127,9 +126,16 @@ function normalizeCandidate(
 }
 
 export async function POST(req: Request) {
+  // heavy LLM route — 30 req/min per client (auth gate)
+  const rl = await rateLimit(`ai:${clientIp(req)}`, 30, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'عدد كبير من الطلبات — خفّف السرعة وحاول بعد قليل' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+    );
+  }
+
   try {
-    const g = await requireSession('teacher', req);
-    if ('error' in g) return g.error;
     const body = await readJsonBody(req);
     const parsed = genSchema.safeParse(body);
     if (!parsed.success) {
@@ -141,11 +147,31 @@ export async function POST(req: Request) {
     const p = parsed.data;
 
     const { system, user } = buildPrompt(p);
-    const { aiChatText } = await import('@/lib/ai/client');
+    const mod = (await import('z-ai-web-dev-sdk')) as unknown as {
+      default: {
+        create: () => Promise<{
+          chat: {
+            completions: {
+              create: (params: unknown) => Promise<{
+                choices?: Array<{ message?: { content?: string } }>;
+              }>;
+            };
+          };
+        }>;
+      };
+    };
+    const zai = await mod.default.create();
 
     // LLMs occasionally emit non-JSON prose — ask again once before failing.
     const askOnce = async (): Promise<string> => {
-      return aiChatText({ system, user, maxTokens: 4000, timeoutMs: 120_000 });
+      const completion = await zai.chat.completions.create({
+        messages: [
+          { role: 'assistant', content: system },
+          { role: 'user', content: user },
+        ],
+        thinking: { type: 'disabled' },
+      });
+      return completion.choices?.[0]?.message?.content ?? '';
     };
     let raw = await askOnce();
     let candidates = extractJsonArray(raw);
@@ -195,7 +221,6 @@ export async function POST(req: Request) {
       }
       const row = await db.question.create({
         data: {
-          organizationId: orgFilter(g.session) ?? null,
           subject: input.subject,
           chapter: input.chapter,
           topic: input.topic,
@@ -221,9 +246,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const rows = await db.question.findMany({
-      where: { id: { in: createdIds }, organizationId: orgFilter(g.session) },
-    });
+    const rows = await db.question.findMany({ where: { id: { in: createdIds } } });
     return NextResponse.json(
       {
         generated: rows.length,

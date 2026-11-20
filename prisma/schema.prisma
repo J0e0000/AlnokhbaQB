@@ -145,6 +145,30 @@ model Exam {
   scans    Scan[]
   attempts ExamAttempt[]
   assignments Assignment[] // graded assignments bound to this exam (PHASE 5)
+  sittings ExamSitting[]
+}
+
+// ---- Exam sittings registry (كود الجلوس) ----
+// One-time numeric seat code per seat; codes are digits-only so they can be
+// filled into the OMR ID bubbles, and unique across the whole database so a
+// code can never collide with another exam's sitting. When a scan is matched
+// to its code (cheating analysis) the sitting is linked to that scan.
+model ExamSitting {
+  id          String    @id @default(cuid())
+  examId      String
+  seatNumber  Int
+  code        String    @unique
+  studentName String?   // assigned by the teacher (optional)
+  studentCode String?   // real student code once assigned
+  status      String    @default("unused") // unused | used | invalidated
+  scanId      String?   // scan whose sheet carried this code
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  exam Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, seatNumber])
+  @@index([examId])
 }
 
 // ---- Online exam configuration (additive; printable/OMR unaffected) ----
@@ -241,7 +265,8 @@ model AssignmentSubmission {
   studentName  String
   studentCode  String?
   attemptId    String?  @unique // graded mode → one ledger row per attempt
-  filePath     String? // db/assignments/<file> — only the PATH is stored
+  filePath     String? // legacy local-disk path (db/assignments/<file>) — only the PATH is stored
+  storagePath  String? // Supabase Storage object path (private "uploads" bucket) — direct browser upload
   fileName     String?
   fileType     String?
   fileSize     Int?
@@ -337,4 +362,14 @@ model FormTemplate {
   dataJson  String // full FormTemplate JSON (areas, markers, key, weights...)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Fixed-window rate limiting for the auth gate. One row per
+// "<scope>:<client-key>"; the window resets when it elapses. Deliberately a
+// plain table — no external rate-limit service required.
+model RateLimitBucket {
+  key         String   @id
+  count       Int      @default(0)
+  windowStart DateTime
+  @@index([windowStart])
 }

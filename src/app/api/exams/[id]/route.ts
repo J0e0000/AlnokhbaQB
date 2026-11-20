@@ -4,19 +4,14 @@
 
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { audit } from '@/lib/auth';
 import { sanitizeAnswerKey, sanitizeDocument } from '@/lib/qb/schema';
-import { keyFingerprint } from '@/lib/qb/key-fingerprint';
 import type { QBDocument } from '@/lib/qb/types';
-import { requireSession } from '../../_lib/auth-guard';
 import { readJsonBody, serverError, zodMessage } from '../../_lib/shared';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 type Ctx = { params: Promise<{ id: string }> };
-
-const NOT_OWNED = { error: 'غير موجود أو لا تملك صلاحية الوصول' } as const;
 
 function isZodError(err: unknown): boolean {
   return Array.isArray((err as { issues?: unknown })?.issues);
@@ -30,10 +25,8 @@ function parseDraftDocument(exam: { documentJson: string }): QBDocument | null {
   }
 }
 
-export async function GET(req: Request, ctx: Ctx) {
+export async function GET(_req: Request, ctx: Ctx) {
   try {
-    const g = await requireSession('viewer', req);
-    if ('error' in g) return g.error;
     const { id } = await ctx.params;
     const exam = await db.exam.findUnique({
       where: { id },
@@ -41,9 +34,6 @@ export async function GET(req: Request, ctx: Ctx) {
     });
     if (!exam) {
       return NextResponse.json({ error: 'الامتحان غير موجود' }, { status: 404 });
-    }
-    if (g.session.role !== 'super_admin' && exam.organizationId !== g.session.orgId) {
-      return NextResponse.json(NOT_OWNED, { status: 404 });
     }
     const document = parseDraftDocument(exam);
     let answerKey: Record<string, string> = {};
@@ -57,26 +47,7 @@ export async function GET(req: Request, ctx: Ctx) {
       exam: examRow,
       document,
       answerKey,
-      versions: versions.map((v) => {
-        let keyCount = 0;
-        let keyHash = '';
-        try {
-          const k = JSON.parse(v.answerKeyJson) as Record<string, string>;
-          keyCount = Object.keys(k).length;
-          keyHash = keyFingerprint(k);
-        } catch {
-          keyCount = 0;
-          keyHash = '';
-        }
-        return {
-          id: v.id,
-          version: v.version,
-          publishedAt: v.publishedAt,
-          omrTemplate: !!v.omrTemplateJson,
-          answerKeyCount: keyCount,
-          answerKeyHash: keyHash,
-        };
-      }),
+      versions: versions.map((v) => ({ id: v.id, version: v.version, publishedAt: v.publishedAt })),
     });
   } catch (err) {
     return NextResponse.json(serverError(err), { status: 500 });
@@ -85,15 +56,10 @@ export async function GET(req: Request, ctx: Ctx) {
 
 export async function PATCH(req: Request, ctx: Ctx) {
   try {
-    const g = await requireSession('teacher', req);
-    if ('error' in g) return g.error;
     const { id } = await ctx.params;
     const exam = await db.exam.findUnique({ where: { id } });
     if (!exam) {
       return NextResponse.json({ error: 'الامتحان غير موجود' }, { status: 404 });
-    }
-    if (g.session.role !== 'super_admin' && exam.organizationId !== g.session.orgId) {
-      return NextResponse.json(NOT_OWNED, { status: 404 });
     }
     if (exam.status === 'ARCHIVED') {
       return NextResponse.json(
@@ -169,29 +135,16 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 }
 
-export async function DELETE(req: Request, ctx: Ctx) {
+export async function DELETE(_req: Request, ctx: Ctx) {
   try {
-    const g = await requireSession('teacher', req);
-    if ('error' in g) return g.error;
     const { id } = await ctx.params;
     const exam = await db.exam.findUnique({ where: { id } });
     if (!exam) {
       return NextResponse.json({ error: 'الامتحان غير موجود' }, { status: 404 });
     }
-    if (g.session.role !== 'super_admin' && exam.organizationId !== g.session.orgId) {
-      return NextResponse.json(NOT_OWNED, { status: 404 });
-    }
     const updated = await db.exam.update({
       where: { id },
       data: { status: 'ARCHIVED' },
-    });
-    await audit({
-      session: g.session,
-      action: 'exam.archive',
-      entity: 'exam',
-      entityId: exam.id,
-      meta: { title: exam.title },
-      req,
     });
     return NextResponse.json({ exam: updated, archived: true });
   } catch (err) {

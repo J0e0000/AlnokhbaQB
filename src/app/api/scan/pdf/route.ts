@@ -22,7 +22,6 @@
 import { createHash, randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { audit } from '@/lib/auth';
 import { gradeScan } from '@/lib/qb/grading';
 import {
   isTransportError,
@@ -33,7 +32,6 @@ import {
 import type { OMRTemplate, QBAnswerKey, QBDocument, QBScannedAnswer } from '@/lib/qb/types';
 import {
   ensureActiveCalibration,
-  rateLimit,
   readJsonBody,
   scanMaxPdfBytes,
   scanMaxPdfPages,
@@ -42,7 +40,7 @@ import {
   stripDataUrl,
   thresholdsFromConfig,
 } from '../../_lib/shared';
-import { requireSession } from '../../_lib/auth-guard';
+import { clientIp, rateLimit } from '@/lib/auth/ratelimit';
 import { loadVersion, loadVersionHint } from '../../_lib/version';
 import { persistScanImage } from '@/lib/omr/scan-store';
 
@@ -244,12 +242,11 @@ async function validatePdfStructure(bytes: Buffer): Promise<
 
 export async function POST(req: Request) {
   try {
-    const g = await requireSession('teacher', req);
-    if ('error' in g) return g.error;
-    if (!rateLimit(`scanpdf:${g.session.uid}`, 30, 60_000)) {
+    const rl = await rateLimit(`scanpdf:${clientIp(req)}`, 30, 60_000);
+    if (!rl.ok) {
       return NextResponse.json(
         { error: 'عدد كبير من عمليات المعالجة — انتظر لحظة ثم أعد المحاولة' },
-        { status: 429 }
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } }
       );
     }
 
@@ -340,12 +337,6 @@ export async function POST(req: Request) {
       // hint may be an ExamVersion id (new clients) or an Exam id (legacy picker)
       const loaded = await loadVersionHint(versionId);
       if (!loaded || !loaded.omrTemplate) return false;
-      if (
-        g.session.role !== 'super_admin' &&
-        loaded.row.exam.organizationId !== g.session.orgId
-      ) {
-        return false; // another org's version → behave like unknown QR
-      }
       template = loaded.omrTemplate;
       versionDoc = loaded.document;
       versionKey = loaded.answerKey;
@@ -538,17 +529,6 @@ export async function POST(req: Request) {
     }
 
     const processedAny = results.some((r) => r.ok || r.scanId);
-    if (processedAny) {
-      await audit({
-        session: g.session,
-        action: 'scan.batch',
-        entity: 'scan',
-        entityId: batchId,
-        meta: { fromPage, toPage: fromPage + pages.length - 1, total, resolvedVersionId },
-        req,
-      });
-    }
-
     const transportAbort = results.some((r) => r.transportAbort);
     const nextFrom = pageChunk ? pageChunk.index + pages.length : fromPage + pages.length;
     return NextResponse.json({

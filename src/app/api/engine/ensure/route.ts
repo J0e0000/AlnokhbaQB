@@ -11,7 +11,6 @@
 import { NextResponse } from 'next/server';
 import { ensureEngine, engineHealthy } from '@/lib/omr/supervisor';
 import { OMR_ENGINE_URL } from '@/lib/omr/client';
-import { requireSession } from '../../_lib/auth-guard';
 import { serverError } from '../../_lib/shared';
 
 export const runtime = 'nodejs';
@@ -29,8 +28,6 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const g = await requireSession('teacher', req);
-    if ('error' in g) return g.error;
     if (process.env.VERCEL) {
       return NextResponse.json(
         {

@@ -31,23 +31,15 @@ export interface DocumentProcessor {
 }
 
 // ---------- processor 1: Tesseract (via the local OMR engine service) ----------
-// Arabic support is REAL and OFFLINE: the engine bundles ara.traineddata
-// (tesseract-ocr/tessdata_fast, Apache-2.0) and reports a mean word
-// confidence from tesseract's TSV output. Weak Arabic results (< AR Escalate
-// threshold) escalate to the VLM processor below instead of being trusted.
-
-/** Below this self-assessed confidence the next processor gets a chance. */
-const ESCALATE_BELOW = 0.6;
 
 const tesseractProcessor: DocumentProcessor = {
   name: 'tesseract',
-  langs: ['eng', 'ara'],
+  langs: ['ara', 'eng'],
   async process({ base64, lang }) {
     const { ocrText } = await import('@/lib/omr/client');
-    // Mixed pass: Arabic pages usually contain digits/latin fragments too.
-    const res = await ocrText(base64, lang === 'ara' ? 'ara+eng' : lang);
+    const res = await ocrText(base64, lang);
     if (!res.ok || !res.text.trim()) return null;
-    return { engine: 'tesseract', text: res.text, confidence: res.confidence ?? null };
+    return { engine: 'tesseract', text: res.text, confidence: null };
   },
 };
 
@@ -61,19 +53,37 @@ export const vlmProcessor: DocumentProcessor = {
   langs: ['ara', 'eng'],
   async process({ base64, mime }) {
     try {
-      const { aiVisionText } = await import('@/lib/ai/client');
-      const text = await aiVisionText({
-        prompt: VLM_OCR_PROMPT,
-        dataUrl: `data:${mime};base64,${base64}`,
-        maxTokens: 4096,
+      const mod = (await import('z-ai-web-dev-sdk')) as unknown as {
+        default: {
+          create: () => Promise<{
+            chat: {
+              completions: {
+                createVision: (params: unknown) => Promise<{
+                  choices?: Array<{ message?: { content?: string } }>;
+                }>;
+              };
+            };
+          }>;
+        };
+      };
+      const zai = await mod.default.create();
+      const completion = await zai.chat.completions.createVision({
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: VLM_OCR_PROMPT },
+              { type: 'image_url', image_url: { url: `data:${mime};base64,${base64}` } },
+            ],
+          },
+        ],
+        thinking: { type: 'disabled' },
       });
+      const text = completion.choices?.[0]?.message?.content;
       if (!text || !text.trim()) return null;
       return { engine: 'vlm', text: text.trim(), confidence: null };
-    } catch (err) {
-      // re-throw so processDocument records the REAL failure reason in the
-      // API response — swallowed nulls made Vercel OCR failures
-      // indistinguishable from genuinely-empty model output
-      throw err instanceof Error ? err : new Error(String(err));
+    } catch {
+      return null;
     }
   },
 };
@@ -103,22 +113,11 @@ export async function processDocument(input: ProcessorInput): Promise<DocumentOc
   const candidates = PROCESSORS.filter((p) => p.langs.includes(input.lang));
   let lastStage = 'noProcessor';
   let lastError: string | undefined;
-  // Weak-but-usable result: kept as fallback in case no stronger processor succeeds.
-  let weak: ProcessorResult | null = null;
 
   for (const processor of candidates) {
     try {
       const result = await processor.process(input);
       if (result) {
-        // Confident result wins. A self-assessed confidence below ESCALATE_BELOW
-        // is never trusted blindly — the next processor (e.g. VLM for Arabic)
-        // gets a chance; if none succeeds the weak result is returned flagged.
-        if (result.confidence !== null && result.confidence < ESCALATE_BELOW) {
-          if (!weak || (weak.confidence ?? 0) < result.confidence) weak = result;
-          lastStage = 'lowConfidence';
-          lastError = `المحرك ${processor.name} أعاد ثقة منخفضة (${result.confidence})`;
-          continue;
-        }
         // no self-assessed confidence → the teacher MUST review the text
         const needsReview = result.confidence === null || result.confidence < 0.85;
         return {
@@ -135,16 +134,6 @@ export async function processDocument(input: ProcessorInput): Promise<DocumentOc
       lastStage = 'engineError';
       lastError = err instanceof Error ? err.message : String(err);
     }
-  }
-
-  if (weak) {
-    return {
-      ok: true,
-      engine: weak.engine,
-      text: weak.text,
-      confidence: weak.confidence,
-      needsReview: true,
-    };
   }
 
   return { ok: false, confidence: null, needsReview: true, stage: lastStage, error: lastError };

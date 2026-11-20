@@ -6,7 +6,7 @@
 // structure. Deterministic: same version → same template.
 // ============================================================
 
-import { createHash, createHmac } from 'crypto';
+import { createHash } from 'crypto';
 import type {
   OMRTemplate,
   OMRQuestionSpec,
@@ -16,10 +16,7 @@ import type {
 
 export const OMR_DEFAULT_THRESHOLDS = {
   filled: 0.45,
-  // Metric-consistent: the engine measures fill relative to local paper, so
-  // paper noise tops out ~0.18 while the lightest real marks start ~0.25.
-  // The engine also enforces this as a floor (EMPTY_FLOOR) at scan time.
-  empty: 0.2,
+  empty: 0.17,
   ambiguousMargin: 0.1,
   minAbsoluteFill: 0.08,
 };
@@ -66,77 +63,20 @@ export function omrChecksum(examVersionId: string, templateId: string, sheet: nu
     .toUpperCase();
 }
 
-/** Secret used to sign QR payloads (v2). Falls back to the auth secret in
- *  production; a stable dev default keeps local renders verifiable. */
-export function qrSigningSecret(): string {
-  return (
-    process.env.OMR_QR_SECRET?.trim() ||
-    process.env.AUTH_SECRET?.trim() ||
-    'anqb-dev-qr-secret-do-not-use-in-prod'
-  );
-}
-
-function qrHmac(examVersionId: string, templateId: string, sheet: number, sheets: number): string {
-  return createHmac('sha256', qrSigningSecret())
-    .update(`2|${examVersionId}|${templateId}|${sheet}|${sheets}`)
-    .digest('hex')
-    .slice(0, 10)
-    .toUpperCase();
-}
-
-/**
- * QR payload v2 — HMAC-signed (tamper-evident sheet/version identity).
- * Format: ANQB2|<examVersionId>|<templateId>|<sheet>|<sheets>|<hmac10>
- * v1 (ANQB|1|...) remains accepted for legacy printed sheets; every payload
- * is ultimately re-verified server-side against the database anyway.
- */
 export function buildQrPayload(
   examVersionId: string,
   templateId: string,
   sheet: number,
   sheets: number
 ): string {
-  return `ANQB2|${examVersionId}|${templateId}|${sheet}|${sheets}|${qrHmac(
-    examVersionId,
-    templateId,
-    sheet,
-    sheets
-  )}`;
+  return `ANQB|1|${examVersionId}|${templateId}|${sheet}|${sheets}|${omrChecksum(examVersionId, templateId, sheet)}`;
 }
 
-export interface QrPayloadParsed {
-  examVersionId: string;
-  templateId: string;
-  sheet: number;
-  sheets: number;
-  /** payload format version actually decoded (1 = legacy checksum, 2 = HMAC) */
-  v: 1 | 2;
-}
-
-export function parseQrPayload(payload: string): QrPayloadParsed | null {
+export function parseQrPayload(
+  payload: string
+): { examVersionId: string; templateId: string; sheet: number; sheets: number } | null {
   try {
     const parts = payload.trim().split('|');
-    // ---- v2: ANQB2|evid|tid|sheet|sheets|hmac10
-    if (parts.length === 6 && parts[0] === 'ANQB2') {
-      const [, examVersionId, templateId, sheetS, sheetsS, mac] = parts;
-      const sheet = parseInt(sheetS, 10);
-      const sheets = parseInt(sheetsS, 10);
-      if (
-        !examVersionId ||
-        !templateId ||
-        !Number.isInteger(sheet) ||
-        !Number.isInteger(sheets) ||
-        sheet < 0 ||
-        sheets < 1 ||
-        sheet >= sheets
-      ) {
-        return null;
-      }
-      const expected = qrHmac(examVersionId, templateId, sheet, sheets);
-      if (mac.toUpperCase() !== expected) return null;
-      return { examVersionId, templateId, sheet, sheets, v: 2 };
-    }
-    // ---- v1 legacy: ANQB|1|evid|tid|sheet|sheets|sha8
     if (parts.length !== 7 || parts[0] !== 'ANQB') return null;
     const [, ver, examVersionId, templateId, sheetS, sheetsS, check] = parts;
     if (ver !== '1') return null;
@@ -145,7 +85,7 @@ export function parseQrPayload(payload: string): QrPayloadParsed | null {
     if (!Number.isInteger(sheet) || !Number.isInteger(sheets)) return null;
     const expected = omrChecksum(examVersionId, templateId, sheet);
     if (check.toUpperCase() !== expected) return null;
-    return { examVersionId, templateId, sheet, sheets, v: 1 };
+    return { examVersionId, templateId, sheet, sheets };
   } catch {
     return null;
   }

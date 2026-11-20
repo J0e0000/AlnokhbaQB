@@ -120,6 +120,23 @@ if ! command -v bun >/dev/null 2>&1; then
 	exit 1
 fi
 
+if [ -f "$PROJECT_DIR/requirements.txt" ]; then
+	if command -v uv >/dev/null 2>&1; then
+		uv venv --python python3 "$PROJECT_DIR/.venv"
+		uv pip install --python "$PROJECT_DIR/.venv/bin/python" --requirement "$PROJECT_DIR/requirements.txt"
+	else
+		python3 -m venv "$PROJECT_DIR/.venv"
+		"$PROJECT_DIR/.venv/bin/python" -m pip install --requirement "$PROJECT_DIR/requirements.txt"
+	fi
+	export PATH="$PROJECT_DIR/.venv/bin:$PATH"
+fi
+
+BUILD_DIR="$PROJECT_DIR/.dev-runtime" bash "$SCRIPT_DIR/tesseract-runtime-build.sh"
+export TESSERACT_CMD="$PROJECT_DIR/.dev-runtime/tesseract-runtime/bin/tesseract"
+export TESSDATA_DIR="$PROJECT_DIR/.dev-runtime/tesseract-runtime/share/tessdata"
+export LD_LIBRARY_PATH="$PROJECT_DIR/.dev-runtime/tesseract-runtime/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export PYTHONDONTWRITEBYTECODE=1
+
 log_step_start "bun install"
 echo "[BUN] Installing dependencies..."
 bun install

@@ -108,7 +108,7 @@ export function AiGenerateDialog({ open, onOpenChange, onGenerated }: Props) {
       <DialogContent className="max-w-lg" dir="rtl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-right">
-            <span className="logo-glow flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-700 text-white">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-white">
               <BrainCircuit className="h-4 w-4" />
             </span>
             توليد أسئلة بالذكاء الاصطناعي
@@ -120,7 +120,7 @@ export function AiGenerateDialog({ open, onOpenChange, onGenerated }: Props) {
 
         {result ? (
           <div className="space-y-4 py-2 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/15 text-violet-500">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               <Sparkles className="h-7 w-7" />
             </div>
             <div className="text-sm font-bold">

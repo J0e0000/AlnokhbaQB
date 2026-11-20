@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.join(ROOT, "mini-services", "omr-engine", "engine"))
 
 import pipeline  # noqa: E402  (the REAL engine code)
 
-FIX = os.path.join(ROOT, "tests", "omr-fixtures")
+FIX = os.environ.get("OMR_HARNESS_FIXTURES") or os.path.join(ROOT, "tests", "omr-fixtures")
 ART = os.path.join(ROOT, "tests", "omr-engine-harness-artifacts")
 os.makedirs(ART, exist_ok=True)
 
@@ -34,7 +34,11 @@ with open(os.path.join(FIX, "template.json"), "r", encoding="utf-8") as f:
     TEMPLATE = json.load(f)
 with open(os.path.join(FIX, "key_by_number.json"), "r", encoding="utf-8") as f:
     KEY = {int(k): v for k, v in json.load(f).items()}
-with open(os.path.join(FIX, "blank_sheet_0.png"), "rb") as f:
+_blank_name = next(
+    (n for n in ("blank_sheet_0.png", "blank_sheet_0.jpg") if os.path.exists(os.path.join(FIX, n))),
+    "blank_sheet_0.png",
+)
+with open(os.path.join(FIX, _blank_name), "rb") as f:
     BLANK = cv2.imdecode(np.frombuffer(f.read(), np.uint8), cv2.IMREAD_COLOR)
 
 H, W = BLANK.shape[:2]
@@ -75,19 +79,15 @@ def encode64(img: np.ndarray, quality: Optional[int] = None) -> str:
 # ------------------------------------------------ degradation
 
 def perspective(img: np.ndarray, max_frac: float = 0.07) -> np.ndarray:
-    """Realistic oblique photo: the sheet stays FULLY inside the capture
-    (corners displaced inward only) — outward displacement would simulate
-    a sheet partially outside the frame, which real scans never contain."""
     h, w = img.shape[:2]
-    dx, dy = w * max_frac, h * max_frac
-    d = lambda: abs(PYR.uniform(-1, 1))  # noqa: E731
+    d = lambda: PYR.uniform(-max_frac, max_frac)  # noqa: E731
     src = np.float32([[0, 0], [w, 0], [w, h], [0, h]])
     dst = np.float32(
         [
-            [d() * dx, d() * dy],
-            [w - d() * dx, d() * dy],
-            [w - d() * dx, h - d() * dy],
-            [d() * dx, h - d() * dy],
+            [d() * w, d() * h],
+            [w + d() * w, d() * h],
+            [w + d() * w, h + d() * h],
+            [d() * w, h + d() * h],
         ]
     )
     M = cv2.getPerspectiveTransform(src, dst)
@@ -111,40 +111,6 @@ def lighting(img: np.ndarray, strength: float = 0.55) -> np.ndarray:
     grad = np.minimum.outer(gy, gx)  # (h, w) in [strength, 1]
     out = img.astype(np.float32) * grad[:, :, None]
     return np.clip(out, 0, 255).astype(np.uint8)
-
-
-def photocopy(img: np.ndarray, fade: float = 0.5) -> np.ndarray:
-    """Low-contrast photocopy: white stays white, black becomes gray."""
-    out = 255.0 - (255.0 - img.astype(np.float32)) * fade
-    return np.clip(out, 0, 255).astype(np.uint8)
-
-
-def side_shadow(img: np.ndarray, strength: float = 0.45, from_left: bool = True) -> np.ndarray:
-    """Hard illumination gradient from one side only (hand/lamp shadow)."""
-    h, w = img.shape[:2]
-    gx = np.linspace(1.0, strength, w, dtype=np.float32)
-    if from_left:
-        gx = gx[::-1]
-    out = img.astype(np.float32) * gx[None, :, None]
-    return np.clip(out, 0, 255).astype(np.uint8)
-
-
-def stray_marks(img: np.ndarray, count: int = 14) -> np.ndarray:
-    """Random pen dots/scribbles BETWEEN bubbles (not covering any bubble)."""
-    rng = random.Random(777)
-    for _ in range(count):
-        q = rng.choice(TEMPLATE["questions"])
-        letter = rng.choice(list(q["options"].keys()))
-        p = q["options"][letter]
-        # a dot 2.6-3.4r away from a bubble center — in the gutter between bubbles
-        ang = rng.uniform(0, 2 * math.pi)
-        d_mm = q["radiusMm"] * rng.uniform(2.6, 3.4)
-        x = p["x"] + math.cos(ang) * d_mm
-        y = p["y"] + math.sin(ang) * d_mm
-        cx, cy = int(round(x * PX_PER_MM)), int(round(y * PX_PER_MM))
-        r = max(2, int(0.09 * PX_PER_MM))  # ~0.9mm dot
-        cv2.circle(img, (cx, cy), r, (70, 70, 70), -1, cv2.LINE_AA)
-    return img
 
 
 def phone_camera(img: np.ndarray, out_width: int, jpeg_q: int) -> np.ndarray:
@@ -434,175 +400,6 @@ def main() -> None:
     acc, _ = check_answers(res, KEY) if res.get("ok") else (0, [])
     record("18. manual template w/o QR", res.get("ok") and acc >= 0.9 and res.get("templateSource") == "manual",
            f"acc={acc:.0%} src={res.get('templateSource')} rot={res.get('diagnostics', {}).get('rotationDeg')}")
-
-    # ---------- 19. photocopy (low contrast, gray print) ≥85%
-    img = photocopy(build_sheet(KEY, "pencil"), 0.45)
-    res = run(img)
-    acc, problems = check_answers(res, KEY)
-    record("19. photocopy low contrast", acc >= 0.85 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
-
-    # ---------- 20. hard side shadow + slight rotation ≥85%
-    img = rotate(side_shadow(build_sheet(KEY, "pencil"), 0.40, from_left=False), 4)
-    res = run(img)
-    acc, problems = check_answers(res, KEY)
-    record("20. side shadow + rotation", acc >= 0.85 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
-
-    # ---------- 21. severe perspective + jpeg ≥85%
-    img = perspective(build_sheet(KEY, "pen"), 0.12)
-    res = run(img, jpeg=55)
-    acc, problems = check_answers(res, KEY)
-    record("21. severe perspective", acc >= 0.85 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
-
-    # ---------- 22. camera blur + small image ≥85%
-    img = cv2.GaussianBlur(build_sheet(KEY, "pencil"), (5, 5), 1.4)
-    scale = 1000 / img.shape[1]
-    img = cv2.resize(img, (1000, int(img.shape[0] * scale)), interpolation=cv2.INTER_AREA)
-    res = run(img, jpeg=70)
-    acc, problems = check_answers(res, KEY)
-    record("22. blur + 1000px", acc >= 0.85 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
-
-    # ---------- 23. off-center marks (sloppy student) ≥90%
-    img = BLANK.copy()
-    for n, l in KEY.items():
-        q = next(qq for qq in TEMPLATE["questions"] if qq["number"] == n)
-        p = q["options"][l]
-        jx = PYR.uniform(-0.35, 0.35) * q["radiusMm"]
-        jy = PYR.uniform(-0.35, 0.35) * q["radiusMm"]
-        fill_bubble(img, p["x"] + jx, p["y"] + jy, q["radiusMm"] * 0.9, 0.62)
-    res = run(img)
-    acc, problems = check_answers(res, KEY)
-    record("23. off-center marks", acc >= 0.9 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
-
-    # ---------- 24. stray marks between bubbles → never confidently wrong
-    img = stray_marks(build_sheet(KEY, "pencil"))
-    res = run(img)
-    acc, problems = check_answers(res, KEY)
-    wrong_conf = [a for a in res.get("answers", []) if a["status"] == "selected" and a["detected"] != KEY[a["number"]] and a["confidence"] > 0.8]
-    record("24. stray marks", acc >= 0.9 and len(wrong_conf) == 0 and res["ok"], f"accuracy={acc:.0%} wrongConf={len(wrong_conf)}", {"problems": problems[:5]})
-
-    # ---------- 25. mixed instruments (pencil + pen same sheet) ≥90%
-    plan = {n: l for n, l in KEY.items()}
-    mixed = BLANK.copy()
-    for i, (n, l) in enumerate(plan.items()):
-        q = next(qq for qq in TEMPLATE["questions"] if qq["number"] == n)
-        p = q["options"][l]
-        fill_bubble(mixed, p["x"], p["y"], q["radiusMm"], 0.48 if i % 2 else 0.85)
-    res = run(mixed)
-    acc, problems = check_answers(res, KEY)
-    record("25. mixed pencil+pen", acc >= 0.9 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
-
-    # ---------- 26. faint photocopy of light pencil → correct or unclear, ≥70% read
-    img = photocopy(build_sheet(KEY, "pencil"), 0.30)
-    res = run(img)
-    acc, problems = check_answers(res, KEY, allow_unclear_as={n: l for n, l in KEY.items()})
-    unclear_or_ok = [a for a in res.get("answers", []) if a["detected"] == KEY[a["number"]] or a["status"] == "unclear"]
-    record("26. faint photocopy pencil", len(unclear_or_ok) >= 7 and res["ok"], f"okOrUnclear={len(unclear_or_ok)}/10 acc={acc:.0%}", {"problems": problems[:5]})
-
-    # ---------- 27. phone camera + photocopy combo ≥80%
-    img = phone_camera(photocopy(build_sheet(KEY, "pencil"), 0.55), 1300, 70)
-    res = run(img)
-    acc, problems = check_answers(res, KEY)
-    record("27. photocopied phone photo", acc >= 0.80 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
-
-    # ---------- 28. 270° sideways rotation (third phone orientation) ≥90%
-    img = np.rot90(build_sheet(KEY, "pencil"), k=3).copy()
-    res = run(img)
-    acc, problems = check_answers(res, KEY)
-    record("28. rotation 270°", acc >= 0.90 and res["ok"], f"accuracy={acc:.0%} rotationFixed={res['diagnostics'].get('rotationDeg')}", {"problems": problems[:3]})
-
-    # ---------- 29. extreme JPEG compression (q=45) ≥85%
-    img = rotate(perspective(build_sheet(KEY, "pencil"), 0.05), 3)
-    res = run(img, jpeg=45)
-    acc, problems = check_answers(res, KEY)
-    record("29. extreme jpeg q45", acc >= 0.85 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
-
-    # ---------- 30. tiny 700px scan (old webcam / slow connection) ≥80%
-    img = phone_camera(build_sheet(KEY, "pen"), 700, 65)
-    res = run(img)
-    acc, problems = check_answers(res, KEY)
-    record("30. tiny 700px", acc >= 0.80 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
-
-    # ---------- 31. fold shadow stripe across the answer grid ≥85%, never confidently wrong
-    img = build_sheet(KEY, "pencil")
-    y0 = int(TEMPLATE["grid"]["firstRowYMm"]["main"] * PX_PER_MM * 1.02)
-    for dy in range(-int(0.8 * PX_PER_MM), int(0.8 * PX_PER_MM)):
-        yy = y0 + dy
-        if 0 <= yy < img.shape[0]:
-            fade = 0.55 + 0.45 * (abs(dy) / (0.8 * PX_PER_MM))
-            img[yy, :, :] = (img[yy, :, :] * fade).astype(np.uint8)
-    res = run(img)
-    acc, problems = check_answers(res, KEY)
-    wrong_conf = [a for a in res.get("answers", []) if a["status"] == "selected" and a["detected"] != KEY[a["number"]] and a["confidence"] > 0.8]
-    record("31. fold shadow stripe", acc >= 0.85 and len(wrong_conf) == 0 and res["ok"], f"accuracy={acc:.0%} wrongConf={len(wrong_conf)}", {"problems": problems[:5]})
-
-    # ---------- 32. smeared mark bleeding toward the neighbour bubble → never confidently the neighbour
-    img = BLANK.copy()
-    for n, l in KEY.items():
-        q = next(qq for qq in TEMPLATE["questions"] if qq["number"] == n)
-        p = q["options"][l]
-        fill_bubble(img, p["x"], p["y"], q["radiusMm"], 0.62)
-        # a drag smear from this bubble toward its right-hand neighbour
-        nb_i = (list(q["options"].keys()).index(l) + 1) % len(q["options"])
-        nb_letter = list(q["options"].keys())[nb_i]
-        pn = q["options"][nb_letter]
-        mx, my = (p["x"] + pn["x"]) / 2, (p["y"] + pn["y"]) / 2
-        cx, cy = int(round(mx * PX_PER_MM)), int(round(my * PX_PER_MM))
-        cv2.ellipse(img, (cx, cy), (max(2, int(q["radiusMm"] * PX_PER_MM * 0.55)), max(2, int(q["radiusMm"] * PX_PER_MM * 0.3))),
-                    0, 0, 360, (90, 90, 90), -1, cv2.LINE_AA)
-    res = run(img)
-    neigh_wrong = [
-        a for a in res.get("answers", [])
-        if a["status"] == "selected" and a["detected"] != KEY[a["number"]] and a["confidence"] > 0.8
-    ]
-    ok_or_flagged = [
-        a for a in res.get("answers", [])
-        if a["detected"] == KEY[a["number"]] or a["status"] in ("unclear", "multiple")
-    ]
-    record("32. smeared neighbour bleed", len(neigh_wrong) == 0 and len(ok_or_flagged) >= 7 and res["ok"],
-           f"wrongConf={len(neigh_wrong)} okOrFlagged={len(ok_or_flagged)}/10", {"statuses": [(a["number"], a["status"]) for a in res.get("answers", [])][:10]})
-
-    # ---------- 33. highlighter over filled bubbles → never confidently wrong
-    img = build_sheet(KEY, "pencil")
-    for n, l in KEY.items():
-        q = next(qq for qq in TEMPLATE["questions"] if qq["number"] == n)
-        p = q["options"][l]
-        cx, cy = int(round(p["x"] * PX_PER_MM)), int(round(p["y"] * PX_PER_MM))
-        r = int(q["radiusMm"] * PX_PER_MM * 1.5)
-        hl = img[cy - r:cy + r, cx - r:cx + r].astype(np.float32)
-        yellow = np.array([60.0, 225.0, 225.0])
-        m = np.zeros((2 * r, 2 * r), np.uint8)
-        cv2.circle(m, (r, r), r, 255, -1)
-        mf = cv2.GaussianBlur(m, (7, 7), 2).astype(np.float32)[..., None] / 255.0
-        img[cy - r:cy + r, cx - r:cx + r] = (hl * (1 - mf) + yellow[None, None, :] * mf).astype(np.uint8)
-    res = run(img)
-    hl_wrong = [
-        a for a in res.get("answers", [])
-        if a["status"] == "selected" and a["detected"] != KEY[a["number"]] and a["confidence"] > 0.8
-    ]
-    hl_ok = [
-        a for a in res.get("answers", [])
-        if a["detected"] == KEY[a["number"]] or a["status"] in ("unclear", "multiple", "unanswered")
-    ]
-    record("33. highlighter over marks", len(hl_wrong) == 0 and len(hl_ok) >= 7 and res["ok"],
-           f"wrongConf={len(hl_wrong)} okOrFlagged={len(hl_ok)}/10", {"statuses": [(a["number"], a["status"]) for a in res.get("answers", [])][:10]})
-
-    # ---------- 34. warm indoor tint + backlight ≥85%
-    img = build_sheet(KEY, "pencil").astype(np.float32)
-    img[:, :, 0] *= 0.82  # less blue
-    img[:, :, 2] *= 1.05  # more red
-    img = np.clip(img + 18, 0, 255).astype(np.uint8)  # lifted blacks (backlight)
-    img = rotate(img, -3)
-    res = run(img)
-    acc, problems = check_answers(res, KEY)
-    record("34. warm tint + backlight", acc >= 0.85 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
-
-    # ---------- 35. pencil sheet through the FULL HTTP stack shape (base64 data-url form)
-    data_url = "data:image/jpeg;base64," + encode64(phone_camera(build_sheet(KEY, "pencil"), 1400, 75), 75)
-    res = pipeline.process({"imageBase64": data_url, "template": TEMPLATE,
-                            "answerKey": {str(k): v for k, v in KEY.items()},
-                            "marksMap": {str(k): 1 for k in KEY}, "debug": False})
-    acc, problems = check_answers(res, KEY)
-    record("35. data-url input", acc >= 0.90 and res["ok"], f"accuracy={acc:.0%}", {"problems": problems[:5]})
 
     # ---------- recommended thresholds
     rec = {

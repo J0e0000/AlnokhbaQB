@@ -1,16 +1,17 @@
 // GET /api/health → { ok, db, pdf, omrEngine }
+// Public by design, but UNAUTHENTICATED callers get { ok } only — the db /
+// pdf / omrEngine internals require a valid session (see src/proxy.ts).
 
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { db } from '@/lib/db';
 import { getBrowserHealth, warmBrowser } from '@/lib/pdf/pool';
 import { engineHealth } from '@/lib/omr/client';
-import { aiStatus } from '@/lib/ai/client';
 import { serverError } from '../_lib/shared';
+import { authConfigured, SESSION_COOKIE, verifySessionToken } from '@/lib/auth/session';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-// serverless headroom: chromium extraction + first launch + render can exceed the 10s default
-export const maxDuration = 60;
 
 export async function GET() {
   try {
@@ -27,9 +28,18 @@ export async function GET() {
       dbOk = false;
     }
 
+    // Public, minimal payload for unauthenticated callers.
+    // (When the auth gate is not configured yet, the proxy is fail-open and
+    // the full payload stays available — nothing is protected at that point.)
+    const authed =
+      !authConfigured() ||
+      (await verifySessionToken((await cookies()).get(SESSION_COOKIE)?.value));
+    if (!authed) {
+      return NextResponse.json({ ok: dbOk });
+    }
+
     const pdf = getBrowserHealth();
     const omrEngine = await engineHealth(2000);
-    const ai = aiStatus();
 
     return NextResponse.json({
       ok: dbOk,
@@ -38,13 +48,6 @@ export async function GET() {
       omrEngine: {
         ok: omrEngine.ok,
         ...(omrEngine.ok ? {} : { error: omrEngine.error ?? 'OMR engine unreachable' }),
-      },
-      ai: {
-        mode: ai.mode,
-        ...(ai.mode === 'env' ? { baseUrl: ai.baseUrl, model: ai.model } : {}),
-        ...(ai.mode === 'none'
-          ? { error: 'الذكاء الاصطناعي غير مهيأ — أضف AI_API_KEY في إعدادات البيئة' }
-          : {}),
       },
     });
   } catch (err) {

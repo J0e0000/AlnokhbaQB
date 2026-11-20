@@ -3,19 +3,14 @@
 
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { audit, orgFilter } from '@/lib/auth';
-import { requireSession } from '../_lib/auth-guard';
 import { readJsonBody, serverError } from '../_lib/shared';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
-    const g = await requireSession('viewer', req);
-    if ('error' in g) return g.error;
     const students = await db.student.findMany({
-      where: { organizationId: orgFilter(g.session) },
       orderBy: { createdAt: 'desc' },
       take: 500,
     });
@@ -27,8 +22,6 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const g = await requireSession('teacher', req);
-    if ('error' in g) return g.error;
     const body = await readJsonBody(req);
     const code = typeof body?.code === 'string' ? body.code.trim() : '';
     const name = typeof body?.name === 'string' ? body.name.trim() : '';
@@ -47,17 +40,7 @@ export async function POST(req: Request) {
         : null;
 
     try {
-      const student = await db.student.create({
-        data: { organizationId: g.session.orgId ?? null, code, name, classroom },
-      });
-      await audit({
-        session: g.session,
-        action: 'student.create',
-        entity: 'student',
-        entityId: student.id,
-        meta: { name: student.name },
-        req,
-      });
+      const student = await db.student.create({ data: { code, name, classroom } });
       return NextResponse.json(student, { status: 201 });
     } catch (err) {
       if (

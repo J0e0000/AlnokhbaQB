@@ -23,10 +23,6 @@ export interface DesignerState {
   title: string;
   document: QBDocument;
   answerKey: Record<string, string>;
-  /** id of the currently PUBLISHED ExamVersion (null → draft-only exam).
-   *  When set, save() ALSO syncs the guide answer key into that frozen
-   *  version so OMR grading reflects the teacher's edits immediately. */
-  publishedVersionId: string | null;
   selectedElementId: string | null;
   activePage: number;
   zoom: number;
@@ -40,22 +36,8 @@ export interface DesignerState {
   future: QBDocument[];
 }
 
-export interface SaveResult {
-  ok: boolean;
-  /** key was also written into the published version */
-  keySynced: boolean;
-  /** draft saved, but the published-version key sync failed */
-  keySyncFailed: boolean;
-}
-
 export interface DesignerActions {
-  loadExam: (
-    examId: string,
-    title: string,
-    document: QBDocument,
-    answerKey: Record<string, string>,
-    opts?: { publishedVersionId?: string | null }
-  ) => void;
+  loadExam: (examId: string, title: string, document: QBDocument, answerKey: Record<string, string>) => void;
   addElement: (element: QBElement) => void;
   updateElement: (id: string, patch: { style?: Record<string, unknown>; content?: Record<string, unknown>; rotation?: number; page?: number; visible?: boolean; locked?: boolean; x?: number; y?: number; widthMm?: number; heightMm?: number }) => void;
   deleteElement: (id: string) => void;
@@ -78,7 +60,7 @@ export interface DesignerActions {
   setTitle: (t: string) => void;
   undo: () => void;
   redo: () => void;
-  save: () => Promise<SaveResult>;
+  save: () => Promise<boolean>;
   markClean: () => void;
 }
 
@@ -101,7 +83,6 @@ export const useDesignerStore = create<DesignerState & DesignerActions>((set, ge
   title: '',
   document: emptyDocument(),
   answerKey: {},
-  publishedVersionId: null,
   selectedElementId: null,
   activePage: 0,
   zoom: 0.75,
@@ -113,13 +94,12 @@ export const useDesignerStore = create<DesignerState & DesignerActions>((set, ge
   past: [],
   future: [],
 
-  loadExam: (examId, title, document, answerKey, opts) =>
+  loadExam: (examId, title, document, answerKey) =>
     set({
       examId,
       title,
       document: clone(document),
       answerKey: clone(answerKey || {}),
-      publishedVersionId: opts?.publishedVersionId ?? null,
       selectedElementId: null,
       activePage: 0,
       zoom: 0.75,
@@ -391,9 +371,8 @@ export const useDesignerStore = create<DesignerState & DesignerActions>((set, ge
   },
 
   save: async () => {
-    const { examId, title, document, answerKey, publishedVersionId } = get();
-    const fail: SaveResult = { ok: false, keySynced: false, keySyncFailed: false };
-    if (!examId) return fail;
+    const { examId, title, document, answerKey } = get();
+    if (!examId) return false;
     set({ saving: true });
     try {
       const res = await fetch(`/api/exams/${examId}`, {
@@ -402,32 +381,16 @@ export const useDesignerStore = create<DesignerState & DesignerActions>((set, ge
         body: JSON.stringify({ title, document: { ...document, schemaVersion: QB_SCHEMA_VERSION }, answerKey }),
       });
       if (!res.ok) {
+        const info = await res.json().catch(() => null);
+        console.error('[designer] save failed', res.status, info?.error ?? '');
         set({ saving: false });
-        return fail;
-      }
-      // Published exam → the OMR scan grades against the FROZEN version key,
-      // so push the teacher's guide answer into that version as well.
-      // (Template/QR untouched — printed sheets stay valid.)
-      let keySynced = false;
-      let keySyncFailed = false;
-      if (publishedVersionId && Object.keys(answerKey).length > 0) {
-        try {
-          const vres = await fetch(`/api/versions/${publishedVersionId}/answer-key`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ answerKey }),
-          });
-          if (vres.ok) keySynced = true;
-          else keySyncFailed = true;
-        } catch {
-          keySyncFailed = true;
-        }
+        return false;
       }
       set({ saving: false, dirty: false, lastSavedAt: Date.now() });
-      return { ok: true, keySynced, keySyncFailed };
+      return true;
     } catch {
       set({ saving: false });
-      return fail;
+      return false;
     }
   },
 
