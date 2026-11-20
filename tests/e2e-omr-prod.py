@@ -96,9 +96,9 @@ def degrade(img):
 
 def main():
     # 1. login
-    r, code = api("/api/auth/login", {"email": "teacher@alnokhba.qb", "password": "Teacher@2025"})
+    r, code = api("/api/auth/login", {"password": os.environ.get("APP_PASSWORD", "")})
     assert code == 200, f"login failed: {r}"
-    print("[1] production login OK:", r["user"]["email"])
+    print("[1] production login OK:", r)
 
     # 2. create exam + set document/key + enable OMR
     title = f"اختبار OMR آلي — {random.randint(1000, 9999)}"
