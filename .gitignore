@@ -31,3 +31,6 @@ __pycache__/
 .env
 .env*.local
 .secrets/
+
+# puppeteer browser cache
+chrome/

@@ -112,6 +112,10 @@ async function engineFetch(
   if (process.env.OMR_ENGINE_TOKEN) {
     headers.authorization = `Bearer ${process.env.OMR_ENGINE_TOKEN}`;
   }
+  // Vercel omr-service variant: shared-secret gate via x-anqb-omr-key.
+  if (process.env.OMR_SHARED_SECRET) {
+    headers['x-anqb-omr-key'] = process.env.OMR_SHARED_SECRET;
+  }
   try {
     const res = await fetch(`${OMR_ENGINE_URL}${path}`, {
       ...init,

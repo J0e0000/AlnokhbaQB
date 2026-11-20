@@ -17,7 +17,16 @@ import { existsSync } from 'fs';
 import path from 'path';
 
 const ENGINE_PORT = 3032;
-const HEALTH_URL = `http://127.0.0.1:${ENGINE_PORT}/health`;
+
+/** Base URL of the engine: explicit OMR_ENGINE_URL wins, else the local sidecar. */
+export function engineBaseUrl(): string {
+  return (
+    process.env.OMR_ENGINE_URL?.trim()?.replace(/\/+$/, '') ||
+    `http://127.0.0.1:${ENGINE_PORT}`
+  );
+}
+
+const healthUrl = () => `${engineBaseUrl()}/health`;
 
 let spawned: ChildProcess | null = null;
 
@@ -50,7 +59,7 @@ export async function engineHealthy(timeoutMs = 2500): Promise<boolean> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(HEALTH_URL, { signal: ctrl.signal, cache: 'no-store' });
+    const res = await fetch(healthUrl(), { signal: ctrl.signal, cache: 'no-store' });
     if (!res.ok) return false;
     const body = (await res.json()) as { ok?: boolean };
     return body.ok === true;
@@ -95,8 +104,7 @@ export interface SupervisorResult {
  * Returns a supervisor-neutral result; the API route decides the status code.
  */
 export async function ensureEngine(): Promise<SupervisorResult> {
-  const engineUrl =
-    process.env.OMR_ENGINE_URL?.trim()?.replace(/\/+$/, '') || `http://127.0.0.1:${ENGINE_PORT}`;
+  const engineUrl = engineBaseUrl();
   if (!supervisorEnabled()) {
     return { ok: await engineHealthy(), engineUrl, action: 'disabled' };
   }
