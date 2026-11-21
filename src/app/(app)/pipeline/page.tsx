@@ -15,6 +15,7 @@ export default function PipelinePage() {
         onGoView={(v, examId) => {
           if (v === 'design' && examId) router.push(`/exams/${examId}/design`);
           else if (v === 'preview' && examId) router.push(`/exams/${examId}/preview`);
+          else if (v === 'review') router.push('/review');
           else router.push('/scan');
         }}
       />

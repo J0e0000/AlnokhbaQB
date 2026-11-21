@@ -24,6 +24,7 @@ export const strings: Strings = {
   navImport: { ar: 'استيراد من ملف', en: 'Import from file' },
   navScan: { ar: 'مسح وتصحيح', en: 'Scan & grade' },
   navPipeline: { ar: 'معالج OMR', en: 'OMR wizard' },
+  navReview: { ar: 'قائمة المراجعة', en: 'Review queue' },
   navCheating: { ar: 'كشف الغش', en: 'Cheating detection' },
   navStudents: { ar: 'الطلاب', en: 'Students' },
   navAssignments: { ar: 'الواجبات', en: 'Assignments' },

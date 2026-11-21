@@ -9,7 +9,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  BookOpen, ClipboardList, FileInput, Files, GraduationCap, NotebookPen,
+  BookOpen, ClipboardCheck, ClipboardList, FileInput, Files, GraduationCap, NotebookPen,
   ScanLine, Settings2, ShieldAlert, Users,
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -37,6 +37,7 @@ const GROUPS: { label: string; items: Item[] }[] = [
     items: [
       { href: '/scan', label: t('navScan'), icon: ScanLine },
       { href: '/pipeline', label: t('navPipeline'), icon: Files },
+      { href: '/review', label: t('navReview'), icon: ClipboardCheck },
       { href: '/cheating', label: t('navCheating'), icon: ShieldAlert },
     ],
   },
