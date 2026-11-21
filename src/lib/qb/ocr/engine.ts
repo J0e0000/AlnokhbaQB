@@ -99,6 +99,11 @@ export const vlmProcessor: DocumentProcessor = {
 // app ships AI_API_KEY + AI_BASE_URL + AI_VISION_MODEL (Groq or any OpenAI-
 // compatible vision endpoint) — this processor uses them directly so Arabic
 // OCR works in production where tesseract is unavailable.
+// Groq free tier enforces a small OUTPUT-tokens-per-minute cap (e.g. 1000).
+// Requests whose max_tokens exceed the cap are rejected with HTTP 429 before
+// running, so we default to a safe value and adaptively retry lower.
+
+const FALLBACK_VISION_MODELS = ['meta-llama/llama-4-scout-17b-16e-instruct'];
 
 export const vlmApiProcessor: DocumentProcessor = {
   name: 'vlm-api',
@@ -111,44 +116,85 @@ export const vlmApiProcessor: DocumentProcessor = {
     );
     const model = process.env.AI_VISION_MODEL?.trim();
     if (!apiKey || !model) return null; // not configured → skip silently
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 55_000);
-    try {
-      const res = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          temperature: 0,
-          max_tokens: 4096,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: VLM_OCR_PROMPT },
-                { type: 'image_url', image_url: { url: `data:${mime};base64,${base64}` } },
-              ],
-            },
-          ],
-        }),
-        signal: ctrl.signal,
-        cache: 'no-store',
-      });
-      if (!res.ok) {
-        const detail = await res.text().catch(() => '');
-        throw new Error(`vlm-api HTTP ${res.status}: ${detail.slice(0, 300)}`);
+
+    const envMax = Number(process.env.AI_MAX_TOKENS);
+    const initialMax = Number.isFinite(envMax) && envMax > 0 ? envMax : 900;
+
+    const call = async (useModel: string, maxTokens: number): Promise<{
+      ok: boolean;
+      text?: string;
+      rateLimited?: boolean;
+      error?: string;
+    }> => {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 55_000);
+      try {
+        const res = await fetch(`${baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: useModel,
+            temperature: 0,
+            max_tokens: maxTokens,
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: VLM_OCR_PROMPT },
+                  { type: 'image_url', image_url: { url: `data:${mime};base64,${base64}` } },
+                ],
+              },
+            ],
+          }),
+          signal: ctrl.signal,
+          cache: 'no-store',
+        });
+        if (!res.ok) {
+          const detail = await res.text().catch(() => '');
+          const rateLimited =
+            res.status === 429 ||
+            /output tokens per minute|OTPM|rate limit/i.test(detail);
+          return { ok: false, rateLimited, error: `vlm-api HTTP ${res.status}: ${detail.slice(0, 300)}` };
+        }
+        const data = (await res.json()) as {
+          choices?: Array<{ message?: { content?: string } }>;
+        };
+        const text = data.choices?.[0]?.message?.content;
+        if (!text || !text.trim()) return { ok: false, error: 'vlm-api returned empty text' };
+        return { ok: true, text: text.trim() };
+      } finally {
+        clearTimeout(timer);
       }
-      const data = (await res.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
-      };
-      const text = data.choices?.[0]?.message?.content;
-      if (!text || !text.trim()) return null;
-      return { engine: 'vlm-api', text: text.trim(), confidence: null };
-    } finally {
-      clearTimeout(timer);
+    };
+
+    // ladder: primary model @ max_tokens → same model @ half tokens →
+    // fallback model @ half tokens. The half-token retry rescues OTPM-capped
+    // plans without failing the whole OCR pipeline.
+    let lastError = '';
+    const attempts: Array<{ model: string; maxTokens: number }> = [
+      { model, maxTokens: initialMax },
+    ];
+    try {
+      const first = await call(model, initialMax);
+      if (first.ok) return { engine: 'vlm-api', text: first.text!, confidence: null };
+      lastError = first.error ?? '';
+      if (first.rateLimited) {
+        attempts.push({ model, maxTokens: Math.floor(initialMax / 2) });
+        for (const fb of FALLBACK_VISION_MODELS) {
+          if (fb !== model) attempts.push({ model: fb, maxTokens: Math.floor(initialMax / 2) });
+        }
+        for (const attempt of attempts.slice(1)) {
+          const retry = await call(attempt.model, attempt.maxTokens);
+          if (retry.ok) return { engine: 'vlm-api', text: retry.text!, confidence: null };
+          lastError = retry.error ?? lastError;
+        }
+      }
+      throw new Error(lastError || 'vlm-api failed');
+    } catch (err) {
+      throw err instanceof Error ? err : new Error(String(err));
     }
   },
 };
