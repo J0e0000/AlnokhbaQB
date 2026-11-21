@@ -38,7 +38,13 @@ const tesseractProcessor: DocumentProcessor = {
   async process({ base64, lang }) {
     const { ocrText } = await import('@/lib/omr/client');
     const res = await ocrText(base64, lang);
-    if (!res.ok || !res.text.trim()) return null;
+    if (!res.ok) {
+      // transport or engine error — surface the reason so the API details
+      // show WHY tesseract failed (binary missing / pack missing / down)
+      if ('error' in res && res.error) throw new Error(res.error);
+      return null;
+    }
+    if (!res.text.trim()) return null;
     return { engine: 'tesseract', text: res.text, confidence: null };
   },
 };
@@ -88,6 +94,65 @@ export const vlmProcessor: DocumentProcessor = {
   },
 };
 
+// ---------- processor 3: OpenAI-compatible vision API (Vercel: AI_* env) ----------
+// The z-ai SDK above only authenticates inside its own sandbox. On Vercel the
+// app ships AI_API_KEY + AI_BASE_URL + AI_VISION_MODEL (Groq or any OpenAI-
+// compatible vision endpoint) — this processor uses them directly so Arabic
+// OCR works in production where tesseract is unavailable.
+
+export const vlmApiProcessor: DocumentProcessor = {
+  name: 'vlm-api',
+  langs: ['ara', 'eng'],
+  async process({ base64, mime }) {
+    const apiKey = process.env.AI_API_KEY?.trim();
+    const baseUrl = (process.env.AI_BASE_URL?.trim() || 'https://api.groq.com/openai/v1').replace(
+      /\/+$/,
+      '',
+    );
+    const model = process.env.AI_VISION_MODEL?.trim();
+    if (!apiKey || !model) return null; // not configured → skip silently
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 55_000);
+    try {
+      const res = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0,
+          max_tokens: 4096,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: VLM_OCR_PROMPT },
+                { type: 'image_url', image_url: { url: `data:${mime};base64,${base64}` } },
+              ],
+            },
+          ],
+        }),
+        signal: ctrl.signal,
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '');
+        throw new Error(`vlm-api HTTP ${res.status}: ${detail.slice(0, 300)}`);
+      }
+      const data = (await res.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      const text = data.choices?.[0]?.message?.content;
+      if (!text || !text.trim()) return null;
+      return { engine: 'vlm-api', text: text.trim(), confidence: null };
+    } finally {
+      clearTimeout(timer);
+    }
+  },
+};
+
 // ---------- registry + pipeline ----------
 
 /**
@@ -96,7 +161,7 @@ export const vlmProcessor: DocumentProcessor = {
  * (PaddleOCR / Surya / Docling require heavy Python runtimes — deferred;
  * this interface is their integration point.)
  */
-const PROCESSORS: DocumentProcessor[] = [tesseractProcessor, vlmProcessor];
+const PROCESSORS: DocumentProcessor[] = [tesseractProcessor, vlmProcessor, vlmApiProcessor];
 
 export interface DocumentOcrResult {
   ok: boolean;
@@ -133,6 +198,9 @@ export async function processDocument(input: ProcessorInput): Promise<DocumentOc
     } catch (err) {
       lastStage = 'engineError';
       lastError = err instanceof Error ? err.message : String(err);
+      // surface WHY each engine failed (missing binary / pack / auth …) in
+      // the API response details instead of swallowing the reason
+      console.error(`[ocr] processor ${processor.name} failed:`, lastError);
     }
   }
 
