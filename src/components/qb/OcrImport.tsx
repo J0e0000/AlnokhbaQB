@@ -68,7 +68,7 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
         body: JSON.stringify({ imageBase64: dataUrl, lang: lang === 'ara+eng' ? 'ara' : lang }),
       });
       const d = (await res.json().catch(() => null)) as
-        | { ok?: boolean; text?: string; error?: string; details?: string }
+        | { ok?: boolean; text?: string; error?: string; details?: string; engine?: string }
         | null;
       if (!res.ok || !d?.ok || !d.text?.trim()) return null;
       setEngine(d.engine === 'vlm' ? 'نموذج رؤية — الخادم' : 'Tesseract — الخادم');
