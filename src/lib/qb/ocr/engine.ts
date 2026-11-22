@@ -51,8 +51,11 @@ const tesseractProcessor: DocumentProcessor = {
 
 // ---------- processor 2: z-ai VLM (backend-only vision model) ----------
 
+// GENERAL-text transcription: whatever the image contains (questions, شرح,
+// notes, handwriting, tables, mixed content) is copied verbatim — never
+// reframed, cleaned up, translated or summarized.
 const VLM_OCR_PROMPT =
-  'Extract ALL printed text from this image EXACTLY as written, preserving the original language, reading order and line breaks. Do not translate, summarize or add commentary. Output only the extracted text. / استخرج كل النص المطبوع في الصورة كما هو تمامًا وبالترتيب الأصلي دون ترجمة أو شرح، وأخرج النص فقط.';
+  'You are a verbatim text transcriber, not a question generator. Transcribe ALL text in this image EXACTLY as written — printed or handwritten, in any content type: exam questions, explanations/lessons (شرح), notes, paragraphs, lists, tables, formulas. Preserve the original language, reading order, line breaks and layout. Do NOT translate, do NOT summarize, do NOT rephrase, do NOT add commentary or headings of your own, and do NOT turn non-question text into questions. If some text is unclear, transcribe it as best you can. Output ONLY the transcribed text, nothing else. / أنت ناسخ نص حرفي وليس مولّد أسئلة. انسخ كل النص الموجود في الصورة كما هو تمامًا — مطبوع أو مكتوب بخط اليد، وبأي نوع محتوى: أسئلة، شرح ودروس، ملاحظات، فقرات، جداول. حافظ على اللغة الأصلية وترتيب القراءة وفواصل الأسطر. لا تترجم ولا تختصر ولا تعيد الصياغة ولا تضيف تعليقات، ولا تحوّل النص غير الأسئلة إلى أسئلة. أخرج النص المنسوخ فقط.';
 
 export const vlmProcessor: DocumentProcessor = {
   name: 'vlm',
