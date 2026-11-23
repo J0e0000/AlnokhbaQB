@@ -74,7 +74,7 @@ export function serverError(err: unknown): { error: string; details?: string } {
 /** Strip a `data:image/...;base64,` prefix if present → raw base64 + mime. */
 export function stripDataUrl(s: string): { base64: string; mime: string } {
   const trimmed = s.trim();
-  const m = /^data:(image\/[a-zA-Z0-9.+-]+);base64,/.exec(trimmed);
+  const m = /^data:([a-zA-Z0-9.+-]+\/[a-zA-Z0-9.+-]+);base64,/i.exec(trimmed);
   if (m) return { base64: trimmed.slice(m[0].length), mime: m[1] };
   return { base64: trimmed, mime: 'image/png' };
 }
