@@ -21,19 +21,52 @@ interface OmrDetail {
   versions: { id: string; version: number; publishedAt: string }[];
 }
 
+interface FixedSheetSummary {
+  id: string;
+  revision: number;
+  templateId: string;
+  createdAt: string;
+  template?: { totalQuestions: number; idBoxes?: { digits: number } };
+}
+
 export default function OmrStudioPane({ examId }: { examId: string }) {
   const [detail, setDetail] = useState<OmrDetail | null>(null);
+  const [fixed, setFixed] = useState<FixedSheetSummary | null>(null);
   const [copies, setCopies] = useState(30);
   const [busy, setBusy] = useState('');
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/exams/${examId}`);
-    setDetail(await res.json());
+    const [examRes, fixedRes] = await Promise.all([
+      fetch(`/api/exams/${examId}`),
+      fetch(`/api/exams/${examId}/fixed-sheet`),
+    ]);
+    setDetail(await examRes.json());
+    if (fixedRes.ok) setFixed((await fixedRes.json()).current ?? null);
   }, [examId]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const createFixedSheet = async () => {
+    setBusy('fixed');
+    try {
+      const res = await fetch(`/api/exams/${examId}/fixed-sheet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        toast.error(body?.error ?? 'تعذّر إنشاء الورقة الموحّدة');
+        return;
+      }
+      toast.success(`الورقة الموحّدة جاهزة — الإصدار ${body.revision}`);
+      void load();
+    } finally {
+      setBusy('');
+    }
+  };
 
   const enableOmr = async (enabled: boolean) => {
     if (!detail) return;
@@ -148,6 +181,67 @@ export default function OmrStudioPane({ examId }: { examId: string }) {
                   </Button>
                 </div>
               </>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="border-border bg-paper md:col-span-2">
+          <CardContent className="space-y-3 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-[15px] font-bold">
+                  الورقة الموحّدة {fixed ? `(الإصدار ${fixed.revision})` : ''}
+                </div>
+                <div className="mt-0.5 text-[13px] text-muted-foreground">
+                  ورقة واحدة لكل الامتحان تُطبع مرة واحدة وتُستخدم لكل النسخ — الطالب يظلّل رقمه في
+                  شبكة الأرقام ويظلّل حرف النسخة، فلا حاجة لورقة لكل نسخة.
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9"
+                disabled={busy !== ''}
+                onClick={() => void createFixedSheet()}
+              >
+                {busy === 'fixed' ? 'جارٍ الإنشاء…' : fixed ? 'أنشئ إصدارًا جديدًا' : 'أنشئ الورقة الموحّدة'}
+              </Button>
+            </div>
+            {fixed ? (
+              <>
+                <div className="rounded-lg bg-muted p-3 text-[13px] leading-relaxed text-muted-foreground">
+                  {fixed.template?.totalQuestions ?? 0} سؤالًا • {fixed.template?.idBoxes?.digits ?? 0} خانات
+                  لرقم الطالب • ظلّل حرف النسخة (A/B/C) في صف النسخة أعلى الورقة.
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    className="h-9 gap-1 bg-primary text-primary-foreground hover:bg-primary/90"
+                    disabled={busy !== ''}
+                    onClick={() =>
+                      void download(`/api/fixed-sheets/${fixed.id}/pdf?copies=${copies}`, 'fixed-sheet.pdf', 'fixedPdf')
+                    }
+                  >
+                    <FileDown className="h-4 w-4" />
+                    {busy === 'fixedPdf' ? 'جارٍ التوليد…' : `اطبع ${copies} ورقة (PDF)`}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 gap-1"
+                    disabled={busy !== ''}
+                    onClick={() =>
+                      void download(`/api/fixed-sheets/${fixed.id}/png?sheet=0&dpi=300`, 'fixed-sheet-300dpi.png', 'fixedPng')
+                    }
+                  >
+                    <FileDown className="h-4 w-4" />
+                    {busy === 'fixedPng' ? 'جارٍ التجهيز…' : 'ورقة PNG 300dpi (اختبار)'}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-[13px] text-warning">
+                لا توجد ورقة موحّدة بعد — أنشئها مرة واحدة ثم اطبعها لكل الطلاب.
+              </div>
             )}
           </CardContent>
         </Card>
