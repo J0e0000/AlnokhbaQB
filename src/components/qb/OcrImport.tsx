@@ -53,6 +53,8 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [ocrPct, setOcrPct] = useState<number | null>(null);
   const [ocrStage, setOcrStage] = useState('');
+  /** last server-side reason, surfaced when both readers fail */
+  const serverReason = useRef('');
   const [showQuestions, setShowQuestions] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -66,7 +68,11 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
     setOcrStage(stage);
   };
 
-  /** Server fallback: same engine chain as before (OMR Tesseract → vision model). */
+  /**
+   * Server fallback. Returns null on failure but keeps the server's reason in
+   * `serverReason` — swallowing it is why every failure used to read the same
+   * "لم يُستخرج أي نص" no matter which engine broke.
+   */
   const serverOcr = async (dataUrl: string): Promise<string | null> => {
     try {
       const res = await fetch('/api/ocr', {
@@ -75,12 +81,24 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
         body: JSON.stringify({ imageBase64: dataUrl, lang: lang === 'ara+eng' ? 'ara' : lang }),
       });
       const d = (await res.json().catch(() => null)) as
-        | { ok?: boolean; text?: string; error?: string; details?: string; engine?: string }
+        | {
+            ok?: boolean;
+            text?: string;
+            error?: string;
+            details?: string;
+            engine?: string;
+            attempts?: string[];
+          }
         | null;
-      if (!res.ok || !d?.ok || !d.text?.trim()) return null;
-      setEngine(d.engine === 'vlm' ? 'نموذج رؤية — الخادم' : 'Tesseract — الخادم');
+      if (!res.ok || !d?.ok || !d.text?.trim()) {
+        const reason = d?.details || d?.error || `HTTP ${res.status}`;
+        serverReason.current = d?.attempts?.length ? `${reason} — ${d.attempts.join(' · ')}` : reason;
+        return null;
+      }
+      setEngine(ENGINE_LABELS[d.engine ?? ''] ?? d.engine ?? null);
       return d.text;
-    } catch {
+    } catch (err) {
+      serverReason.current = err instanceof Error ? err.message : 'تعذر الوصول إلى الخادم';
       return null;
     }
   };
@@ -150,7 +168,10 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
           await page.cleanup();
         }
         const extracted = pageTexts.filter(Boolean).join('\n\n').trim();
-        if (!extracted) throw new Error('لم يُستخرج أي نص — جرّب صورة أوضح أو ملفًا نصيًا');
+        if (!extracted)
+          throw new Error(
+            `لم يُستخرج أي نص${serverReason.current ? ` — ${serverReason.current}` : ' — جرّب صورة أوضح أو ملفًا نصيًا'}`
+          );
         setText(extracted);
         setEngine('PDF');
         setProgress(null);
@@ -177,7 +198,9 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
         extracted = (await serverOcr(prepared.dataUrl)) ?? '';
       }
       if (!extracted) {
-        throw new Error('لم يُستخرج أي نص — جرّب صورة أوضح وبجودة أعلى');
+        throw new Error(
+          `لم يُستخرج أي نص${serverReason.current ? ` — ${serverReason.current}` : ' — جرّب صورة أوضح وبجودة أعلى'}`
+        );
       }
       setText(extracted);
       setProgress(null);
