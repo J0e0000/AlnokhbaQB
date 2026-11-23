@@ -6,6 +6,7 @@
 
 import { NextResponse } from 'next/server';
 import { processDocument } from '@/lib/qb/ocr/engine';
+import { cloudflareAiConfigured } from '@/lib/cloudflare/config';
 import { clientIp, rateLimit } from '@/lib/auth/ratelimit';
 import { readJsonBody, serverError, stripDataUrl } from '../_lib/shared';
 
@@ -44,16 +45,28 @@ export async function POST(req: Request) {
       });
     }
 
+    // A bare "recognition failed" is useless to whoever has to fix it: say
+    // which provider is missing so the admin knows what to configure.
+    const missing: string[] = [];
+    if (!cloudflareAiConfigured()) {
+      missing.push('Cloudflare Workers AI (CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN)');
+    }
+    if (!process.env.AI_API_KEY?.trim() || !process.env.AI_VISION_MODEL?.trim()) {
+      missing.push('مزوّد الرؤية الاحتياطي (AI_API_KEY + AI_VISION_MODEL)');
+    }
+    const baseError =
+      lang === 'ara'
+        ? 'فشل التعرف الضوئي باللغة العربية في المحرك وفي النموذج البديل'
+        : result.error || 'فشل التعرف الضوئي في المحرك';
+
     return NextResponse.json(
       {
         ok: false,
-        error:
-          lang === 'ara'
-            ? 'فشل التعرف الضوئي باللغة العربية في المحرك وفي النموذج البديل'
-            : result.error || 'فشل التعرف الضوئي في المحرك',
+        error: missing.length ? `${baseError} — غير مهيأ: ${missing.join('، ')}` : baseError,
         stage: result.stage ?? 'engineError',
         details: result.error,
         attempts: result.attempts,
+        unconfiguredProviders: missing,
         needsReview: true,
       },
       result.stage === 'noProcessor' || result.stage === 'engineUnreachable' ? { status: 503 } : { status: 502 }

@@ -9,6 +9,7 @@
 import base64
 import hashlib
 import io
+import itertools
 import math
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -226,6 +227,37 @@ def _order_points(pts: np.ndarray) -> np.ndarray:
     return pts
 
 
+def _sits_on_paper(
+    gray: np.ndarray, cx: float, cy: float, size: float,
+    bx: int, by: int, bw: int, bh: int,
+) -> bool:
+    """True when the blob is a dark mark on bright paper.
+
+    Absolute brightness thresholds fail on dim/shadowed captures, so the paper
+    level is taken from the frame itself (90th percentile) and the blob's ring
+    is compared against it. Desk clutter / shadow blobs sit on a much darker
+    surround and are rejected."""
+    h, w = gray.shape[:2]
+    pad = int(max(6.0, size * 0.7))
+    x0, y0 = max(0, bx - pad), max(0, by - pad)
+    x1, y1 = min(w, bx + bw + pad), min(h, by + bh + pad)
+    win = gray[y0:y1, x0:x1]
+    if win.size < 64:
+        return False
+    ring_mask = np.ones(win.shape, dtype=bool)
+    iy0, ix0 = max(0, by - y0), max(0, bx - x0)
+    ring_mask[iy0:iy0 + bh, ix0:ix0 + bw] = False
+    ring_vals = win[ring_mask]
+    if ring_vals.size < 32:
+        return False
+    ring_med = float(np.median(ring_vals))
+    paper_level = float(np.percentile(gray, 90))
+    blob_med = float(np.median(win[iy0:iy0 + bh, ix0:ix0 + bw])) if bh and bw else 0.0
+    if paper_level <= 0:
+        return True
+    return ring_med >= 0.72 * paper_level and blob_med <= 0.72 * ring_med
+
+
 def _marker_candidates(
     binary: np.ndarray,
     min_sz: float,
@@ -233,8 +265,15 @@ def _marker_candidates(
     aspect_max: float,
     rect_min: float,
     fill_min: float,
+    gray: Optional[np.ndarray] = None,
 ) -> List[Tuple[float, float, float, float]]:
-    """Solid, near-square dark blobs within the given mm-based size bounds."""
+    """Solid, near-square dark blobs within the given mm-based size bounds.
+
+    When `gray` is supplied, blobs whose surroundings are not bright paper are
+    rejected: a printed marker always sits on the white sheet, while the dark
+    blobs of desk clutter / shadows that survive Otsu sit on a dark background.
+    Without this check a cluttered photo can match clutter to the corner slots
+    and warp the page into garbage (silently wrong reads)."""
     contours = _find_contours(binary, cv2.RETR_EXTERNAL)
     candidates: List[Tuple[float, float, float, float]] = []
     for c in contours:
@@ -260,61 +299,206 @@ def _marker_candidates(
         fill = cv2.countNonZero(cv2.bitwise_and(binary[y:y + bh, x:x + bw], mask)) / float(mask_nz)
         if fill < fill_min:
             continue
+        if gray is not None and not _sits_on_paper(gray, cx, cy, size, x, y, bw, bh):
+            continue
         candidates.append((float(cx), float(cy), size, area))
     return candidates
 
 
+def _qr_from_source_quad(
+    gray: np.ndarray, M: np.ndarray, template: Optional[Dict[str, Any]], px_per_mm: float
+) -> bool:
+    """Warp just the canonical QR area out of the source image through `M` and
+    try to decode it. Ground truth for choosing between candidate quads and
+    for resolving the corner rotation."""
+    tpl = template or {}
+    qx = float((tpl.get("qr") or {}).get("x", 24.0))
+    qy = float((tpl.get("qr") or {}).get("y", 24.0))
+    qs = float((tpl.get("qr") or {}).get("sizeMm", 18.0))
+    dst = np.array(
+        [[qx * px_per_mm, qy * px_per_mm], [(qx + qs) * px_per_mm, qy * px_per_mm],
+         [(qx + qs) * px_per_mm, (qy + qs) * px_per_mm], [qx * px_per_mm, (qy + qs) * px_per_mm]],
+        dtype=np.float32,
+    )
+    try:
+        Minv = np.linalg.inv(M)
+    except np.linalg.LinAlgError:
+        return False
+    src = cv2.perspectiveTransform(dst.reshape(-1, 1, 2), Minv).reshape(-1, 2).astype(np.float32)
+    size = 420
+    target = np.array([[0, 0], [size, 0], [size, size], [0, size]], dtype=np.float32)
+    Mq = cv2.getPerspectiveTransform(src, target)
+    crop = cv2.warpPerspective(gray, Mq, (size, size), flags=cv2.INTER_LINEAR, borderValue=255)
+    return bool(try_qr(crop, None))
+
+
+def _slots_by_qr(
+    gray: np.ndarray,
+    markers: List[Tuple[float, float, float]],
+    template: Optional[Dict[str, Any]],
+    px_per_mm: float,
+) -> Optional[List[Tuple[Tuple[float, float, float], str]]]:
+    """Resolve the 4 markers' rotation by decoding the QR: try each cyclic
+    assignment and keep the one where the QR area actually decodes. Rotation
+    invariant, and independent of marker sizes (which blur destroys)."""
+    if len(markers) != 4:
+        return None
+    tmarks = {m["id"]: m for m in ((template or {}).get("markers") or CANONICAL_MARKERS)}
+    dst = np.array(
+        [[tmarks[s]["x"] * px_per_mm, tmarks[s]["y"] * px_per_mm] for s in ("TL", "TR", "BR", "BL")],
+        dtype=np.float32,
+    )
+    cx = sum(m[0] for m in markers) / 4.0
+    cy = sum(m[1] for m in markers) / 4.0
+    ring = sorted(markers, key=lambda m: math.atan2(m[1] - cy, m[0] - cx))
+    for shift in range(4):
+        cand = ring[shift:] + ring[:shift]
+        src = np.array([[m[0], m[1]] for m in cand], dtype=np.float32)
+        M, _ = cv2.findHomography(src, dst, 0)
+        if M is None:
+            continue
+        if _qr_from_source_quad(gray, M, template, px_per_mm):
+            return [(m, slot) for m, slot in zip(cand, ("TL", "TR", "BR", "BL"))]
+    return None
+
+
 def _pick_corner_markers(
-    candidates: List[Tuple[float, float, float, float]], w: int, h: int
-) -> Optional[List[Tuple[float, float, float]]]:
-    """Keep the 4 biggest candidates that sit in the page's corner zones and
-    span the sheet. Rejects clustered blobs — a garbage homography that
-    silently misreads every bubble is worse than a clean failure."""
-    if not candidates:
-        return None
+    candidates: List[Tuple[float, float, float, float]],
+    w: int,
+    h: int,
+    top_k: int = 1,
+    allow_triples: bool = False,
+) -> List[List[Tuple[float, float, float]]]:
+    """Rank plausible marker quadruples, best first.
 
-    def corner_zone(c: Tuple[float, float, float, float]) -> bool:
-        cx, cy = c[0], c[1]
-        near_x = cx < w * 0.32 or cx > w * 0.68
-        near_y = cy < h * 0.32 or cy > h * 0.68
-        return near_x and near_y
+    "The four biggest blobs in the corner zones" breaks as soon as anything
+    else dark is in frame: clutter outranks the real markers and the resulting
+    homography warps the page into garbage — which surfaces as "QR unreadable"
+    or, worse, as silently wrong bubble reads. Image quadrants are no better:
+    on a 90°-rotated capture two markers land in the same quadrant.
 
-    zoned = [c for c in candidates if corner_zone(c)]
-    pool = zoned if len(zoned) >= 3 else candidates
-    if len(pool) < 3:
-        return None
-    pool.sort(key=lambda t: -t[3])
-    chosen = [(c[0], c[1], c[2]) for c in pool[:4]]
-    if len(chosen) >= 3:
-        xs = [c[0] for c in chosen]
-        ys = [c[1] for c in chosen]
-        span_x = (max(xs) - min(xs)) / max(1, w)
-        span_y = (max(ys) - min(ys)) / max(1, h)
-        if len(chosen) == 4 and (span_x < 0.5 or span_y < 0.5):
-            return None
-        if len(chosen) == 3 and (span_x < 0.4 or span_y < 0.4):
-            return None
-    return chosen
+    So every 4-combination of the strongest candidates is scored against what
+    the sheet physically is: four equally-sized printed squares whose centres
+    span 182x269mm. The caller validates the survivors against the QR.
+    """
+    if len(candidates) < 4:
+        return []
+    pool = sorted(candidates, key=lambda t: -t[3])[:10]
+    scored: List[Tuple[float, List[Tuple[float, float, float]]]] = []
+    for combo in itertools.combinations(pool, 4):
+        sizes = [p[2] for p in combo]
+        if min(sizes) <= 0 or max(sizes) / min(sizes) > 1.75:
+            continue
+        pts = np.array([[p[0], p[1]] for p in combo], dtype=np.float32)
+        centre = pts.mean(axis=0)
+        order = np.argsort(np.arctan2(pts[:, 1] - centre[1], pts[:, 0] - centre[0]))
+        quad = pts[order]
+        if not cv2.isContourConvex(quad.reshape(-1, 1, 2)):
+            continue
+        sides = [float(np.linalg.norm(quad[(i + 1) % 4] - quad[i])) for i in range(4)]
+        wq, hq = (sides[0] + sides[2]) / 2.0, (sides[1] + sides[3]) / 2.0
+        if wq > hq:
+            wq, hq = hq, wq
+        if wq <= 0:
+            continue
+        ar = hq / wq
+        if not (1.05 <= ar <= 2.2):
+            continue
+        area = cv2.contourArea(quad)
+        if area < 0.05 * w * h:
+            continue
+        # The marker rectangle is 182x269mm (markers inset 14mm) → aspect ~1.48,
+        # and markers print at 5-7mm, so each side is ~26-45x the marker size.
+        aspect_score = max(0.0, 1.0 - abs(ar - 1.478) / 0.55)
+        med_sz = float(np.median(sizes))
+        if not (16.0 <= wq / med_sz <= 55.0) or not (28.0 <= hq / med_sz <= 85.0):
+            continue
+        size_score = 1.0 - (max(sizes) / min(sizes) - 1.0) / 0.75
+        # Corner proximity: the four markers sit at the sheet's corners, so on
+        # a normal capture each one is near a *different* image corner. This is
+        # what separates them from bubble clusters at low resolution, where a
+        # 34 px bubble is too close to a 53 px marker for size alone.
+        diag = math.hypot(w, h)
+        corners = [(0.0, 0.0), (float(w), 0.0), (float(w), float(h)), (0.0, float(h))]
+        free = corners[:]
+        worst = 0.0
+        for p in sorted(quad.tolist(), key=lambda q: min(
+            math.hypot(q[0] - c[0], q[1] - c[1]) for c in free
+        )):
+            best = min(free, key=lambda c: math.hypot(p[0] - c[0], p[1] - c[1]))
+            worst = max(worst, math.hypot(p[0] - best[0], p[1] - best[1]))
+            free.remove(best)
+        if worst > 0.5 * diag:
+            continue
+        corner_score = max(0.0, 1.0 - worst / (0.35 * diag))
+        score = (
+            2.0 * size_score
+            + 2.0 * aspect_score
+            + 1.5 * corner_score
+            + area / (w * h)
+        )
+        size_by_pt = {(p[0], p[1]): p[2] for p in combo}
+        scored.append(
+            (score, [(float(p[0]), float(p[1]), float(size_by_pt[(p[0], p[1])])) for p in quad])
+        )
+    scored.sort(key=lambda t: -t[0])
+    if scored or not allow_triples:
+        return [quad for _, quad in scored[:top_k]]
+
+    # Fallback: only three markers are visible (one merged with the QR or the
+    # printed frame). Three corners plus the QR's four corners still define the
+    # page, so return the best corner-hugging triple.
+    triples: List[Tuple[float, List[Tuple[float, float, float]]]] = []
+    diag = math.hypot(w, h)
+    corners = [(0.0, 0.0), (float(w), 0.0), (float(w), float(h)), (0.0, float(h))]
+    for combo in itertools.combinations(sorted(candidates, key=lambda t: -t[3])[:8], 3):
+        sizes = [p[2] for p in combo]
+        # Looser than the quad rule: with one marker lost to blur or to the
+        # QR, the survivors' apparent sizes differ more.
+        if min(sizes) <= 0 or max(sizes) / min(sizes) > 2.3:
+            continue
+        pts = np.array([[p[0], p[1]] for p in combo], dtype=np.float32)
+        if cv2.contourArea(pts) < 0.05 * w * h:
+            continue
+        free = corners[:]
+        worst = 0.0
+        for p in sorted(pts.tolist(), key=lambda q: min(
+            math.hypot(q[0] - c[0], q[1] - c[1]) for c in free
+        )):
+            best = min(free, key=lambda c: math.hypot(p[0] - c[0], p[1] - c[1]))
+            worst = max(worst, math.hypot(p[0] - best[0], p[1] - best[1]))
+            free.remove(best)
+        if worst > 0.45 * diag:
+            continue
+        size_score = 1.0 - (max(sizes) / min(sizes) - 1.0) / 0.75
+        score = 2.0 * size_score + 1.5 * max(0.0, 1.0 - worst / (0.35 * diag))
+        triples.append(
+            (score, [(float(p[0]), float(p[1]), float(p[2])) for p in combo])
+        )
+    triples.sort(key=lambda t: -t[0])
+    return [t for _, t in triples[:top_k]]
 
 
-def find_corner_markers(gray: np.ndarray) -> Optional[List[Tuple[float, float, float]]]:
-    """Find the 4 largest solid near-square dark blobs (the corner markers).
-    Prefers blobs lying in the page's corner zones. Markers print at 5-7mm;
-    QR finder inners (~1.5mm), text and frame fragments are excluded by
-    mm-based size bounds (page width assumed A4 for scale).
+def find_corner_markers(
+    gray: np.ndarray, paper_gray: Optional[np.ndarray] = None, top_k: int = 1
+) -> List[List[Tuple[float, float, float]]]:
+    """Find candidate marker quadruples, best first.
 
-    Oblique phone photos distort the markers (a square becomes a trapezoid,
-    and a marker touching the printed frame merges into one blob), so a strict
-    Otsu pass alone misses them. Three passes run in order of strictness and
-    the first one that yields a spatially valid set wins — the strict pass
-    still handles flatbed scans exactly as before."""
+    Markers print at 5-7mm; QR finder inners (~1.5mm), text and frame fragments
+    are excluded by mm-based size bounds. Oblique phone photos distort the
+    markers (a square becomes a trapezoid, and a marker touching the printed
+    frame merges into one blob), so several binarization passes run in order of
+    strictness. Blobs that are not dark-on-bright-paper are dropped when
+    `paper_gray` (the un-normalized frame) is supplied."""
     h, w = gray.shape[:2]
     # area-based scale estimate — orientation-independent (works for rotated
     # landscape captures of a portrait A4 sheet)
     px_per_mm_est = (w * h / (210.0 * 297.0)) ** 0.5
-    # smallest real marker is 5mm; QR finder rings (~3.5mm) must stay excluded.
-    min_sz = 4.2 * px_per_mm_est
-    max_sz = 11.0 * px_per_mm_est
+    # The estimate assumes the sheet fills the frame; on a phone photo it
+    # over-estimates the true page scale, so the lower bound stays generous or
+    # the 5mm BR marker falls out of the candidate set.
+    min_sz = 2.4 * px_per_mm_est
+    max_sz = 13.0 * px_per_mm_est
 
     otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
     close5 = cv2.morphologyEx(otsu, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5)))
@@ -333,15 +517,23 @@ def find_corner_markers(gray: np.ndarray) -> Optional[List[Tuple[float, float, f
 
     passes = (
         (close5, min_sz, max_sz, 1.35, 0.75, 0.75),
-        (split, 3.6 * px_per_mm_est, 13.0 * px_per_mm_est, 1.6, 0.65, 0.60),
-        (adaptive, 3.6 * px_per_mm_est, 13.0 * px_per_mm_est, 1.6, 0.65, 0.55),
+        (split, min_sz, max_sz, 1.6, 0.65, 0.60),
+        (adaptive, min_sz, max_sz, 1.6, 0.65, 0.55),
+        (close5, min_sz, max_sz, 1.45, 0.72, 0.70),
     )
+    ref = paper_gray if paper_gray is not None else gray
+    cands_by_pass = []
     for binary, lo, hi, aspect_max, rect_min, fill_min in passes:
-        cands = _marker_candidates(binary, lo, hi, aspect_max, rect_min, fill_min)
-        chosen = _pick_corner_markers(cands, w, h)
-        if chosen:
-            return chosen
-    return None
+        cands = _marker_candidates(binary, lo, hi, aspect_max, rect_min, fill_min, gray=ref)
+        cands_by_pass.append(cands)
+        quads = _pick_corner_markers(cands, w, h, top_k=top_k)
+        if quads:
+            return quads
+    for cands in cands_by_pass:
+        triples = _pick_corner_markers(cands, w, h, top_k=top_k, allow_triples=True)
+        if triples:
+            return triples
+    return []
 
 
 def detect_document_quad(gray: np.ndarray) -> Optional[np.ndarray]:
@@ -418,7 +610,9 @@ def _orientation_from_markers(
     of all markers toward the smallest must point down-right (+45° in y-down
     image coords) on an upright page. Returns the exact corrective angle for
     cv2.getRotationMatrix2D, or None when inconclusive."""
-    markers = markers if markers is not None else find_corner_markers(gray)
+    if markers is None:
+        quads = find_corner_markers(gray)
+        markers = quads[0] if quads else None
     if not markers or len(markers) != 4:
         return None
     smallest = min(markers, key=lambda m: m[2])
@@ -479,6 +673,15 @@ def try_qr(
     for img_ref in ((gray, raw_gray) if raw_gray is not None else (gray,)):
         for ox, oy in ((0, 0), (w - cw, 0), (0, h - ch), (w - cw, h - ch)):
             add(img_ref[oy:oy + ch, ox:ox + cw], 1.0, (ox, oy))
+    # Small frames (phone photos downscaled client-side to 2200px): the QR
+    # drops below ~3px per module and the detector gives up. An upscaled copy
+    # restores enough module contrast to decode.
+    long_side = max(h, w)
+    if long_side < 2600:
+        uscale = 2600.0 / long_side
+        add(cv2.resize(gray, None, fx=uscale, fy=uscale, interpolation=cv2.INTER_CUBIC), uscale, (0, 0))
+        if raw_gray is not None:
+            add(cv2.resize(raw_gray, None, fx=uscale, fy=uscale, interpolation=cv2.INTER_CUBIC), uscale, (0, 0))
     add(gray, 1.0)
     if raw_gray is not None:
         add(raw_gray, 1.0)
@@ -571,6 +774,28 @@ def _try_qr_once(gray: np.ndarray) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _slots_from_quad(
+    markers: List[Tuple[float, float, float]],
+) -> Optional[List[Tuple[Tuple[float, float, float], str]]]:
+    """Order four markers clockwise starting from the printed BR (the small
+    one) and name them BR, BL, TL, TR. Rotation-invariant: works for any
+    capture angle, unlike image-quadrant naming."""
+    if len(markers) != 4:
+        return None
+    sizes = sorted(m[2] for m in markers)
+    med = float(np.median(sizes[:3]))
+    if med <= 0 or sizes[0] / med > 0.92:
+        return None  # no clear small marker — cannot trust the ordering
+    cx = sum(m[0] for m in markers) / 4.0
+    cy = sum(m[1] for m in markers) / 4.0
+    ordered = sorted(markers, key=lambda m: math.atan2(m[1] - cy, m[0] - cx))
+    br = min(markers, key=lambda m: m[2])
+    i = ordered.index(br)
+    ordered = ordered[i:] + ordered[:i]
+    names = ["BR", "BL", "TL", "TR"]
+    return [(m, n) for m, n in zip(ordered, names)]
+
+
 def _match_markers_to_slots(
     markers: List[Tuple[float, float, float]],
 ) -> List[Tuple[Tuple[float, float, float], str]]:
@@ -579,6 +804,10 @@ def _match_markers_to_slots(
     (BR is intentionally smaller). Robust when 3 of 4 markers are visible.
     Spurious small blobs are DROPPED rather than risk a wrong 180° swap."""
     markers = list(markers)
+    if len(markers) == 4:
+        geometric = _slots_from_quad(markers)
+        if geometric:
+            return geometric
 
     def assign(ms: List[Tuple[float, float, float]]) -> List[Tuple[Tuple[float, float, float], str]]:
         xs = [m[0] for m in ms]
@@ -663,7 +892,11 @@ def build_homography(
         diag["qrRawDecoded"] = False
         return M, np.array([W, Hpx]), diag
 
-    markers = markers_preknown if markers_preknown is not None else find_corner_markers(gray)
+    if markers_preknown is not None:
+        quads = [list(markers_preknown)] if markers_preknown else []
+    else:
+        quads = find_corner_markers(gray, paper_gray=raw_gray, top_k=4)
+    markers = quads[0] if quads else None
     diag["markersFound"] = len(markers or [])
     if qr_preknown is not None:
         # reuse the pre-rotation decode result (identical coordinate frame)
@@ -683,7 +916,21 @@ def build_homography(
     strategy = None
 
     if markers and len(markers) >= 3:
-        slots = _match_markers_to_slots(list(markers))
+        # The QR is the only ground truth for which quadruple is the sheet and
+        # how its corners are rotated; try the ranked candidates in order.
+        slots = None
+        if not (qr and qr.get("parsed")):
+            for quad in quads:
+                if len(quad) != 4:
+                    continue
+                slots = _slots_by_qr(gray, list(quad), template, px_per_mm)
+                if slots:
+                    markers = quad
+                    diag["markersFound"] = len(quad)
+                    diag["markerQuadRank"] = quads.index(quad)
+                    break
+        if slots is None:
+            slots = _match_markers_to_slots(list(markers))
         if len(markers) == 3:
             diag["warnings"].append("one corner marker missing/occluded — using markers+QR alignment")
         for m, slot in slots:
@@ -709,6 +956,8 @@ def build_homography(
                     [qx * px_per_mm, (qy + qsize) * px_per_mm],
                 ]
             )
+        if len(markers) >= 3:
+            diag["markerQuad"] = [[float(m[0]), float(m[1]), float(m[2])] for m in markers]
         strategy = "markers" if len(markers) == 4 else "markers+qr"
     elif qr and qr.get("parsed"):
         qx, qy = (template or {}).get("qr", {}).get("x", 24.0), (template or {}).get("qr", {}).get("y", 24.0)
@@ -760,6 +1009,13 @@ def warp_with(
     gray: np.ndarray, M: np.ndarray, size_px: np.ndarray
 ) -> np.ndarray:
     W, Hpx = int(size_px[0]), int(size_px[1])
+    M = np.asarray(M, dtype=np.float64)
+    if M.shape == (2, 3):
+        # 3-correspondence alignment yields an affine matrix; warpPerspective
+        # asserts on it (used to surface as a 500 on the whole scan).
+        return cv2.warpAffine(gray, M, (W, Hpx), flags=cv2.INTER_LINEAR, borderValue=255)
+    if M.shape != (3, 3):
+        raise ValueError(f"unsupported transform shape {M.shape}")
     return cv2.warpPerspective(gray, M, (W, Hpx), flags=cv2.INTER_LINEAR, borderValue=255)
 
 
@@ -1415,6 +1671,50 @@ def _failure_preview(gray: np.ndarray, max_w: int = 900) -> str:
     return 'data:image/jpeg;base64,' + base64.b64encode(buf.tobytes()).decode()
 
 
+def _sheet_bubbles(template: Dict[str, Any], sheet: int) -> List[Tuple[float, float, float]]:
+    out: List[Tuple[float, float, float]] = []
+    for q in template.get("questions", []):
+        if q.get("sheet", 0) != sheet:
+            continue
+        for _letter, pos in q["options"].items():
+            out.append((pos["x"], pos["y"], q.get("radiusMm", 2.0)))
+    return out
+
+
+def _alignment_score(
+    warped: np.ndarray, bubbles: List[Tuple[float, float, float]], px_per_mm: float
+) -> int:
+    """How many bubbles read as clearly filled. Used only to compare candidate
+    alignments: a correct warp fills the marked bubbles, a wrong rotation or a
+    bad quad fills nothing."""
+    if not bubbles:
+        return 0
+    ink_ref = estimate_ink_ref(warped)
+    ratios = bubble_fill_ratios(warped, bubbles, px_per_mm, ink_ref)
+    return sum(1 for r, _m, _c in ratios if r >= 0.45)
+
+
+def _quad_rotation_homography(
+    markers: List[Tuple[float, float, float]],
+    shift: int,
+    template: Dict[str, Any],
+    px_per_mm: float,
+) -> Optional[np.ndarray]:
+    """Homography for one of the 4 cyclic corner assignments of a marker quad."""
+    tmarks = {m["id"]: m for m in (template.get("markers") or CANONICAL_MARKERS)}
+    dst = np.array(
+        [[tmarks[sl]["x"] * px_per_mm, tmarks[sl]["y"] * px_per_mm] for sl in ("TL", "TR", "BR", "BL")],
+        dtype=np.float32,
+    )
+    cx = sum(m[0] for m in markers) / 4.0
+    cy = sum(m[1] for m in markers) / 4.0
+    ring = sorted(markers, key=lambda m: math.atan2(m[1] - cy, m[0] - cx))
+    cand = ring[shift:] + ring[:shift]
+    src = np.array([[m[0], m[1]] for m in cand], dtype=np.float32)
+    M, _ = cv2.findHomography(src, dst, 0)
+    return M
+
+
 def process(payload: Dict[str, Any]) -> Dict[str, Any]:
     t0 = time.time()
     global _QR_SECRET
@@ -1507,9 +1807,8 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
     # Fallbacks: QR-corner angle (only when markers are absent entirely) and
     # printed-marker geometry (BR is the smallest marker). Skipped in manual
     # mode: the user's 4 clicks define the upright frame.
-    markers_pre: Optional[List[Tuple[float, float, float]]] = (
-        None if manual_markers else find_corner_markers(gray)
-    )
+    _quads_pre = [] if manual_markers else find_corner_markers(gray, paper_gray=raw_gray)
+    markers_pre: Optional[List[Tuple[float, float, float]]] = _quads_pre[0] if _quads_pre else None
     qr_pre = None if manual_markers else try_qr(gray, raw_gray)
     pre_rot = 0.0
     qr_known: Optional[Dict[str, Any]] = None
@@ -1585,19 +1884,12 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
                 qr_pre["pts"].reshape(-1, 1, 2).astype(np.float32), Mrot
             ).reshape(-1, 2)
             qr_known = {**qr_pre, "pts": pts_t.astype(np.float32)}
-    elif not manual_markers and not (qr_pre and qr_pre.get("parsed")):
-        # QR unreadable: printed-marker geometry cue (BR is the smallest)
-        mrot = _orientation_from_markers(gray, markers_pre)
-        if mrot:
-            gray, _ = _rotate_bound(gray, mrot)
-            if raw_gray is not None:
-                raw_gray, _ = _rotate_bound(raw_gray, mrot)
-            pre_rot = mrot
-            diag["preRotationDeg"] = round(mrot % 360, 1)
-            diag["warnings"].append(f"تم تدوير الصورة مسبقًا بمقدار {round(mrot, 1)}° (توجيه العلامات)")
-            # markers were detected pre-warp — force re-detection on the
-            # rotated frame (positions no longer match)
-            markers_pre = None
+    # NOTE: no marker-based pre-rotation. The four printed markers define a
+    # full projective transform that already absorbs any capture angle, and
+    # the "BR is the smallest" size cue is unreliable once blur/perspective
+    # move the sizes within a few pixels — rotating on a wrong cue threw away
+    # an otherwise perfect marker set (whole scans failed with "sheet not
+    # detected"). Orientation is resolved after the warp, by the QR.
 
     # Sheet detection + perspective correction (manual > markers + QR-assisted).
     px_per_mm = 300 / 25.4
@@ -1643,6 +1935,56 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
             warped = np.rot90(warped).copy()
             diag["aspectRot90"] = True
             warnings.append("تم تدوير الورقة المصححة هندسيًا لتطابق اتجاه القالب")
+
+    # Rotation self-heal: without a decodable QR the marker->slot mapping is a
+    # guess (the "BR is smallest" cue is unreliable at low resolution), and a
+    # wrong guess warps the page upside-down — every bubble then reads empty
+    # and the sheet is graded 0 as if the student left it blank. Score the 4
+    # cyclic assignments on actual bubble fills and adopt the best one.
+    if template and not manual_markers and payload.get("alignRetry") is not False:
+        qbubbles = _sheet_bubbles(template, 0)
+        base_score = _alignment_score(warped, qbubbles, px_per_mm) if qbubbles else 1
+        best: Optional[Tuple[int, np.ndarray, np.ndarray, Any]] = None
+        if base_score == 0 and qbubbles and len(wdiag.get("markerQuad") or []) == 3:
+            # Three markers can be mis-slotted (which corner is which is a
+            # guess), but the QR alone pins the page unambiguously. Retry with
+            # the QR-only alignment and keep it when it reads real marks.
+            Mq, _, qdiag = build_homography(
+                gray, template, px_per_mm, raw_gray=raw_gray, markers_preknown=[]
+            )
+            if Mq is not None:
+                wtmp = warp_with(gray, Mq, size_px)
+                pg = template.get("page") or A4
+                pw_mm, ph_mm = float(pg.get("widthMm") or 210), float(pg.get("heightMm") or 297)
+                h_t, w_t = wtmp.shape[:2]
+                if (w_t > h_t) != (pw_mm > ph_mm):
+                    wtmp = np.rot90(wtmp).copy()
+                best = (_alignment_score(wtmp, qbubbles, px_per_mm), wtmp, Mq, "qr")
+        elif (
+            base_score == 0
+            and qbubbles
+            and not wdiag.get("qrRawDecoded")
+            and len(wdiag.get("markerQuad") or []) == 4
+        ):
+            for shift in range(4):
+                Mx = _quad_rotation_homography(
+                    [tuple(m) for m in wdiag["markerQuad"]], shift, template, px_per_mm
+                )
+                if Mx is None:
+                    continue
+                wtmp = warp_with(gray, Mx, size_px)
+                pg = template.get("page") or A4
+                pw_mm, ph_mm = float(pg.get("widthMm") or 210), float(pg.get("heightMm") or 297)
+                h_t, w_t = wtmp.shape[:2]
+                if (w_t > h_t) != (pw_mm > ph_mm):
+                    wtmp = np.rot90(wtmp).copy()
+                sc = _alignment_score(wtmp, qbubbles, px_per_mm)
+                if best is None or sc > best[0]:
+                    best = (sc, wtmp, Mx, shift)
+        if best and best[0] > base_score:
+            _, warped, M, how = best
+            diag["alignRetry"] = {"applied": True, "how": how, "score": best[0]}
+            diag["warnings"].append("تم تصحيح المحاذاة تلقائيًا بعد فشل القراءة الأولى")
 
     if manual_markers:
         # Trust the user's clicks: no self-heal (it would override their exact
@@ -1814,11 +2156,22 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
         grade = grade_answers(answers, key_sheet, marks_map, float(template.get("marksPerQuestion", 1)))
         stages["graded"] = True
 
-    overall_conf = round(float(np.mean(confs)) if confs else 1.0, 3)
+    answered_count = sum(1 for a in answers if a["status"] in ("selected", "multiple"))
+    needs_review = bool(template) and not manual_markers and answered_count == 0
+    if needs_review:
+        # A detected sheet with zero readable marks is almost always a failed
+        # alignment, not a blank answer sheet. Never report it as a confident
+        # success — the caller flags it for human review.
+        warnings.append(
+            "لم يتم قراءة أي إجابة — تحقق من محاذاة الورقة ووضوح الصورة (أو أن الورقة فارغة فعلًا)"
+        )
+        diag["needsReview"] = True
+    overall_conf = round(float(np.mean(confs)) if confs else (0.0 if needs_review else 1.0), 3)
 
     result = {
         "ok": True,
         "needsTemplate": False,
+        "needsReview": needs_review,
         "stages": stages,
         "qr": {"decoded": qr_decoded, "payload": odiag.get("qrPayload"), "parsed": qr_parsed},
         "templateSource": template_source,

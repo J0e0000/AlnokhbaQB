@@ -34,6 +34,49 @@ def _error(msg: str) -> Dict[str, Any]:
     return {"ok": False, "error": msg, "engine": "tesseract"}
 
 
+def _text_from_tsv(tsv_path: str) -> str:
+    """Rebuild the plain-text output from the TSV we already asked for.
+
+    Tesseract used to be invoked twice (once for TSV, once for .txt) — the
+    second run doubles latency for text that is already in the first output.
+    Lines are grouped by tesseract's (block, par, line) ids.
+    """
+    lines: list[str] = []
+    current: list[str] = []
+    key: tuple[str, str, str] | None = None
+    try:
+        with open(tsv_path, "r", encoding="utf-8", errors="replace") as fh:
+            header = fh.readline().rstrip("\n").split("\t")
+            try:
+                i_block = header.index("block_num")
+                i_par = header.index("par_num")
+                i_line = header.index("line_num")
+                i_text = header.index("text")
+                i_level = header.index("level")
+            except ValueError:
+                return ""
+            for row in fh:
+                cols = row.rstrip("\n").split("\t")
+                if len(cols) <= max(i_block, i_par, i_line, i_text, i_level):
+                    continue
+                if cols[i_level] != "5":
+                    continue
+                word = cols[i_text].strip()
+                if not word:
+                    continue
+                row_key = (cols[i_block], cols[i_par], cols[i_line])
+                if key is not None and row_key != key:
+                    lines.append(" ".join(current))
+                    current = []
+                key = row_key
+                current.append(word)
+    except OSError:
+        return ""
+    if current:
+        lines.append(" ".join(current))
+    return "\n".join(lines)
+
+
 def _mean_word_confidence(tsv_path: str) -> float | None:
     """Mean of word-level confidences (tesseract TSV level 5), 0..1; None if no words."""
     confs: list[float] = []
@@ -108,23 +151,7 @@ def ocr(image_b64: str, lang: str = "eng") -> Dict[str, Any]:
         if proc.returncode != 0:
             return _error(f"tesseract failed: {(proc.stderr or proc.stdout or '').strip()[:300]}")
 
-        text = ""
-        if os.path.exists(tsv_path):
-            # Plain text comes free: re-run is wasteful — reconstruct from TSV text column
-            # (level 5 words joined with their line boundaries is lossy; simpler to also
-            # request the txt output by running the plain invocation when needed).
-            pass
-        # Run once more for clean .txt (fast, cached model, still well under timeout)
-        cmd_txt = [
-            tess_bin, inp, outbase + "_t", "-l", lang,
-            "--tessdata-dir", _BUNDLED_TESSDATA,
-        ]
-        proc2 = subprocess.run(cmd_txt, capture_output=True, text=True, timeout=60)
-        text_path = outbase + "_t.txt"
-        if proc2.returncode == 0 and os.path.exists(text_path):
-            with open(text_path, "r", encoding="utf-8", errors="replace") as fh:
-                text = fh.read()
-
+        text = _text_from_tsv(tsv_path) if os.path.exists(tsv_path) else ""
         confidence = _mean_word_confidence(tsv_path) if os.path.exists(tsv_path) else None
         return {
             "ok": True,

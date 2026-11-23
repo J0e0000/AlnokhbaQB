@@ -5,14 +5,18 @@
 // (413 FUNCTION_PAYLOAD_TOO_LARGE, HTML body). Phone photos posted
 // as raw base64 JSON blow through that instantly. This helper
 // decodes with the correct EXIF orientation, downscales the long
-// side to ≤2200 px (never upscales — small images pass through at
+// side to ≤3000 px (never upscales — small images pass through at
 // their original size), and re-encodes JPEG down a quality ladder
 // (0.85 → 0.75 → 0.65 → 0.55) targeting ≤2.0 MB raw, so the base64 JSON
 // body stays around 2.7 MB — comfortably under the 4.5 MB function cap. PDF page rendering is NOT affected —
 // it already renders at 1800 px.
 // ============================================================
 
-const MAX_LONG_SIDE = 2200;
+// 3000 px keeps the 5mm corner marker ~40 px and the QR modules ~3 px, which
+// is what the engine needs to find markers and decode the QR on a tilted or
+// rotated phone photo. At 2200 px those cues degrade and sheets were rejected
+// ("لم يتمكن المحرك من تحديد حدود الورقة") or read as blank.
+const MAX_LONG_SIDE = 3000;
 const TARGET_BYTES = 2.0 * 1024 * 1024;
 const QUALITY_LADDER = [0.85, 0.75, 0.65, 0.55] as const;
 

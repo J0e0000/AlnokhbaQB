@@ -18,8 +18,12 @@ import cv2
 import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(ROOT, "mini-services", "omr-engine"))
-sys.path.insert(0, os.path.join(ROOT, "mini-services", "omr-engine", "engine"))
+# The engine Vercel actually deploys is omr-service/ (see vercel.json); the
+# mini-services copy is the legacy Fly.io one. Default to the deployed engine
+# and allow the legacy one for comparison:  OMR_ENGINE_ROOT=mini-services/omr-engine
+ENGINE_ROOT = os.environ.get("OMR_ENGINE_ROOT") or os.path.join(ROOT, "omr-service")
+sys.path.insert(0, ENGINE_ROOT)
+sys.path.insert(0, os.path.join(ENGINE_ROOT, "engine"))
 
 import pipeline  # noqa: E402  (the REAL engine code)
 
@@ -191,6 +195,9 @@ def run(img: np.ndarray, with_template: bool = True, answer_key: bool = True, **
 
 def check_answers(res: Dict[str, Any], expected: Dict[int, Optional[str]], allow_unclear_as: Optional[Dict[int, str]] = None) -> Tuple[float, List[str]]:
     """Returns (exact accuracy, list of problems). expected None = unanswered."""
+    if not res.get("answers"):
+        # engine refused the sheet (markers/QR not found): report, don't crash
+        return 0.0, [f"engine returned no answers: {res.get('error') or res.get('stage')}"]
     got = {a["number"]: (a["detected"] if a["status"] == "selected" else ("MULTI" if a["status"] == "multiple" else ("UNCLEAR" if a["status"] == "unclear" else None))) for a in res["answers"]}
     problems = []
     ok = 0

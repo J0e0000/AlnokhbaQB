@@ -66,7 +66,9 @@ const tesseractProcessor: DocumentProcessor = {
       return null;
     }
     if (!res.text.trim()) return null;
-    return { engine: 'tesseract', text: res.text, confidence: null };
+    // tesseract reports a mean word confidence — surface it instead of
+    // discarding it; the review gate below still forces teacher review.
+    return { engine: 'tesseract', text: res.text, confidence: res.confidence ?? null };
   },
 };
 
@@ -260,8 +262,9 @@ export async function processDocument(input: ProcessorInput): Promise<DocumentOc
     try {
       const result = await processor.process(input);
       if (result) {
-        // no self-assessed confidence → the teacher MUST review the text
-        const needsReview = result.confidence === null || result.confidence < 0.85;
+        // OCR output is never auto-published: a teacher reviews the text even
+        // when the engine is confident (confidence is shown, not trusted).
+        const needsReview = true;
         return {
           ok: true,
           engine: result.engine,

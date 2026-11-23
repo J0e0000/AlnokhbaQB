@@ -13,7 +13,12 @@
 // ============================================================
 
 import { afterAll, describe, expect, test } from 'bun:test';
-import { db } from '@/lib/db';
+
+// bun test runs outside Next, so nothing loads .env.local: point Prisma at the
+// local dev database before the client is constructed.
+process.env.DATABASE_URL ??= 'file:./db/dev-local.db';
+
+const { db } = await import('@/lib/db');
 import { loadVersion, loadVersionHint } from '@/app/api/_lib/version';
 import { starterDocument } from '@/lib/qb/schema';
 

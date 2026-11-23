@@ -139,6 +139,11 @@ export async function POST(req: Request) {
     let versionDoc: QBDocument | null = null;
     let versionKey: QBAnswerKey = {};
     let template: OMRTemplate | null = null;
+    // DB ids of the resolved version — the template JSON is a snapshot and its
+    // examId may no longer exist (version re-published / moved between
+    // environments); the row is the authoritative source for persistence.
+    let resolvedExamId: string | null = null;
+    let resolvedVersionId: string | null = null;
 
     const buildEngineKey = (doc: QBDocument, key: QBAnswerKey) => {
       const answerKeyByNumber: Record<string, string> = {};
@@ -162,6 +167,8 @@ export async function POST(req: Request) {
       template = loaded.omrTemplate;
       versionDoc = loaded.document;
       versionKey = loaded.answerKey;
+      resolvedExamId = loaded.row.examId;
+      resolvedVersionId = loaded.row.id;
       const { answerKeyByNumber, marksMap } = buildEngineKey(versionDoc, versionKey);
       result = await processScan({
         imageBase64,
@@ -215,6 +222,8 @@ export async function POST(req: Request) {
         );
       }
       template = loaded.omrTemplate;
+      resolvedExamId = loaded.row.examId;
+      resolvedVersionId = loaded.row.id;
       if (template && qrTemplateId && template.templateId !== qrTemplateId) {
         return NextResponse.json(
           {
@@ -263,8 +272,8 @@ export async function POST(req: Request) {
     if (!result.ok) {
       const scan = await db.scan.create({
         data: {
-          examId: template?.examId ?? null,
-          examVersionId: template?.examVersionId ?? null,
+          examId: resolvedExamId,
+          examVersionId: resolvedVersionId,
           answersJson: JSON.stringify({ answers: result.answers ?? [] }),
           gradeJson: '{}',
           overridesJson: '{}',
@@ -325,17 +334,22 @@ export async function POST(req: Request) {
       ? await db.student.findUnique({ where: { code: studentCode } })
       : null;
     const overallConfidence = meanConfidence(answers);
+    // Engine flags a detected sheet with zero readable marks: never store that
+    // as a confident PROCESSED result — a teacher must eyeball it.
+    const needsReview = result.needsReview === true;
+    const scanStatus = needsReview ? 'REVIEW' : 'PROCESSED';
 
     const scan = await db.scan.create({
       data: {
-        examId: template.examId,
-        examVersionId: template.examVersionId,
+        examId: resolvedExamId ?? template.examId,
+        examVersionId: resolvedVersionId ?? template.examVersionId,
         studentCode,
         studentId: student?.id ?? null,
         answersJson: JSON.stringify({ answers, studentId: result.studentId ?? null }),
         gradeJson: JSON.stringify(grade),
         overridesJson: '{}',
-        status: 'PROCESSED',
+        status: scanStatus,
+        reviewStatus: needsReview ? 'PENDING' : 'NONE',
         overallConfidence,
         diagnosticsJson: '{}',
       },
@@ -366,16 +380,18 @@ export async function POST(req: Request) {
       diagnostics,
       studentCode,
       studentId: student?.id ?? null,
-      status: 'PROCESSED',
+      status: scanStatus,
+      needsReview,
       overallConfidence,
       template: {
         templateId: template.templateId,
-        examVersionId: template.examVersionId,
+        examVersionId: resolvedVersionId ?? template.examVersionId,
         version: template.versionNumber,
         sheets: template.sheets,
       },
     });
   } catch (err) {
+    console.error('[scan] unhandled', err);
     return NextResponse.json(serverError(err), { status: 500 });
   }
 }

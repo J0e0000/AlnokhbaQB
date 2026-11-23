@@ -54,6 +54,8 @@ export interface OmrProcessSuccess {
   answers: QBScannedAnswer[];
   studentId?: { digits?: string; confidence?: number } | null;
   needsTemplate?: boolean;
+  /** sheet was found but nothing was readable — route stores REVIEW */
+  needsReview?: boolean;
   qr?: {
     examVersionId?: string;
     templateId?: string;
@@ -94,6 +96,8 @@ export interface OmrOcrResult {
   ok: true;
   text: string;
   lang: string;
+  /** mean tesseract word confidence 0..1, null when unavailable */
+  confidence?: number | null;
 }
 
 // ---------- low-level fetch ----------
@@ -234,15 +238,26 @@ export async function ocrText(
   imageBase64: string,
   lang: 'eng' | 'ara'
 ): Promise<OmrOcrResult | OmrClientError> {
-  const res = await enginePostJson<{ ok?: boolean; text?: string }>(
+  const res = await enginePostJson<{ ok?: boolean; text?: string; confidence?: number | null }>(
     '/ocr',
     { imageBase64, lang },
     30_000
   );
   if (res instanceof Response === false && res && typeof res === 'object') {
-    const body = res as { ok?: boolean; text?: string; error?: string; stage?: string };
+    const body = res as {
+      ok?: boolean;
+      text?: string;
+      confidence?: number | null;
+      error?: string;
+      stage?: string;
+    };
     if (body.ok && typeof body.text === 'string') {
-      return { ok: true, text: body.text, lang };
+      return {
+        ok: true,
+        text: body.text,
+        lang,
+        confidence: typeof body.confidence === 'number' ? body.confidence : null,
+      };
     }
     if ('stage' in body) return res as OmrClientError;
     return {
