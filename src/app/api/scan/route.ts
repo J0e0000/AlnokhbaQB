@@ -45,6 +45,12 @@ export const dynamic = 'force-dynamic';
 
 const SCANS_DIR = path.join(process.cwd(), 'db', 'scans');
 
+/**
+ * Persist a preview JPEG for the /api/scans/<id>/images route. Vercel's
+ * function filesystem is read-only, so the write fails there — in that case
+ * return the data URL itself instead of dropping the image, otherwise the
+ * diagnostic overlay is never visible in production.
+ */
 function decodeImage(base64: string, scanId: string, kind: 'debug' | 'corrected'): string | null {
   try {
     mkdirSync(SCANS_DIR, { recursive: true });
@@ -52,7 +58,7 @@ function decodeImage(base64: string, scanId: string, kind: 'debug' | 'corrected'
     writeFileSync(filePath, Buffer.from(base64, 'base64'));
     return `db/scans/${scanId}_${kind}.jpg`;
   } catch {
-    return null;
+    return `data:image/jpeg;base64,${base64}`;
   }
 }
 
@@ -92,9 +98,11 @@ function parseManualMarkers(raw: unknown): number[][] | null {
 }
 
 function imagesPayload(scanId: string, debugPath: string | null, correctedPath: string | null) {
+  const asUrl = (stored: string | null, kind: 'debug' | 'corrected') =>
+    !stored ? null : stored.startsWith('data:') ? stored : `/api/scans/${scanId}/images/${kind}`;
   return {
-    debugImage: debugPath ? `/api/scans/${scanId}/images/debug` : null,
-    correctedImage: correctedPath ? `/api/scans/${scanId}/images/corrected` : null,
+    debugImage: asUrl(debugPath, 'debug'),
+    correctedImage: asUrl(correctedPath, 'corrected'),
   };
 }
 
