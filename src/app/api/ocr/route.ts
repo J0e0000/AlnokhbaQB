@@ -53,6 +53,7 @@ export async function POST(req: Request) {
             : result.error || 'فشل التعرف الضوئي في المحرك',
         stage: result.stage ?? 'engineError',
         details: result.error,
+        attempts: result.attempts,
         needsReview: true,
       },
       result.stage === 'noProcessor' || result.stage === 'engineUnreachable' ? { status: 503 } : { status: 502 }

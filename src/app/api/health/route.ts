@@ -7,6 +7,7 @@ import { cookies } from 'next/headers';
 import { db } from '@/lib/db';
 import { getBrowserHealth, warmBrowser } from '@/lib/pdf/pool';
 import { engineHealth } from '@/lib/omr/client';
+import { probeCloudflareAi } from '@/lib/cloudflare/ai';
 import { serverError } from '../_lib/shared';
 import { authConfigured, SESSION_COOKIE, verifySessionToken } from '@/lib/auth/session';
 
@@ -40,6 +41,9 @@ export async function GET() {
 
     const pdf = getBrowserHealth();
     const omrEngine = await engineHealth(2000);
+    // real entitlement check: a configured token that Workers AI refuses
+    // would otherwise show green while every OCR call fails
+    const cloudflareAi = await probeCloudflareAi();
 
     return NextResponse.json({
       ok: dbOk,
@@ -49,6 +53,7 @@ export async function GET() {
         ok: omrEngine.ok,
         ...(omrEngine.ok ? {} : { error: omrEngine.error ?? 'OMR engine unreachable' }),
       },
+      cloudflare: { ai: cloudflareAi },
     });
   } catch (err) {
     return NextResponse.json(serverError(err), { status: 500 });

@@ -30,6 +30,27 @@ export interface DocumentProcessor {
   process(input: ProcessorInput): Promise<ProcessorResult | null>; // null = failed/unsuitable
 }
 
+// ---------- processor 0: Cloudflare Workers AI vision ----------
+// The only engine that needs neither a Python host nor a third-party key we
+// do not control: the page image goes to Workers AI, which returns the Arabic
+// text. Runs first because it is the one that actually works in production.
+
+export const cloudflareProcessor: DocumentProcessor = {
+  name: 'cloudflare',
+  langs: ['ara', 'eng'],
+  async process({ base64, mime }) {
+    const { visionOcr, CloudflareAiError } = await import('@/lib/cloudflare/ai');
+    try {
+      const { text } = await visionOcr({ base64, mime, prompt: VLM_OCR_PROMPT });
+      return { engine: 'cloudflare', text, confidence: null };
+    } catch (err) {
+      // surface the provider reason ("Authentication error", licence gate …)
+      if (err instanceof CloudflareAiError) throw new Error(`cloudflare: ${err.message}`);
+      throw err;
+    }
+  },
+};
+
 // ---------- processor 1: Tesseract (via the local OMR engine service) ----------
 
 const tesseractProcessor: DocumentProcessor = {
@@ -210,7 +231,12 @@ export const vlmApiProcessor: DocumentProcessor = {
  * (PaddleOCR / Surya / Docling require heavy Python runtimes — deferred;
  * this interface is their integration point.)
  */
-const PROCESSORS: DocumentProcessor[] = [tesseractProcessor, vlmProcessor, vlmApiProcessor];
+const PROCESSORS: DocumentProcessor[] = [
+  cloudflareProcessor,
+  tesseractProcessor,
+  vlmProcessor,
+  vlmApiProcessor,
+];
 
 export interface DocumentOcrResult {
   ok: boolean;
@@ -220,13 +246,15 @@ export interface DocumentOcrResult {
   needsReview: boolean;
   stage?: string;
   error?: string;
+  /** one line per engine that was tried, in order */
+  attempts?: string[];
 }
 
 /** Run the processor pipeline for a document image. */
 export async function processDocument(input: ProcessorInput): Promise<DocumentOcrResult> {
   const candidates = PROCESSORS.filter((p) => p.langs.includes(input.lang));
   let lastStage = 'noProcessor';
-  let lastError: string | undefined;
+  const attempts: string[] = [];
 
   for (const processor of candidates) {
     try {
@@ -243,15 +271,23 @@ export async function processDocument(input: ProcessorInput): Promise<DocumentOc
         };
       }
       lastStage = 'engineEmpty';
-      lastError = `المحرك ${processor.name} أعاد نصًا فارغًا`;
+      attempts.push(`${processor.name}: النموذج أعاد نصًا فارغًا`);
     } catch (err) {
       lastStage = 'engineError';
-      lastError = err instanceof Error ? err.message : String(err);
+      const reason = err instanceof Error ? err.message : String(err);
       // surface WHY each engine failed (missing binary / pack / auth …) in
       // the API response details instead of swallowing the reason
-      console.error(`[ocr] processor ${processor.name} failed:`, lastError);
+      attempts.push(`${processor.name}: ${reason}`);
+      console.error(`[ocr] processor ${processor.name} failed:`, reason);
     }
   }
 
-  return { ok: false, confidence: null, needsReview: true, stage: lastStage, error: lastError };
+  return {
+    ok: false,
+    confidence: null,
+    needsReview: true,
+    stage: lastStage,
+    error: attempts.join(' · ') || undefined,
+    attempts,
+  };
 }
