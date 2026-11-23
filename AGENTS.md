@@ -17,6 +17,20 @@
   returned as data URLs (`decodeImage` fallback in `/api/scan`).
 - `/api/scan` returns engine output under `diagnostics` (including `stages`),
   not at the top level — clients must read `diagnostics.stages`.
+- Alignment order: 4 markers → markers+QR → QR only → full frame. With three
+  markers the slot mapping is a guess, so a zero-mark result retries the
+  QR-only homography (`alignRetry.how = "qr"`).
+- A sheet that is detected but reads zero marks comes back `needsReview`
+  (stored as scan status `REVIEW`) instead of a 409 — do not "fix" that back
+  into an error.
+- **OCR providers** (`src/lib/qb/ocr/engine.ts`), in order: Cloudflare Workers
+  AI (`CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN`), tesseract via the OMR
+  service, z-ai VLM (sandbox only), OpenAI-compatible vision
+  (`AI_API_KEY` + `AI_BASE_URL` + `AI_VISION_MODEL`). Vercel has **no
+  tesseract binary**, so production OCR needs one of the two AI providers; the
+  failure message now lists the ones that are unconfigured.
+- `bun test` needs no env: `tests/version-hint.test.ts` defaults
+  `DATABASE_URL` to `file:./db/dev-local.db`.
 - Test fixtures: `tests/omr-fixtures/` (blank sheet 2481×3509 = A4@300dpi,
   template.json has bubble centres in mm). Prod sheets can be downloaded from
   `/api/versions/<id>/omr-png` and filled at `x_mm * width_px/210`.
