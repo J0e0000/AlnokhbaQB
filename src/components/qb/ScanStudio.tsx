@@ -14,6 +14,7 @@ import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Camera, CameraOff, CircleStop, Crosshair, FileScan, Loader2, ScanLine, Stethoscope, Video } from 'lucide-react';
+import ScanSheetViewer from '@/components/qb/ScanSheetViewer';
 import { apiErrorMessage, prepareUpload } from '@/lib/image/prepareUpload';
 import type { QBAnswerStatus, QBScannedAnswer, QBScanGrade } from '@/lib/qb/types';
 
@@ -580,20 +581,17 @@ function ScanDiagnostics({ result }: { result: ScanResult }) {
           واضغط على العلامات الأربع بالترتيب.
         </div>
       )}
-      {result.images?.debug && (
-        <div>
-          <div className="mb-1 text-[13px] font-semibold text-muted-foreground">
-            {result.status === 'FAILED' ? 'ما رآه المحرك (الصورة بعد المعالجة):' : 'الصورة المعالجة مع الفقاعات المتوقعة:'}
-          </div>
-          <img src={result.images.debug} alt="debug overlay" className="w-full rounded-lg border" />
+      <div>
+        <div className="mb-1 text-[13px] font-semibold text-muted-foreground">
+          {result.status === 'FAILED'
+            ? 'ما رآه المحرك — راجع الصورة قبل إعادة التصوير:'
+            : 'الورقة التي قرأها النظام — راجعها قبل الاعتماد:'}
         </div>
-      )}
-      {result.images?.corrected && (
-        <div>
-          <div className="mb-1 text-[13px] font-semibold text-muted-foreground">الورقة بعد تصحيح المنظور:</div>
-          <img src={result.images.corrected} alt="corrected" className="w-full rounded-lg border" />
-        </div>
-      )}
+        <ScanSheetViewer
+          correctedImage={result.images?.corrected ?? null}
+          debugImage={result.images?.debug ?? null}
+        />
+      </div>
     </div>
   );
 }

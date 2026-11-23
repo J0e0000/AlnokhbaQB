@@ -11,6 +11,7 @@ import { applyOverrides, gradeScan } from '@/lib/qb/grading';
 import { sanitizeAnswerKey, sanitizeDocument } from '@/lib/qb/schema';
 import type { QBAnswerKey, QBDocument, QBScannedAnswer } from '@/lib/qb/types';
 import { readJsonBody, serverError } from '../../_lib/shared';
+import { sheetImageUrl } from '../../_lib/scan-images';
 import { loadVersion } from '../../_lib/version';
 
 export const runtime = 'nodejs';
@@ -49,13 +50,6 @@ function parseScanJson(scan: {
   };
 }
 
-function imageUrlFor(scanId: string, diagnostics: Record<string, unknown>, key: 'debugImagePath' | 'correctedImagePath') {
-  const p = diagnostics[key];
-  if (typeof p !== 'string' || !p) return null;
-  const kind = key === 'debugImagePath' ? 'debug' : 'corrected';
-  return `/api/scans/${scanId}/images/${kind}`;
-}
-
 export async function GET(_req: Request, ctx: Ctx) {
   try {
     const { id } = await ctx.params;
@@ -80,8 +74,8 @@ export async function GET(_req: Request, ctx: Ctx) {
       overrides,
       diagnostics: {
         ...diagnostics,
-        debugImage: imageUrlFor(scan.id, diagnostics, 'debugImagePath'),
-        correctedImage: imageUrlFor(scan.id, diagnostics, 'correctedImagePath'),
+        debugImage: sheetImageUrl(scan.id, diagnostics, 'debug'),
+        correctedImage: sheetImageUrl(scan.id, diagnostics, 'corrected'),
       },
     });
   } catch (err) {

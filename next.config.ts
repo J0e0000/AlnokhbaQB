@@ -13,6 +13,12 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: false,
   },
   reactStrictMode: false,
+  // the sandbox preview is served from a forwarded host: without this, dev-only
+  // assets (HMR, fonts) are blocked and the page never hydrates
+  allowedDevOrigins: [
+    'work-1-fcaavikoqqilgglw.prod-runtime.all-hands.dev',
+    'work-2-fcaavikoqqilgglw.prod-runtime.all-hands.dev',
+  ],
 };
 
 export default nextConfig;

@@ -42,6 +42,7 @@ import {
 } from '@/components/ui/select';
 import type { QBAnswerStatus, QBScanGrade, QBScannedAnswer } from '@/lib/qb/types';
 import { EmptyState, PaneHeader } from '@/components/qb/pane-kit';
+import ScanSheetViewer from '@/components/qb/ScanSheetViewer';
 
 // ---- types ----
 
@@ -334,7 +335,7 @@ export default function ReviewQueue() {
 
       {/* ---- detail dialog ---- */}
       <Dialog open={openId !== null} onOpenChange={(v) => !v && setOpenId(null)}>
-        <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto" dir="rtl">
+        <DialogContent className="max-h-[92vh] w-[95vw] max-w-5xl overflow-y-auto sm:max-w-5xl" dir="rtl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-right">
               <ClipboardCheck className="h-5 w-5 text-emerald-600" /> مراجعة الورقة الممسوحة
@@ -381,6 +382,22 @@ export default function ReviewQueue() {
                   </div>
                 </div>
               )}
+
+              {/* the sheet itself — the teacher approves what they can see */}
+              <div className="rounded-xl border p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-sm font-bold">
+                    <FileSearch className="h-4 w-4 text-emerald-600" /> الورقة الممسوحة
+                  </div>
+                  <span className="text-[10px] text-slate-500">
+                    اضغط على الصورة للتكبير والتحقق من الفقاعات قبل الاعتماد
+                  </span>
+                </div>
+                <ScanSheetViewer
+                  correctedImage={detail.diagnostics.correctedImage}
+                  debugImage={detail.diagnostics.debugImage}
+                />
+              </div>
 
               {/* student identity */}
               <div className="rounded-xl border p-3">
@@ -488,42 +505,6 @@ export default function ReviewQueue() {
                   </div>
                 )}
               </div>
-
-              {/* debug images (best-effort; /tmp images may expire on serverless) */}
-              {(detail.diagnostics.debugImage || detail.diagnostics.correctedImage) && (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {detail.diagnostics.debugImage && (
-                    <div>
-                      <div className="mb-1 text-[11px] font-semibold text-slate-600">
-                        الورقة مع مناطق الفقاعات:
-                      </div>
-                      <img
-                        src={detail.diagnostics.debugImage}
-                        alt="debug overlay"
-                        className="w-full rounded-lg border"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                    </div>
-                  )}
-                  {detail.diagnostics.correctedImage && (
-                    <div>
-                      <div className="mb-1 text-[11px] font-semibold text-slate-600">
-                        بعد تصحيح المنظور:
-                      </div>
-                      <img
-                        src={detail.diagnostics.correctedImage}
-                        alt="corrected sheet"
-                        className="w-full rounded-lg border"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
 
               {/* confidence + actions */}
               <div className="space-y-3">

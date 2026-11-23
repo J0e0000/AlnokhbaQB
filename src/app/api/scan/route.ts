@@ -292,6 +292,22 @@ export async function POST(req: Request) {
       const correctedPath = result.correctedImage
         ? decodeImage(stripDataUrl(result.correctedImage).base64, scan.id, 'corrected')
         : null;
+      const failedImages = imagesPayload(scan.id, debugPath, correctedPath);
+      // keep what the engine saw: a rejected sheet is exactly the one a
+      // teacher needs to look at before re-photographing it
+      await db.scan
+        .update({
+          where: { id: scan.id },
+          data: {
+            diagnosticsJson: JSON.stringify({
+              error: result.error,
+              engineStage: result.stage,
+              ...scanMeta,
+              ...failedImages,
+            }),
+          },
+        })
+        .catch(() => undefined);
       return NextResponse.json(
         {
           scanId: scan.id,
@@ -299,7 +315,7 @@ export async function POST(req: Request) {
           stage: result.stage,
           diagnostics: {
             ...(result.diagnostics ?? {}),
-            ...imagesPayload(scan.id, debugPath, correctedPath),
+            ...failedImages,
           },
           status: 'FAILED',
         },

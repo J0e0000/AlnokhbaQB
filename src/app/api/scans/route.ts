@@ -31,7 +31,22 @@ export async function GET(req: Request) {
       },
       orderBy: { createdAt: 'desc' },
       take: 200,
-      include: { exam: { select: { title: true } } },
+      // diagnosticsJson can carry a full base64 sheet on serverless hosts —
+      // never load it for a 200-row list
+      select: {
+        id: true,
+        createdAt: true,
+        examId: true,
+        examVersionId: true,
+        studentCode: true,
+        studentId: true,
+        status: true,
+        reviewStatus: true,
+        pageIndex: true,
+        overallConfidence: true,
+        gradeJson: true,
+        exam: { select: { title: true } },
+      },
     });
 
     return NextResponse.json(

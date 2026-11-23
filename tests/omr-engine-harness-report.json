@@ -37,7 +37,7 @@
       "detail": "accuracy=100%",
       "extra": {
         "problems": [],
-        "ms": 968
+        "ms": 953
       }
     },
     {
@@ -201,5 +201,5 @@
       "extra": {}
     }
   ],
-  "totalMs": 47848
+  "totalMs": 47577
 }

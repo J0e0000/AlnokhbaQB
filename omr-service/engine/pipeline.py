@@ -1998,11 +1998,42 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
             diag["refine"] = rdiag
             diag["warnings"].append("alignment refined in second pass")
 
+    pre_orientation = None if manual_markers else warped.copy()
     if manual_markers:
         warped, odiag = warped, {"qrParsed": None, "qrDecoded": False}
     else:
         warped, odiag = fix_orientation(warped, template, px_per_mm)
     diag.update(odiag)
+    # fix_orientation may rotate 90° on a weak cue (marker sizes read off desk
+    # clutter), leaving a portrait page landscape: every bubble coordinate then
+    # falls outside the frame and the sheet grades 0. The page shape is known,
+    # so trust it over the cue and rotate the sheet back.
+    if template:
+        pg = template.get("page") or A4
+        pw_mm, ph_mm = float(pg.get("widthMm") or 210), float(pg.get("heightMm") or 297)
+        h_o, w_o = warped.shape[:2]
+        if (w_o > h_o) != (pw_mm > ph_mm):
+            warped = np.rot90(warped).copy()
+            diag["aspectRot90AfterOrientation"] = True
+            diag["warnings"].append("تم تدوير الورقة لتطابق اتجاه القالب بعد تصحيح الاتجاه")
+    # The marker-size cue behind fix_orientation is a guess (it reads the
+    # smallest printed marker, which desk clutter can imitate). When it fired
+    # without a QR to confirm it and the sheet then shows no filled bubble at
+    # all, keep whichever orientation actually sees marks.
+    if (
+        pre_orientation is not None
+        and template
+        and odiag.get("rotationDeg")
+        and not odiag.get("qrDecoded")
+    ):
+        qbubbles_rot = _sheet_bubbles(template, 0)
+        if qbubbles_rot and _alignment_score(warped, qbubbles_rot, px_per_mm) == 0:
+            if _alignment_score(pre_orientation, qbubbles_rot, px_per_mm) > 0:
+                warped = pre_orientation
+                diag["orientationReverted"] = True
+                diag["warnings"].append(
+                    "تم إلغاء تدوير الاتجاه (المؤشر كان خاطئًا) لأن القراءة الأولى كانت فارغة"
+                )
     stages["orientationFixed"] = True
 
     qr_parsed = odiag.get("qrParsed")

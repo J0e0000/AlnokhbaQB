@@ -15,6 +15,14 @@
   `cv2.QRCodeDetectorAruco` is the fallback that saves them.
 - Vercel functions have a **read-only filesystem**: preview JPEGs must be
   returned as data URLs (`decodeImage` fallback in `/api/scan`).
+- **Sheet images**: `/api/scan` stores `debugImage`/`correctedImage` in
+  `diagnosticsJson` — an `/api/scans/<id>/images/<kind>` URL when `db/scans/` is
+  writable, a base64 data URL on Vercel. `GET /api/scans/:id` resolves them via
+  `sheetImageUrl()` (`src/app/api/_lib/scan-images.ts`) and the review dialog
+  renders them with `ScanSheetViewer`. Do not add `diagnosticsJson` to the
+  `/api/scans` list query — it can hold a whole sheet per row.
+- Failed scans keep their images too: the teacher must see what the engine
+  rejected before re-photographing.
 - `/api/scan` returns engine output under `diagnostics` (including `stages`),
   not at the top level — clients must read `diagnostics.stages`.
 - Alignment order: 4 markers → markers+QR → QR only → full frame. With three
