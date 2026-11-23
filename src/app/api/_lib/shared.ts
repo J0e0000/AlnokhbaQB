@@ -71,6 +71,22 @@ export function serverError(err: unknown): { error: string; details?: string } {
   };
 }
 
+/**
+ * Prisma reports a missing table (P2021) or column (P2022) when the deployed
+ * schema is newer than the database — the owner has not run `prisma db push`
+ * after an update. Say so instead of "unexpected server error".
+ */
+export function schemaOutdated(err: unknown): { error: string; needsDbUpdate: true } | null {
+  const message = err instanceof Error ? err.message : String(err);
+  const code = (err as { code?: string } | null)?.code;
+  const missing = code === 'P2021' || code === 'P2022' || /does not exist in the current database|no such table/i.test(message);
+  if (!missing) return null;
+  return {
+    error: 'قاعدة البيانات لم تُحدَّث بعد — نفّذ «prisma db push» على قاعدة بيانات الإنتاج ثم أعد المحاولة',
+    needsDbUpdate: true,
+  };
+}
+
 /** Strip a `data:image/...;base64,` prefix if present → raw base64 + mime. */
 export function stripDataUrl(s: string): { base64: string; mime: string } {
   const trimmed = s.trim();

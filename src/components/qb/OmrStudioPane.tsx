@@ -73,6 +73,7 @@ export default function OmrStudioPane({ examId }: { examId: string }) {
   const [busy, setBusy] = useState('');
   const [practice, setPractice] = useState<PracticeResult | null>(null);
   const [practiceOpen, setPracticeOpen] = useState(false);
+  const [dbUpdateNeeded, setDbUpdateNeeded] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -81,7 +82,13 @@ export default function OmrStudioPane({ examId }: { examId: string }) {
       fetch(`/api/exams/${examId}/fixed-sheet`),
     ]);
     setDetail(await examRes.json());
-    if (fixedRes.ok) setFixed((await fixedRes.json()).current ?? null);
+    const fixedBody = await fixedRes.json().catch(() => null);
+    if (fixedRes.ok) {
+      setFixed(fixedBody?.current ?? null);
+      setDbUpdateNeeded(false);
+    } else if (fixedBody?.needsDbUpdate) {
+      setDbUpdateNeeded(true);
+    }
   }, [examId]);
 
   useEffect(() => {
@@ -271,6 +278,12 @@ export default function OmrStudioPane({ examId }: { examId: string }) {
                 {busy === 'fixed' ? 'جارٍ الإنشاء…' : fixed ? 'أنشئ إصدارًا جديدًا' : 'أنشئ الورقة الموحّدة'}
               </Button>
             </div>
+            {dbUpdateNeeded ? (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-[13px] text-destructive">
+                قاعدة البيانات لم تُحدَّث بعد — نفّذ <code className="font-mono">npx prisma db push</code> على قاعدة
+                بيانات الإنتاج مرة واحدة، ثم أعد تحميل الصفحة.
+              </div>
+            ) : null}
             {fixed ? (
               <>
                 <div className="rounded-lg bg-muted p-3 text-[13px] leading-relaxed text-muted-foreground">

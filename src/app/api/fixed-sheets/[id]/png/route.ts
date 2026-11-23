@@ -8,7 +8,7 @@ import { db } from '@/lib/db';
 import type { FixedSheetTemplate } from '@/lib/qb/fixed-sheet';
 import { renderFixedSheetHtml } from '@/lib/qb/render-fixed-sheet';
 import { renderPng } from '@/lib/pdf/pool';
-import { serverError } from '../../../_lib/shared';
+import { schemaOutdated, serverError } from '../../../_lib/shared';
 import { intParam } from '../../../_lib/version';
 
 export const maxDuration = 60;
@@ -48,6 +48,8 @@ export async function GET(req: Request, ctx: Ctx) {
       },
     });
   } catch (err) {
+    const outdated = schemaOutdated(err);
+    if (outdated) return NextResponse.json(outdated, { status: 503 });
     return NextResponse.json(
       { ...serverError(err), hint: 'تحقق من مسار Chrome (CHROME_PATH)' },
       { status: 500 }

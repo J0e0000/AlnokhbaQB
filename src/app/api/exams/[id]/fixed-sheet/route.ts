@@ -13,7 +13,7 @@ import {
   validateFixedSheetTemplate,
 } from '@/lib/qb/fixed-sheet';
 import { sanitizeDocument } from '@/lib/qb/schema';
-import { readJsonBody, serverError } from '../../../_lib/shared';
+import { readJsonBody, schemaOutdated, serverError } from '../../../_lib/shared';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -50,6 +50,8 @@ export async function GET(_req: Request, ctx: Ctx) {
       })),
     });
   } catch (err) {
+    const outdated = schemaOutdated(err);
+    if (outdated) return NextResponse.json(outdated, { status: 503 });
     return NextResponse.json(serverError(err), { status: 500 });
   }
 }
@@ -131,6 +133,8 @@ export async function POST(req: Request, ctx: Ctx) {
       idDigits: template.idBoxes.digits,
     });
   } catch (err) {
+    const outdated = schemaOutdated(err);
+    if (outdated) return NextResponse.json(outdated, { status: 503 });
     return NextResponse.json(serverError(err), { status: 500 });
   }
 }
