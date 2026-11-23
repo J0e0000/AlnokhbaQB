@@ -5,15 +5,17 @@
 // Enable OMR → publish → print sheets. Same endpoints as before.
 // ============================================================
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { downloadFile } from '@/components/qb/PreviewPane';
+import ScanSheetViewer from '@/components/qb/ScanSheetViewer';
 import { t } from '@/lib/ui/strings';
-import { BookOpen, FileDown } from 'lucide-react';
+import { BookOpen, FileDown, ScanLine } from 'lucide-react';
 
 interface OmrDetail {
   exam: { status: string };
@@ -29,11 +31,49 @@ interface FixedSheetSummary {
   template?: { totalQuestions: number; idBoxes?: { digits: number } };
 }
 
+interface PracticeAnswer {
+  number: number;
+  detected: string | null;
+  confidence: number;
+}
+
+interface PracticeResult {
+  scanId?: string;
+  status?: string;
+  needsReview?: boolean;
+  duplicate?: boolean;
+  message?: string;
+  error?: string;
+  stage?: string;
+  studentCode?: string | null;
+  grade?: { score: number; maxScore: number; percent: number; unanswered: number[] } | null;
+  answers?: PracticeAnswer[];
+  diagnostics?: {
+    identity?: { digits?: string; complete?: boolean; source?: string };
+    versionRead?: { letter?: string | null } | null;
+    flags?: string[];
+    correctedImage?: string | null;
+    debugImage?: string | null;
+  };
+}
+
+const FLAG_LABEL: Record<string, string> = {
+  versionBlank: 'لم تُظلَّل النسخة',
+  versionMultiple: 'أكثر من نسخة مظللة',
+  versionUnclear: 'النسخة غير واضحة',
+  versionNotPublished: 'نسخة غير منشورة',
+  noAnswersRead: 'لم تُقرأ أي إجابة',
+  duplicateStudentPage: 'للطالب ورقة سابقة',
+};
+
 export default function OmrStudioPane({ examId }: { examId: string }) {
   const [detail, setDetail] = useState<OmrDetail | null>(null);
   const [fixed, setFixed] = useState<FixedSheetSummary | null>(null);
   const [copies, setCopies] = useState(30);
   const [busy, setBusy] = useState('');
+  const [practice, setPractice] = useState<PracticeResult | null>(null);
+  const [practiceOpen, setPracticeOpen] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     const [examRes, fixedRes] = await Promise.all([
@@ -63,6 +103,31 @@ export default function OmrStudioPane({ examId }: { examId: string }) {
       }
       toast.success(`الورقة الموحّدة جاهزة — الإصدار ${body.revision}`);
       void load();
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const runPracticeScan = async (file: File) => {
+    setBusy('practice');
+    setPractice(null);
+    setPracticeOpen(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error('read failed'));
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch('/api/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUrl }),
+      });
+      setPractice(await res.json());
+    } catch {
+      toast.error('تعذّر إرسال الصورة إلى المحرك');
+      setPracticeOpen(false);
     } finally {
       setBusy('');
     }
@@ -236,6 +301,27 @@ export default function OmrStudioPane({ examId }: { examId: string }) {
                     <FileDown className="h-4 w-4" />
                     {busy === 'fixedPng' ? 'جارٍ التجهيز…' : 'ورقة PNG 300dpi (اختبار)'}
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-9 gap-1"
+                    disabled={busy !== ''}
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    <ScanLine className="h-4 w-4" />
+                    {busy === 'practice' ? 'جارٍ القراءة…' : 'اختبر ورقة معبّأة (صورة)'}
+                  </Button>
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = '';
+                      if (file) void runPracticeScan(file);
+                    }}
+                  />
                 </div>
               </>
             ) : (
@@ -246,6 +332,69 @@ export default function OmrStudioPane({ examId }: { examId: string }) {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={practiceOpen} onOpenChange={setPracticeOpen}>
+        <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto" dir="rtl">
+          <DialogTitle className="text-[15px] font-bold">نتيجة قراءة الورقة</DialogTitle>
+          {busy === 'practice' || !practice ? (
+            <div className="py-10 text-center text-[13px] text-muted-foreground">جارٍ قراءة الورقة…</div>
+          ) : practice.error ? (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-[13px] text-destructive">
+              {practice.error}
+              {practice.stage ? <div className="mt-1 text-[11px] opacity-70">المرحلة: {practice.stage}</div> : null}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {practice.duplicate ? (
+                <div className="rounded-lg border border-warning/30 bg-warning/10 p-2 text-[12px] text-warning">
+                  {practice.message ?? 'هذه الصورة مُسجّلة مسبقًا'}
+                </div>
+              ) : null}
+              <div className="flex flex-wrap gap-2 text-[13px]">
+                <span className="rounded-md bg-muted px-2 py-1">
+                  رقم الطالب: <b className="tabular-nums">{practice.diagnostics?.identity?.digits || '—'}</b>
+                </span>
+                <span className="rounded-md bg-muted px-2 py-1">
+                  النسخة: <b>{practice.diagnostics?.versionRead?.letter ?? '—'}</b>
+                </span>
+                <span className="rounded-md bg-muted px-2 py-1">
+                  الدرجة: <b className="tabular-nums">{practice.grade?.score ?? 0}</b> /{' '}
+                  {practice.grade?.maxScore ?? 0}
+                </span>
+                <span className="rounded-md bg-muted px-2 py-1">
+                  الحالة: <b>{practice.status === 'PROCESSED' ? 'مقبولة' : 'تحتاج مراجعة'}</b>
+                </span>
+              </div>
+              {(practice.diagnostics?.flags?.length ?? 0) > 0 ? (
+                <div className="flex flex-wrap gap-1 text-[12px]">
+                  {practice.diagnostics?.flags?.map((f) => (
+                    <span key={f} className="rounded bg-destructive/10 px-2 py-0.5 text-destructive">
+                      {FLAG_LABEL[f] ?? f}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              <ScanSheetViewer
+                correctedImage={practice.diagnostics?.correctedImage ?? null}
+                debugImage={practice.diagnostics?.debugImage ?? null}
+              />
+              {practice.answers && practice.answers.length > 0 ? (
+                <div className="grid grid-cols-2 gap-1 text-[12px] sm:grid-cols-3 md:grid-cols-5">
+                  {practice.answers.map((a) => (
+                    <div key={a.number} className="flex items-center justify-between rounded border px-2 py-1">
+                      <span className="text-muted-foreground">س{a.number}</span>
+                      <span className={a.detected ? 'font-bold' : 'text-muted-foreground'}>{a.detected ?? '—'}</span>
+                      <span className="tabular-nums text-[10px] text-muted-foreground">
+                        {Math.round((a.confidence ?? 0) * 100)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
