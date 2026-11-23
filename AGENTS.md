@@ -34,7 +34,9 @@
 - **Tables on a sheet** (`omr-service/engine/tables.py`): ruled grids of at
   least 2×2 cells are found on the warped page (a 1×1 "grid" is the page frame
   or a marker box — filtered). Cell text is read with tesseract when the host
-  has it; otherwise the engine returns a base64 `crop` and
+  has it (one read per cell up to 20 cells; bigger grids are read one row at a
+  time and the lost cells patched, because ~1s of process startup per cell
+  would blow the 60s function budget); otherwise the engine returns a base64 `crop` and
   `resolveScanTables()` (`src/app/api/_lib/scan-tables.ts`) OCRs that crop once
   through the AI provider. The result lands in `diagnostics.tables` and the
   `tables` field of `POST /api/scan`, and `ScanSheetViewer` renders it under the
