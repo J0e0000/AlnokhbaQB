@@ -32,7 +32,10 @@ class OmrTemplate:
             self.page_w_mm = float(page["widthMm"])
             self.page_h_mm = float(page["heightMm"])
             self.template_id = str(raw["templateId"])
-            self.exam_version_id = str(raw["examVersionId"])
+            # fixed reusable sheets are exam-level: no version binding
+            self.mode = str(raw.get("mode") or "version")
+            self.exam_id = str(raw.get("examId") or "")
+            self.exam_version_id = str(raw.get("examVersionId") or "")
             self.sheets = int(raw.get("sheets", 1))
             self.marks_per_question = float(raw.get("marksPerQuestion", 1))
             self.reference_dpi = int(raw.get("referenceDpi", DEFAULT_REFERENCE_DPI))
@@ -50,6 +53,8 @@ class OmrTemplate:
             "minAbsoluteFill": float(thr.get("minAbsoluteFill", 0.08)),
         }
         self.student_id: Optional[Dict[str, Any]] = raw.get("studentId") or None
+        self.id_boxes: Optional[Dict[str, Any]] = raw.get("idBoxes") or None
+        self.version_marks: Optional[Dict[str, Any]] = raw.get("versionMarks") or None
 
     def _validate(self) -> None:
         if self.page_w_mm <= 10 or self.page_h_mm <= 10:
@@ -59,6 +64,8 @@ class OmrTemplate:
             # Marker geometry is canonical; fewer than 4 named markers breaks
             # the perspective contract.
             raise StageError("templateIdentified", "template must define TL/TR/BL/BR markers")
+        if self.mode != "fixed" and not self.exam_version_id:
+            raise StageError("templateIdentified", "template has no exam version id")
         if not self.questions:
             raise StageError("templateIdentified", "template has no questions")
         for q in self.questions:

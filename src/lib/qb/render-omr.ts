@@ -13,7 +13,7 @@ import type { OMRTemplate } from './types';
 const QR_GROUP_CACHE = new Map<string, string>();
 
 /** Render a QR payload as a black/white SVG group string (vector, crisp). */
-function qrSvgGroup(payload: string, x: number, y: number, sizeMm: number): string {
+export function qrSvgGroup(payload: string, x: number, y: number, sizeMm: number): string {
   let group = QR_GROUP_CACHE.get(payload);
   if (!group) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -36,7 +36,7 @@ function qrSvgGroup(payload: string, x: number, y: number, sizeMm: number): stri
   return group;
 }
 
-function escapeHtml(s: string): string {
+export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -45,7 +45,7 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-interface TxtOpts {
+export interface TxtOpts {
   size: number; // font-size in pt
   bold?: boolean;
   color?: string;
@@ -59,7 +59,7 @@ interface TxtOpts {
 }
 
 /** Absolutely positioned HTML text node — CSS bidi/alignment, fully deterministic. */
-function txt(content: string, o: TxtOpts): string {
+export function txt(content: string, o: TxtOpts): string {
   const styles: string[] = [
     'position:absolute',
     `top:${o.top.toFixed(2)}mm`,

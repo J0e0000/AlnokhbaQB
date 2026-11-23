@@ -12,8 +12,6 @@
 //   6. link Student by decoded student code
 // Engine down → clean 503. Unknown QR → 404. Template mismatch → 409.
 
-import { mkdirSync, writeFileSync } from 'fs';
-import path from 'path';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { clientIp, rateLimit } from '@/lib/auth/ratelimit';
@@ -38,43 +36,18 @@ import {
 } from '../_lib/shared';
 import { resolveScanTables } from '../_lib/scan-tables';
 import { loadVersion } from '../_lib/version';
+import { handleFixedScan } from '../_lib/fixed-scan';
+import {
+  decodeImage,
+  imagesPayload,
+  meanConfidence,
+  normalizeStudentCode,
+} from '../_lib/scan-persist';
 
 export const maxDuration = 60;
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const SCANS_DIR = path.join(process.cwd(), 'db', 'scans');
-
-/**
- * Persist a preview JPEG for the /api/scans/<id>/images route. Vercel's
- * function filesystem is read-only, so the write fails there — in that case
- * return the data URL itself instead of dropping the image, otherwise the
- * diagnostic overlay is never visible in production.
- */
-function decodeImage(base64: string, scanId: string, kind: 'debug' | 'corrected'): string | null {
-  try {
-    mkdirSync(SCANS_DIR, { recursive: true });
-    const filePath = path.join(SCANS_DIR, `${scanId}_${kind}.jpg`);
-    writeFileSync(filePath, Buffer.from(base64, 'base64'));
-    return `db/scans/${scanId}_${kind}.jpg`;
-  } catch {
-    return `data:image/jpeg;base64,${base64}`;
-  }
-}
-
-function normalizeStudentCode(raw: unknown): string | null {
-  if (typeof raw !== 'string') return null;
-  const digits = raw.replace(/\s+/g, '');
-  if (!digits || !/^\d{1,10}$/.test(digits)) return null; // empty / unclear / garbage
-  return digits;
-}
-
-function meanConfidence(answers: QBScannedAnswer[]): number {
-  if (!answers.length) return 0;
-  const sum = answers.reduce((acc, a) => acc + (Number.isFinite(a.confidence) ? a.confidence : 0), 0);
-  return Math.round((sum / answers.length) * 1000) / 1000;
-}
 
 /**
  * Validate the manual 4-corner fallback points ([[x,y] ×4, order TL,TR,BR,BL,
@@ -98,15 +71,6 @@ function parseManualMarkers(raw: unknown): number[][] | null {
   return pts;
 }
 
-function imagesPayload(scanId: string, debugPath: string | null, correctedPath: string | null) {
-  const asUrl = (stored: string | null, kind: 'debug' | 'corrected') =>
-    !stored ? null : stored.startsWith('data:') ? stored : `/api/scans/${scanId}/images/${kind}`;
-  return {
-    debugImage: asUrl(debugPath, 'debug'),
-    correctedImage: asUrl(correctedPath, 'corrected'),
-  };
-}
-
 export async function POST(req: Request) {
   // heavy OMR route — 30 req/min per client (auth gate)
   const rl = await rateLimit(`scan:${clientIp(req)}`, 30, 60_000);
@@ -126,6 +90,9 @@ export async function POST(req: Request) {
     const { base64: imageBase64 } = stripDataUrl(rawImage);
     const hint = typeof body?.examVersionIdHint === 'string' ? body.examVersionIdHint : undefined;
     const manualMarkers = parseManualMarkers(body?.manualMarkers);
+    const batchId = typeof body?.batchId === 'string' ? body.batchId.slice(0, 64) : null;
+    const idempotencyKey =
+      typeof body?.idempotencyKey === 'string' ? body.idempotencyKey.slice(0, 128) : null;
 
     // ---- 1. calibration thresholds (seeds the default profile on first call)
     const profile = await ensureActiveCalibration();
@@ -197,6 +164,18 @@ export async function POST(req: Request) {
         { error: result.error, stage: result.stage, details: result.details ?? null },
         { status: 503 }
       );
+    }
+
+    // Fixed reusable sheet: the QR names the exam/template only, so the whole
+    // identity → version → grade flow lives in its own handler.
+    if (result.ok && result.mode === 'fixed') {
+      return handleFixedScan({
+        imageBase64,
+        first: result,
+        thresholds,
+        batchId,
+        idempotencyKey,
+      });
     }
 
     // ---- 3. resolve version + template, then the (final) second engine call

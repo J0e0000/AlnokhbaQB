@@ -5,6 +5,7 @@
 // the API layer converts them to 503 with a clear Arabic message.
 // ============================================================
 
+import type { FixedSheetTemplate } from '@/lib/qb/fixed-sheet';
 import type {
   OMRTemplate,
   OMRThresholds,
@@ -36,8 +37,9 @@ export interface OmrClientError {
 
 export interface OmrProcessRequest {
   imageBase64: string;
-  /** null → engine QR-decodes the sheet and reports back needsTemplate */
-  template?: OMRTemplate | null;
+  /** null → engine QR-decodes the sheet and reports back needsTemplate.
+   *  Fixed reusable sheets send their exam-level template here. */
+  template?: OMRTemplate | FixedSheetTemplate | null;
   /** { [questionNumber]: optionLetter } — engine keys by NUMBER */
   answerKey?: Record<string, string> | null;
   /** { [questionNumber]: marks } — advisory, for engine-side preview grade */
@@ -49,10 +51,53 @@ export interface OmrProcessRequest {
   manualMarkers?: number[][] | null;
 }
 
+/** Handwritten student ID read from the fixed sheet's digit boxes (assist). */
+export interface OmrHandwrittenId {
+  digits: string; // '?' marks an unreadable position — never guessed
+  complete: boolean;
+  confidence: number;
+  backend?: string;
+  stripImage?: string | null;
+  perDigit: Array<{
+    index: number;
+    value: string | null;
+    confidence: number;
+    status: string;
+  }>;
+}
+
+/** Shaded digit columns of the fixed sheet's ID grid (deterministic). */
+export interface OmrIdGrid {
+  digits: string; // '?' marks an empty/unclear column
+  complete: boolean;
+  confidence: number;
+  columns: Array<{
+    index: number;
+    value: number | null;
+    status: 'selected' | 'unanswered' | 'multiple' | 'unclear';
+    confidence: number;
+    ratios: Record<string, number>;
+  }>;
+}
+
+/** Version bubble row read from the fixed sheet. */
+export interface OmrVersionRead {
+  value: number | null; // 1-based version number
+  status: 'selected' | 'unanswered' | 'multiple' | 'unclear' | 'invalid';
+  confidence: number;
+  ratios: Record<string, number>;
+}
+
 export interface OmrProcessSuccess {
   ok: true;
   answers: QBScannedAnswer[];
   studentId?: { digits?: string; confidence?: number } | null;
+  /** 'fixed' → exam-level reusable sheet (ANQB3 QR, no version in the QR) */
+  mode?: 'fixed' | 'version';
+  examId?: string | null;
+  handwrittenId?: OmrHandwrittenId | null;
+  idGrid?: OmrIdGrid | null;
+  version?: OmrVersionRead | null;
   needsTemplate?: boolean;
   /** sheet was found but nothing was readable — route stores REVIEW */
   needsReview?: boolean;
@@ -60,6 +105,9 @@ export interface OmrProcessSuccess {
     examVersionId?: string;
     templateId?: string;
     sheet?: number;
+    sheets?: number;
+    /** raw decoded payload (needed for the exam-level ANQB3 codes) */
+    payload?: string;
   } | null;
   diagnostics?: Partial<QBScanDiagnostics> | null;
   debugImage?: string | null; // base64 jpeg

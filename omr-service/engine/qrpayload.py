@@ -14,6 +14,40 @@ def checksum(exam_version_id: str, template_id: str, sheet: int) -> str:
     return hashlib.sha256(raw).hexdigest()[:8].upper()
 
 
+def fixed_checksum(exam_id: str, template_id: str, sheet: int) -> str:
+    raw = f"{exam_id}|{template_id}|{sheet}".encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()[:8].upper()
+
+
+def parse_fixed_payload(payload: str) -> Tuple[Optional[Dict[str, object]], Optional[str]]:
+    """ANQB3|<examId>|<templateId>|<sheet>|<sheets>|<checksum8> — exam-level
+    sheet, identical on every copy: it carries no student and no version."""
+    parts = (payload or "").strip().split("|")
+    if len(parts) != 6 or parts[0] != "ANQB3":
+        return None, "payload does not match ANQB3 format"
+    _, exam_id, template_id, sheet_s, sheets_s, check = parts
+    if not exam_id or not template_id:
+        return None, "payload missing identity fields"
+    try:
+        sheet = int(sheet_s)
+        sheets = int(sheets_s)
+    except ValueError:
+        return None, "non-integer sheet index"
+    if sheet < 0 or sheets < 1 or sheet >= sheets:
+        return None, f"invalid sheet index {sheet}/{sheets}"
+    expected = fixed_checksum(exam_id, template_id, sheet)
+    if check.upper() != expected:
+        return None, f"checksum mismatch (got {check.upper()}, expected {expected})"
+    return {
+        "mode": "fixed",
+        "examId": exam_id,
+        "templateId": template_id,
+        "sheet": sheet,
+        "sheets": sheets,
+        "v": 3,
+    }, None
+
+
 def parse_payload(payload: str) -> Tuple[Optional[Dict[str, object]], Optional[str]]:
     """Parse + verify a QR payload.
 

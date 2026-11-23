@@ -54,6 +54,14 @@ def _qr_hmac(exam_version_id: str, template_id: str, sheet: int, sheets: int, se
 
 def parse_qr_payload(payload: str, secret: Optional[str] = None) -> Optional[Dict[str, Any]]:
     try:
+        try:
+            from engine.qrpayload import parse_fixed_payload
+        except ImportError:  # engine imported as a flat module (harness/scripts)
+            from qrpayload import parse_fixed_payload
+
+        fixed, _fixed_err = parse_fixed_payload(payload)
+        if fixed:
+            return fixed
         parts = payload.strip().split("|")
         # ---- v2 (HMAC-signed): ANQB2|evid|tid|sheet|sheets|mac10
         if len(parts) == 6 and parts[0] == "ANQB2":
@@ -1073,8 +1081,16 @@ def refine_homography(
             return np.eye(3), diag
         h, w = warped.shape[:2]
         corners = np.array([[0, 0], [w, 0], [w, h], [0, h]], dtype=np.float32).reshape(-1, 1, 2)
-        proj = cv2.perspectiveTransform(corners, M2).reshape(-1, 2)
+        # build_homography can return a 2x3 affine (three-marker fallback);
+        # cv2.perspectiveTransform collapses those to one coordinate per point,
+        # so promote it to 3x3 before projecting the page corners.
+        mat = np.asarray(M2, dtype=np.float64)
+        if mat.shape == (2, 3):
+            mat = np.vstack([mat, [0.0, 0.0, 1.0]])
+        proj = cv2.perspectiveTransform(corners, mat).reshape(-1, 2)
         ideal = np.array([[0, 0], [w, 0], [w, h], [0, h]], dtype=np.float32)
+        if proj.shape != ideal.shape:
+            return M2, diag
         dev = float(np.max(np.linalg.norm(proj - ideal, axis=1)))
         diag["refineDeviationPx"] = round(dev, 1)
         if dev > 6:
@@ -2057,8 +2073,10 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
             "stages": stages,
             "qr": {"decoded": True, "payload": odiag.get("qrPayload") or diag.get("qrRawPayload"), "parsed": parsed_id},
             "templateSource": "qr",
+            "mode": parsed_id.get("mode") or "version",
+            "examId": parsed_id.get("examId"),
             "templateId": parsed_id["templateId"],
-            "examVersionId": parsed_id["examVersionId"],
+            "examVersionId": parsed_id.get("examVersionId"),
             "sheet": parsed_id["sheet"],
             "sheets": parsed_id["sheets"],
             "studentId": None,
@@ -2072,9 +2090,19 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
     # template provided
     tid = template.get("templateId")
     evid = template.get("examVersionId")
+    fixed_mode = template.get("mode") == "fixed"
     raw_parsed = diag.get("qrRawParsed") if diag.get("qrRawDecoded") else None
+
+    def _identity_mismatch(parsed: Dict[str, Any]) -> bool:
+        if parsed.get("templateId") != tid:
+            return True
+        # a fixed sheet is exam-level: its QR carries no version on purpose
+        if fixed_mode:
+            return False
+        return parsed.get("examVersionId") != evid
+
     if qr_decoded and qr_parsed:
-        if qr_parsed.get("templateId") != tid or qr_parsed.get("examVersionId") != evid:
+        if _identity_mismatch(qr_parsed):
             err = (
                 f"template mismatch: الورقة تنتمي إلى نسخة أخرى (QR={qr_parsed.get('templateId')} / المتوقع={tid})"
             )
@@ -2082,7 +2110,7 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
         template_source = "qr"
     elif raw_parsed:
         # warped-page QR failed but the raw-image QR read fine — verify identity
-        if raw_parsed.get("templateId") != tid or raw_parsed.get("examVersionId") != evid:
+        if _identity_mismatch(raw_parsed):
             err = (
                 f"template mismatch: الورقة تنتمي إلى نسخة أخرى (QR={raw_parsed.get('templateId')} / المتوقع={tid})"
             )
@@ -2170,12 +2198,34 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
             a["detected"] = None
     stages["answersExtracted"] = True
 
-    # Student ID (sheet 0 only)
+    # Student ID (sheet 0 only) + version row (printed on every page of a
+    # fixed sheet so pages can be assembled whatever order they arrive in)
     student_id = None
     version = None
+    handwritten_id = None
     if sheet == 0:
         student_id = analyze_student_id(warped, template.get("studentId"), th, px_per_mm, ink_ref)
-        version = analyze_version(warped, template.get("versionMarks"), th, px_per_mm, ink_ref)
+    version = analyze_version(warped, template.get("versionMarks"), th, px_per_mm, ink_ref)
+    if template.get("idBoxes"):
+        try:
+            from engine.fixed import read_id_boxes
+
+            handwritten_id = read_id_boxes(warped, template.get("idBoxes"), px_per_mm)
+            if handwritten_id:
+                stages["idRead"] = True
+        except Exception as exc:  # noqa: BLE001 - assist only, never fatal
+            warnings.append(f"تعذّر قراءة رقم الطالب المكتوب بخط اليد: {exc}")
+
+    id_grid = None
+    if template.get("idGrid"):
+        try:
+            from engine.fixed import read_id_grid
+
+            id_grid = read_id_grid(warped, template.get("idGrid"), px_per_mm, th)
+            if id_grid:
+                stages["idGridRead"] = True
+        except Exception as exc:  # noqa: BLE001 - the handwritten strip still stands
+            warnings.append(f"تعذّر قراءة شبكة رقم الطالب: {exc}")
 
     # Ruled tables on the sheet (marks tables, grade tables, handwritten grids)
     tables = []
@@ -2223,6 +2273,8 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
         "sheet": sheet,
         "sheets": sheets,
         "studentId": student_id,
+        "handwrittenId": handwritten_id,
+        "idGrid": id_grid,
         "version": version,
         "answers": answers,
         "grade": grade,

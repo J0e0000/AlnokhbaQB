@@ -58,6 +58,40 @@
   template.json has bubble centres in mm). Prod sheets can be downloaded from
   `/api/versions/<id>/omr-png` and filled at `x_mm * width_px/210`.
 
+## Fixed reusable answer sheets (exam-level, QR `ANQB3`)
+
+- One printed sheet per exam, not per version: the template lives in
+  `FixedSheet.dataJson` (`src/lib/qb/fixed-sheet.ts` → `FIXED_GEOMETRY`), the QR
+  is `ANQB3|<examId>|F-<templateId>-r<N>|sheet|sheets|hash` and carries **no
+  version** — the student shades the version row on the paper.
+- Student identity has two channels: the shaded **ID grid** (10 rows × 6
+  columns, authoritative, confidence 1.0) and the handwritten strip (OCR
+  assist, fills only columns the grid left blank). `mergeIdentity()` in
+  `src/app/api/_lib/fixed-scan.ts` does the merge; a grid+OCR disagreement is
+  reported per column, never guessed.
+- Engine side: `omr-service/engine/fixed.py` (`read_id_grid`, `read_id_boxes`)
+  is wired in `pipeline.py` and returns `idGrid` / `handwrittenId` alongside
+  `answers` / `version`.
+- **Corner markers must own their corner.** They are 8 mm squares (BR 6 mm) with
+  a 4 mm white halo. Anything printed within ~4 mm of a marker merges with it,
+  the detector then slots a version bubble as a corner and the whole page warps
+  into garbage (all answers read 0). Keep the title/QR/ID strip clear of them.
+- **Engine imports inside `pipeline.py` must survive flat imports.** The harness
+  imports the engine as top-level modules (`import pipeline`), so
+  `from .qrpayload import …` raises ImportError there and — because
+  `parse_qr_payload` swallows exceptions — silently turns every QR into
+  "unreadable". Use `from engine.x import …` with a `from x import …` fallback.
+- `build_homography()` can return a **2×3 affine**; `cv2.perspectiveTransform`
+  then returns one coordinate per point. Promote to 3×3 before projecting.
+- End-to-end acceptance test (renders the current revision, shades bubbles,
+  writes digits, adds phone degradation, posts to `/api/scan`):
+  `python3 tests/e2e-fixed-sheet.py --exam <examId>` — 12 scenarios, needs the
+  app + engine running. It clears `Scan` rows first (duplicate detection would
+  otherwise return a cached result for an identical image).
+- Version-sheet regression suite: `python3 tests/omr-engine-harness.py`
+  (24 cases, must stay 24/24).
+
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 ## This is NOT the Next.js you know
