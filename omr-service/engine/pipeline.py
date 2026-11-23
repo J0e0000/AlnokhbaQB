@@ -57,24 +57,46 @@ def parse_qr_payload(payload: str, secret: Optional[str] = None) -> Optional[Dic
         # ---- v2 (HMAC-signed): ANQB2|evid|tid|sheet|sheets|mac10
         if len(parts) == 6 and parts[0] == "ANQB2":
             _, exam_version_id, template_id, sheet_s, sheets_s, mac = parts
-            if not secret:
-                # v2 payloads MUST be verified; without the secret reject —
-                # the Next.js layer always passes it server-to-server.
-                return None
             sheet = int(sheet_s)
             sheets = int(sheets_s)
             if sheet < 0 or sheets < 1 or sheet >= sheets:
                 return None
-            expected = _qr_hmac(exam_version_id, template_id, sheet, sheets, secret)
-            if mac.upper() != expected:
+            if not exam_version_id or not template_id:
                 return None
+            # A configured secret means the caller wants strict verification.
+            # Without one the identity is accepted and flagged: sheets printed
+            # by builds that emit v2 codes are already in circulation, and the
+            # server re-resolves the version and grades server-side anyway.
+            unverified = False
+            if secret:
+                expected = _qr_hmac(exam_version_id, template_id, sheet, sheets, secret)
+                if mac.upper() != expected:
+                    return None
+            else:
+                unverified = True
             return {
                 "examVersionId": exam_version_id,
                 "templateId": template_id,
                 "sheet": sheet,
                 "sheets": sheets,
                 "v": 2,
+                **({"macUnverified": True} if unverified else {}),
             }
+        # ---- v0 (legacy unsigned): ANQB2|evid|tid|  — printed by an older
+        # app build. Sheets already in circulation must keep scanning, so the
+        # identity fields are accepted as-is (the server re-resolves the
+        # version and grades server-side, so nothing is trusted from the QR).
+        if parts[0] == "ANQB2" and len(parts) in (3, 4) and not (len(parts) == 4 and parts[3]):
+            _, exam_version_id, template_id = parts[0], parts[1], parts[2]
+            if exam_version_id and template_id:
+                return {
+                    "examVersionId": exam_version_id,
+                    "templateId": template_id,
+                    "sheet": 0,
+                    "sheets": 1,
+                    "v": 0,
+                }
+            return None
         # ---- v1 (legacy, sha256-8 checksum): ANQB|1|evid|tid|sheet|sheets|check
         if len(parts) != 7 or parts[0] != "ANQB":
             return None
@@ -451,6 +473,12 @@ def try_qr(
         if raw_gray is not None:
             rh, rw = raw_gray.shape[:2]
             add(cv2.resize(raw_gray, (int(rw * dscale), int(rh * dscale)), interpolation=cv2.INTER_AREA), dscale, (0, 0))
+    # Corner crops: the QR sits inside one of the four page corners, so a
+    # tight crop decodes small/soft codes that the full frame smears out.
+    ch, cw = int(h * 0.16), int(w * 0.22)
+    for img_ref in ((gray, raw_gray) if raw_gray is not None else (gray,)):
+        for ox, oy in ((0, 0), (w - cw, 0), (0, h - ch), (w - cw, h - ch)):
+            add(img_ref[oy:oy + ch, ox:ox + cw], 1.0, (ox, oy))
     add(gray, 1.0)
     if raw_gray is not None:
         add(raw_gray, 1.0)
@@ -471,21 +499,55 @@ def try_qr(
     return None
 
 
+_ARUCO_QR_DETECTOR: Optional["cv2.QRCodeDetectorAruco"] = None
+
+
+def _aruco_qr_detector() -> Optional["cv2.QRCodeDetectorAruco"]:
+    global _ARUCO_QR_DETECTOR
+    if _ARUCO_QR_DETECTOR is None:
+        if not hasattr(cv2, "QRCodeDetectorAruco"):
+            return None
+        _ARUCO_QR_DETECTOR = cv2.QRCodeDetectorAruco()
+    return _ARUCO_QR_DETECTOR
+
+
+def _qr_corners(payload: Optional[str], pts: Optional[np.ndarray]) -> Optional[Dict[str, Any]]:
+    if not payload or pts is None:
+        return None
+    parsed = parse_qr_payload(payload, _QR_SECRET)
+    if not parsed:
+        return None
+    pts = np.array(pts, dtype=np.float32).reshape(-1, 2)
+    if len(pts) != 4:
+        return None
+    # IMPORTANT: OpenCV returns corners in the QR code's LOCAL frame order
+    # (TL, TR, BR, BL of the printed code) — this order is INVARIANT to image
+    # rotation (verified empirically). Do NOT re-sort by image coordinates:
+    # that corrupts the mapping for rotated sheets.
+    return {"payload": payload, "parsed": parsed, "pts": pts}
+
+
 def _try_qr_once(gray: np.ndarray) -> Optional[Dict[str, Any]]:
     try:
         payload, pts, _ = QR_DETECTOR.detectAndDecode(gray)[:3]
     except cv2.error:
         payload, pts = None, None
-    if payload and pts is not None:
-        parsed = parse_qr_payload(payload, _QR_SECRET)
-        if parsed:
-            pts = np.array(pts, dtype=np.float32).reshape(-1, 2)
-            if len(pts) == 4:
-                # IMPORTANT: OpenCV returns corners in the QR code's LOCAL frame order
-                # (TL, TR, BR, BL of the printed code) — this order is INVARIANT to image
-                # rotation (verified empirically). Do NOT re-sort by image coordinates:
-                # that corrupts the mapping for rotated sheets.
-                return {"payload": payload, "parsed": parsed, "pts": pts}
+    hit = _qr_corners(payload, pts)
+    if hit:
+        return hit
+    # Fallback: the Aruco-based detector (OpenCV >= 4.8) finds and decodes
+    # dense QRs the classic detector gives up on — sheets whose payload is
+    # long enough to bump the QR version (ANQB2 codes) failed to decode at
+    # the printed 18mm size with the classic path alone.
+    aruco = _aruco_qr_detector()
+    if aruco is not None:
+        try:
+            payload, pts, _ = aruco.detectAndDecode(gray)[:3]
+        except cv2.error:
+            payload, pts = None, None
+        hit = _qr_corners(payload, pts)
+        if hit:
+            return hit
     # Fallback: pyzbar (zbar). Decodes at ANY rotation angle where cv2's
     # detector gives up (e.g. 45°-tilted captures) and handles small/soft QRs.
     try:
