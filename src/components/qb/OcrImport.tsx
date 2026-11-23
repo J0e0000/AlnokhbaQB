@@ -91,7 +91,15 @@ export default function OcrImport({ onCreated }: { onCreated: (examId: string) =
           }
         | null;
       if (!res.ok || !d?.ok || !d.text?.trim()) {
-        const reason = d?.details || d?.error || `HTTP ${res.status}`;
+        const statusHint =
+          res.status === 413
+            ? 'الصورة أكبر من الحد المسموح — أعد تصويرها بدقة أقل'
+            : res.status === 429
+              ? 'طلبات كثيرة على القارئ — انتظر دقيقة ثم أعد المحاولة'
+              : res.status === 401
+                ? 'انتهت الجلسة — أعد تسجيل الدخول'
+                : '';
+        const reason = d?.details || d?.error || statusHint || `HTTP ${res.status}`;
         serverReason.current = d?.attempts?.length ? `${reason} — ${d.attempts.join(' · ')}` : reason;
         return null;
       }

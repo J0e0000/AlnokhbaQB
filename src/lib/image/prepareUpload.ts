@@ -7,14 +7,14 @@
 // decodes with the correct EXIF orientation, downscales the long
 // side to ≤2200 px (never upscales — small images pass through at
 // their original size), and re-encodes JPEG down a quality ladder
-// (0.85 → 0.75 → 0.65) targeting ≤3.0 MB raw, so the base64 JSON
-// body stays under ~4.1 MB. PDF page rendering is NOT affected —
+// (0.85 → 0.75 → 0.65 → 0.55) targeting ≤2.0 MB raw, so the base64 JSON
+// body stays around 2.7 MB — comfortably under the 4.5 MB function cap. PDF page rendering is NOT affected —
 // it already renders at 1800 px.
 // ============================================================
 
 const MAX_LONG_SIDE = 2200;
-const TARGET_BYTES = 3.0 * 1024 * 1024;
-const QUALITY_LADDER = [0.85, 0.75, 0.65] as const;
+const TARGET_BYTES = 2.0 * 1024 * 1024;
+const QUALITY_LADDER = [0.85, 0.75, 0.65, 0.55] as const;
 
 export interface PreparedImage {
   dataUrl: string;
