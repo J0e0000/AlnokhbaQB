@@ -92,6 +92,15 @@
   (24 cases, must stay 24/24).
 
 
+- Vercel deploys on push to `main`; it runs `prisma generate` but **never**
+  `prisma db push`. A new model (e.g. `FixedSheet`) needs one manual
+  `npx prisma db push` against the production `DATABASE_URL`, otherwise the
+  fixed-sheet routes answer 503 `needsDbUpdate` (the OMR page prints the
+  command).
+- Practice scan on `/exams/<id>/omr` posts a photo to `/api/scan` and shows
+  `diagnostics.correctedImage` / `debugImage` through `ScanSheetViewer` — the
+  fastest way to confirm a print run without touching the review queue.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 ## This is NOT the Next.js you know
