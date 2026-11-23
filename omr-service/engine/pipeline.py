@@ -204,74 +204,65 @@ def _order_points(pts: np.ndarray) -> np.ndarray:
     return pts
 
 
-def find_corner_markers(gray: np.ndarray) -> Optional[List[Tuple[float, float, float]]]:
-    """Find the 4 largest solid near-square dark blobs (the corner markers).
-    Prefers blobs lying in the page's corner zones. Markers print at 5-7mm;
-    QR finder inners (~1.5mm), text and frame fragments are excluded by
-    mm-based size bounds (page width assumed A4 for scale)."""
-    h, w = gray.shape[:2]
-    # area-based scale estimate — orientation-independent (works for rotated
-    # landscape captures of a portrait A4 sheet)
-    px_per_mm_est = (w * h / (210.0 * 297.0)) ** 0.5
-    # smallest real marker is 5mm; QR finder rings (~3.5mm) must stay excluded.
-    # Upper bound has headroom for oblique photos where the NEAR marker appears
-    # up to ~1.3x larger than its printed size.
-    min_sz = 4.2 * px_per_mm_est
-    max_sz = 11.0 * px_per_mm_est
-    thr = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-    thr = cv2.morphologyEx(thr, cv2.MORPH_CLOSE, kernel)
-    # Solid-fill check: Otsu-based (same ink/paper split as the contour pass).
-    # A fixed low threshold (110) rejected markers on faint photocopies where
-    # solid black prints as gray ~120 — Otsu adapts to the page's ink level.
-    thr_fill = thr
-    contours = _find_contours(thr, cv2.RETR_EXTERNAL)
-    candidates = []
+def _marker_candidates(
+    binary: np.ndarray,
+    min_sz: float,
+    max_sz: float,
+    aspect_max: float,
+    rect_min: float,
+    fill_min: float,
+) -> List[Tuple[float, float, float, float]]:
+    """Solid, near-square dark blobs within the given mm-based size bounds."""
+    contours = _find_contours(binary, cv2.RETR_EXTERNAL)
+    candidates: List[Tuple[float, float, float, float]] = []
     for c in contours:
         area = cv2.contourArea(c)
         if area < min_sz * min_sz * 0.6 or area > max_sz * max_sz:
             continue
-        (cx, cy), (rw, rh), angle = cv2.minAreaRect(c)
+        (cx, cy), (rw, rh), _angle = cv2.minAreaRect(c)
         if rw == 0 or rh == 0:
             continue
         size = float(max(rw, rh))
         if size < min_sz or size > max_sz:
             continue
-        rect_area = rw * rh
-        rectangularity = area / rect_area
+        rectangularity = area / (rw * rh)
         aspect = size / max(1e-6, min(rw, rh))
-        if rectangularity < 0.75 or aspect > 1.35:
+        if rectangularity < rect_min or aspect > aspect_max:
             continue
-        # solid fill check on the (normalized) gray — bbox-crop only
         x, y, bw, bh = cv2.boundingRect(c)
         mask = np.zeros((bh, bw), dtype=np.uint8)
         cv2.drawContours(mask, [c], -1, 255, -1, offset=(-x, -y))
         mask_nz = cv2.countNonZero(mask)
         if mask_nz <= 0:
             continue
-        fill = cv2.countNonZero(cv2.bitwise_and(thr_fill[y:y + bh, x:x + bw], mask)) / float(mask_nz)
-        if fill < 0.75:
+        fill = cv2.countNonZero(cv2.bitwise_and(binary[y:y + bh, x:x + bw], mask)) / float(mask_nz)
+        if fill < fill_min:
             continue
         candidates.append((float(cx), float(cy), size, area))
+    return candidates
+
+
+def _pick_corner_markers(
+    candidates: List[Tuple[float, float, float, float]], w: int, h: int
+) -> Optional[List[Tuple[float, float, float]]]:
+    """Keep the 4 biggest candidates that sit in the page's corner zones and
+    span the sheet. Rejects clustered blobs — a garbage homography that
+    silently misreads every bubble is worse than a clean failure."""
     if not candidates:
         return None
-    # corner zones: near one of the 4 page corners (generous 32% bands)
-    def corner_zone(c) -> bool:
+
+    def corner_zone(c: Tuple[float, float, float, float]) -> bool:
         cx, cy = c[0], c[1]
         near_x = cx < w * 0.32 or cx > w * 0.68
         near_y = cy < h * 0.32 or cy > h * 0.68
         return near_x and near_y
+
     zoned = [c for c in candidates if corner_zone(c)]
     pool = zoned if len(zoned) >= 3 else candidates
     if len(pool) < 3:
         return None
     pool.sort(key=lambda t: -t[3])
     chosen = [(c[0], c[1], c[2]) for c in pool[:4]]
-    # Spatial-spread validation: the real 4 markers span the PAGE (bounding
-    # box ≥ 50% of image width AND height). 4 blobs clustered in one region
-    # (text fragments, grid dots, QR remnants on cropped captures) must be
-    # rejected — trusting them builds a garbage homography that silently
-    # misreads every bubble. Worse than a clean failure.
     if len(chosen) >= 3:
         xs = [c[0] for c in chosen]
         ys = [c[1] for c in chosen]
@@ -282,6 +273,53 @@ def find_corner_markers(gray: np.ndarray) -> Optional[List[Tuple[float, float, f
         if len(chosen) == 3 and (span_x < 0.4 or span_y < 0.4):
             return None
     return chosen
+
+
+def find_corner_markers(gray: np.ndarray) -> Optional[List[Tuple[float, float, float]]]:
+    """Find the 4 largest solid near-square dark blobs (the corner markers).
+    Prefers blobs lying in the page's corner zones. Markers print at 5-7mm;
+    QR finder inners (~1.5mm), text and frame fragments are excluded by
+    mm-based size bounds (page width assumed A4 for scale).
+
+    Oblique phone photos distort the markers (a square becomes a trapezoid,
+    and a marker touching the printed frame merges into one blob), so a strict
+    Otsu pass alone misses them. Three passes run in order of strictness and
+    the first one that yields a spatially valid set wins — the strict pass
+    still handles flatbed scans exactly as before."""
+    h, w = gray.shape[:2]
+    # area-based scale estimate — orientation-independent (works for rotated
+    # landscape captures of a portrait A4 sheet)
+    px_per_mm_est = (w * h / (210.0 * 297.0)) ** 0.5
+    # smallest real marker is 5mm; QR finder rings (~3.5mm) must stay excluded.
+    min_sz = 4.2 * px_per_mm_est
+    max_sz = 11.0 * px_per_mm_est
+
+    otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+    close5 = cv2.morphologyEx(otsu, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5)))
+    # opening separates a marker that bled into the frame edge
+    split = cv2.morphologyEx(
+        cv2.morphologyEx(close5, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))),
+        cv2.MORPH_CLOSE,
+        cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)),
+    )
+    # local threshold survives uneven lighting the global Otsu pass smears out
+    adaptive = cv2.adaptiveThreshold(
+        cv2.GaussianBlur(gray, (5, 5), 0), 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY_INV, 51, 12,
+    )
+    adaptive = cv2.morphologyEx(adaptive, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5)))
+
+    passes = (
+        (close5, min_sz, max_sz, 1.35, 0.75, 0.75),
+        (split, 3.6 * px_per_mm_est, 13.0 * px_per_mm_est, 1.6, 0.65, 0.60),
+        (adaptive, 3.6 * px_per_mm_est, 13.0 * px_per_mm_est, 1.6, 0.65, 0.55),
+    )
+    for binary, lo, hi, aspect_max, rect_min, fill_min in passes:
+        cands = _marker_candidates(binary, lo, hi, aspect_max, rect_min, fill_min)
+        chosen = _pick_corner_markers(cands, w, h)
+        if chosen:
+            return chosen
+    return None
 
 
 def detect_document_quad(gray: np.ndarray) -> Optional[np.ndarray]:
@@ -1302,6 +1340,19 @@ def render_corrected(warped: np.ndarray, max_w: int = 1200) -> str:
 
 # ---------------- Orchestration ----------------
 
+def _failure_preview(gray: np.ndarray, max_w: int = 900) -> str:
+    """Small JPEG of what the engine actually looked at — attached to a
+    detection failure so the user can see the framing/exposure problem."""
+    h, w = gray.shape[:2]
+    scale = min(1.0, max_w / max(1, w))
+    if scale < 1.0:
+        gray = cv2.resize(gray, (max(1, int(w * scale)), max(1, int(h * scale))), interpolation=cv2.INTER_AREA)
+    ok, buf = cv2.imencode('.jpg', gray, [cv2.IMWRITE_JPEG_QUALITY, 80])
+    if not ok:
+        return ''
+    return 'data:image/jpeg;base64,' + base64.b64encode(buf.tobytes()).decode()
+
+
 def process(payload: Dict[str, Any]) -> Dict[str, Any]:
     t0 = time.time()
     global _QR_SECRET
@@ -1507,6 +1558,8 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
         and diag.get("pdfPage") is None
     ):
         stages["sheetDetected"] = False
+        if debug:
+            _debug_b64 = _failure_preview(gray)
         return fail(
             "sheetDetected",
             "لم يتمكن المحرك من تحديد حدود الورقة — تأكد من ظهور الورقة كاملة داخل الكادر (العلامات المرجعية الأربع ورمز QR) وإعادة التصوير بإضاءة جيدة",

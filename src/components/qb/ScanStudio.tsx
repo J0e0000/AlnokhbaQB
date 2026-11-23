@@ -64,6 +64,7 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
   const [pendingImage, setPendingImage] = useState<string | null>(null); // data URL of the uploaded sheet
   const [manualMode, setManualMode] = useState(false);
   const [manualPoints, setManualPoints] = useState<Array<{ x: number; y: number }>>([]);
+  const [imgSize, setImgSize] = useState({ w: 1, h: 1 });
   const imgRef = useRef<HTMLImageElement>(null);
 
   const loadVersions = useCallback(async () => {
@@ -200,19 +201,37 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
       if (!res.ok || !data) {
         const message = await apiErrorMessage(res, 'فشل تحليل الورقة');
         toast.error(message);
+        // The API nests engine output under `diagnostics`; reading `stages`
+        // from the top level marked every step ✗ even when the image loaded
+        // and preprocessed fine, which made the dialog useless for support.
+        const diag = (data?.diagnostics ?? {}) as ScanResult['diagnostics'] & {
+          debugImage?: string | null;
+          correctedImage?: string | null;
+        };
         setResult({
-          scanId: '',
+          scanId: data?.scanId ?? '',
           answers: [],
           grade: null,
           studentCode: null,
           overallConfidence: 0,
           status: 'FAILED',
-          diagnostics: { errors: [data?.error ?? message], stages: data?.stages ?? {}, warnings: data?.warnings ?? [] },
-          images: data?.images,
+          diagnostics: {
+            ...diag,
+            errors: diag.errors?.length ? diag.errors : [data?.error ?? message],
+            stages: diag.stages ?? data?.stages ?? {},
+          },
+          images: { debug: diag.debugImage ?? null, corrected: diag.correctedImage ?? null },
         });
         return;
       }
-      setResult(data);
+      const successDiag = (data.diagnostics ?? {}) as ScanResult['diagnostics'] & {
+        debugImage?: string | null;
+        correctedImage?: string | null;
+      };
+      setResult({
+        ...data,
+        images: { debug: successDiag.debugImage ?? null, corrected: successDiag.correctedImage ?? null },
+      });
       setManualMode(false);
       onScanned?.();
       const ambiguous = (data.answers as QBScannedAnswer[]).filter((a) => a.status === 'multiple' || a.status === 'unclear');
@@ -389,12 +408,13 @@ export default function ScanStudio({ onScanned }: { onScanned?: () => void }) {
                   alt="ورقة الإجابة"
                   className="block w-full cursor-crosshair select-none"
                   onClick={onManualClick}
+                  onLoad={(e) => setImgSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
                 />
                 {manualPoints.map((p, i) => (
                   <span
                     key={i}
                     className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-destructive/100"
-                    style={{ left: `${(p.x / (imgRef.current?.naturalWidth || 1)) * 100}%`, top: `${(p.y / (imgRef.current?.naturalHeight || 1)) * 100}%` }}
+                    style={{ left: `${(p.x / (imgSize.w || 1)) * 100}%`, top: `${(p.y / (imgSize.h || 1)) * 100}%` }}
                   />
                 ))}
               </div>
@@ -553,9 +573,18 @@ function ScanDiagnostics({ result }: { result: ScanResult }) {
           {result.diagnostics.errors?.map((w, i) => <div key={i}>✕ {w}</div>)}
         </div>
       )}
+      {result.status === 'FAILED' && !stages.sheetDetected && (
+        <div className="rounded-lg bg-muted p-2 text-[13px] text-muted-foreground">
+          تأكد أن الصورة هي <b>ورقة الإجابة المطبوعة من التطبيق</b> (فيها رمز QR في الزاوية والعلامات
+          المرجعية الأربع) وليست ورقة الأسئلة. إن كانت الورقة صحيحة فاستخدم «ضبط الزوايا يدويًا»
+          واضغط على العلامات الأربع بالترتيب.
+        </div>
+      )}
       {result.images?.debug && (
         <div>
-          <div className="mb-1 text-[13px] font-semibold text-muted-foreground">الصورة المعالجة مع الفقاعات المتوقعة:</div>
+          <div className="mb-1 text-[13px] font-semibold text-muted-foreground">
+            {result.status === 'FAILED' ? 'ما رآه المحرك (الصورة بعد المعالجة):' : 'الصورة المعالجة مع الفقاعات المتوقعة:'}
+          </div>
           <img src={result.images.debug} alt="debug overlay" className="w-full rounded-lg border" />
         </div>
       )}
