@@ -31,6 +31,19 @@
 - A sheet that is detected but reads zero marks comes back `needsReview`
   (stored as scan status `REVIEW`) instead of a 409 — do not "fix" that back
   into an error.
+- **Tables on a sheet** (`omr-service/engine/tables.py`): ruled grids of at
+  least 2×2 cells are found on the warped page (a 1×1 "grid" is the page frame
+  or a marker box — filtered). Cell text is read with tesseract when the host
+  has it; otherwise the engine returns a base64 `crop` and
+  `resolveScanTables()` (`src/app/api/_lib/scan-tables.ts`) OCRs that crop once
+  through the AI provider. The result lands in `diagnostics.tables` and the
+  `tables` field of `POST /api/scan`, and `ScanSheetViewer` renders it under the
+  sheet. Table extraction is best-effort: a failure must never fail the scan.
+- Table cell OCR inherits the image: 1200 px-wide photos misread small cells,
+  300 dpi scans read them correctly. A table baked into a pre-warped
+  `correctedImage` fixture comes back rotated when the engine re-warps it — draw
+  test tables on the raw photo or the sheet render, not on a stored corrected
+  image.
 - **OCR providers** (`src/lib/qb/ocr/engine.ts`), in order: Cloudflare Workers
   AI (`CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN`), tesseract via the OMR
   service, z-ai VLM (sandbox only), OpenAI-compatible vision

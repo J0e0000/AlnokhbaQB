@@ -42,7 +42,7 @@ import {
 } from '@/components/ui/select';
 import type { QBAnswerStatus, QBScanGrade, QBScannedAnswer } from '@/lib/qb/types';
 import { EmptyState, PaneHeader } from '@/components/qb/pane-kit';
-import ScanSheetViewer from '@/components/qb/ScanSheetViewer';
+import ScanSheetViewer, { type ScannedTable } from '@/components/qb/ScanSheetViewer';
 
 // ---- types ----
 
@@ -75,6 +75,7 @@ interface ScanDetail {
   grade: QBScanGrade | null;
   overrides: Record<string, string>;
   diagnostics: Record<string, unknown> & {
+    tables?: ScannedTable[];
     debugImage?: string | null;
     correctedImage?: string | null;
     batchId?: string;
@@ -394,8 +395,9 @@ export default function ReviewQueue() {
                   </span>
                 </div>
                 <ScanSheetViewer
-                  correctedImage={detail.diagnostics.correctedImage}
-                  debugImage={detail.diagnostics.debugImage}
+                  correctedImage={detail.diagnostics.correctedImage as string | null}
+                  debugImage={detail.diagnostics.debugImage as string | null}
+                  tables={detail.diagnostics.tables}
                 />
               </div>
 

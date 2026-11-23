@@ -36,6 +36,7 @@ import {
   stripDataUrl,
   thresholdsFromConfig,
 } from '../_lib/shared';
+import { resolveScanTables } from '../_lib/scan-tables';
 import { loadVersion } from '../_lib/version';
 
 export const maxDuration = 60;
@@ -335,6 +336,9 @@ export async function POST(req: Request) {
       );
     }
 
+    // ---- 3b. tables printed/ruled on the sheet (shown with the review)
+    const tables = await resolveScanTables(result.tables);
+
     // ---- 4. SERVER-side grading (engine grade is advisory only)
     const answers: QBScannedAnswer[] = result.answers ?? [];
     const grade = gradeScan({
@@ -382,6 +386,7 @@ export async function POST(req: Request) {
       ...(result.diagnostics ?? {}),
       ...scanMeta,
       ...imagesPayload(scan.id, debugPath, correctedPath),
+      tables,
     };
     await db.scan.update({
       where: { id: scan.id },
@@ -399,6 +404,7 @@ export async function POST(req: Request) {
       status: scanStatus,
       needsReview,
       overallConfidence,
+      tables,
       template: {
         templateId: template.templateId,
         examVersionId: resolvedVersionId ?? template.examVersionId,

@@ -9,18 +9,79 @@
 // ============================================================
 
 import { useState } from 'react';
-import { ImageOff, Loader2, Maximize2, Minus, Plus, RotateCcw, ScanLine } from 'lucide-react';
+import { ImageOff, Loader2, Maximize2, Minus, Plus, RotateCcw, ScanLine, Table2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
+export interface ScannedTable {
+  rows: number;
+  cols: number;
+  cells?: string[][];
+  text?: string;
+  source?: string;
+}
 
 export interface ScanSheetViewerProps {
   /** flattened sheet, straight-on */
   correctedImage?: string | null;
   /** same sheet with the detected bubbles/markers drawn on it */
   debugImage?: string | null;
+  /** ruled tables found on the sheet, with whatever text was read */
+  tables?: ScannedTable[] | null;
   className?: string;
+}
+
+const TABLE_SOURCE_LABEL: Record<string, string> = {
+  tesseract: 'قُرئت خلاياها آليًا',
+  ai: 'قُرئت خلاياها بالذكاء الاصطناعي',
+  none: 'تم اكتشاف الجدول — النص غير مقروء على هذا الخادم',
+};
+
+function ExtractedTables({ tables }: { tables: ScannedTable[] }) {
+  return (
+    <div className="mt-3 rounded-xl border p-3">
+      <div className="mb-2 flex items-center gap-2 text-sm font-bold">
+        <Table2 className="h-4 w-4 text-emerald-600" />
+        الجداول المستخرجة من الورقة
+        <Badge variant="outline" className="text-[10px]">{tables.length}</Badge>
+      </div>
+      {tables.map((t, i) => (
+        <div key={i} className="mb-3 last:mb-0">
+          <div className="mb-1 text-[11px] text-slate-500">
+            جدول {i + 1}: {t.rows} صف × {t.cols} عمود —{' '}
+            {TABLE_SOURCE_LABEL[t.source ?? 'none'] ?? TABLE_SOURCE_LABEL.none}
+          </div>
+          {t.cells && t.cells.length > 0 ? (
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full border-collapse text-xs">
+                <tbody>
+                  {t.cells.map((row, r) => (
+                    <tr key={r} className={r === 0 ? 'bg-slate-50 font-bold' : ''}>
+                      {row.map((cell, c) => (
+                        <td key={c} className="border px-2 py-1 text-center">
+                          {cell || <span className="text-slate-300">—</span>}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : t.text ? (
+            <pre className="max-h-40 overflow-auto rounded-lg border bg-slate-50 p-2 text-[11px] leading-6 whitespace-pre-wrap">
+              {t.text}
+            </pre>
+          ) : (
+            <p className="rounded-lg border border-dashed bg-slate-50 p-2 text-[11px] text-slate-500">
+              الجدول ظاهر في الصورة نفسها، لكن لم يتوفر محرك نص لقراءة خلاياه.
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 type Shot = { key: 'corrected' | 'debug'; label: string; src: string };
@@ -64,7 +125,12 @@ function SheetImage({
   );
 }
 
-export default function ScanSheetViewer({ correctedImage, debugImage, className }: ScanSheetViewerProps) {
+export default function ScanSheetViewer({
+  correctedImage,
+  debugImage,
+  tables,
+  className,
+}: ScanSheetViewerProps) {
   const shots: Shot[] = [
     correctedImage ? { key: 'corrected', label: 'الورقة كما قرأها النظام', src: correctedImage } : null,
     debugImage ? { key: 'debug', label: 'مواضع الفقاعات المقروءة', src: debugImage } : null,
@@ -73,7 +139,16 @@ export default function ScanSheetViewer({ correctedImage, debugImage, className 
   const [zoomSrc, setZoomSrc] = useState<Shot | null>(null);
   const [zoom, setZoom] = useState(1);
 
+  const foundTables = Array.isArray(tables) ? tables : [];
+
   if (shots.length === 0) {
+    if (foundTables.length > 0) {
+      return (
+        <div className={className}>
+          <ExtractedTables tables={foundTables} />
+        </div>
+      );
+    }
     return (
       <div className={`rounded-xl border border-dashed bg-slate-50 p-4 text-center text-xs text-slate-500 ${className ?? ''}`}>
         <ImageOff className="mx-auto mb-1 h-5 w-5" />
@@ -165,6 +240,8 @@ export default function ScanSheetViewer({ correctedImage, debugImage, className 
           </div>
         </DialogContent>
       </Dialog>
+
+      {foundTables.length > 0 && <ExtractedTables tables={foundTables} />}
     </div>
   );
 }

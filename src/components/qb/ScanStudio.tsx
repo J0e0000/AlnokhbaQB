@@ -14,7 +14,7 @@ import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Camera, CameraOff, CircleStop, Crosshair, FileScan, Loader2, ScanLine, Stethoscope, Video } from 'lucide-react';
-import ScanSheetViewer from '@/components/qb/ScanSheetViewer';
+import ScanSheetViewer, { type ScannedTable } from '@/components/qb/ScanSheetViewer';
 import { apiErrorMessage, prepareUpload } from '@/lib/image/prepareUpload';
 import type { QBAnswerStatus, QBScannedAnswer, QBScanGrade } from '@/lib/qb/types';
 
@@ -25,6 +25,7 @@ interface ScanResult {
   studentCode: string | null;
   overallConfidence: number;
   status: string;
+  tables?: ScannedTable[];
   diagnostics: Record<string, unknown> & {
     stages?: Record<string, boolean>;
     warnings?: string[];
@@ -590,6 +591,7 @@ function ScanDiagnostics({ result }: { result: ScanResult }) {
         <ScanSheetViewer
           correctedImage={result.images?.corrected ?? null}
           debugImage={result.images?.debug ?? null}
+          tables={result.tables ?? null}
         />
       </div>
     </div>

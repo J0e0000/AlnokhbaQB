@@ -65,6 +65,8 @@ export interface OmrProcessSuccess {
   debugImage?: string | null; // base64 jpeg
   correctedImage?: string | null; // base64 jpeg
   sheet?: number;
+  /** ruled tables found on the sheet (geometry + text when OCR is available) */
+  tables?: unknown[];
 }
 
 /** The engine ran but reported a business failure (e.g. template mismatch). */

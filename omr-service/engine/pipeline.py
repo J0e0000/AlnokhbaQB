@@ -2177,6 +2177,18 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
         student_id = analyze_student_id(warped, template.get("studentId"), th, px_per_mm, ink_ref)
         version = analyze_version(warped, template.get("versionMarks"), th, px_per_mm, ink_ref)
 
+    # Ruled tables on the sheet (marks tables, grade tables, handwritten grids)
+    tables = []
+    if payload.get("extractTables", True):
+        try:
+            from engine.tables import extract_tables
+
+            tables = extract_tables(warped)
+            if tables:
+                stages["tablesExtracted"] = True
+        except Exception as exc:  # noqa: BLE001 - never fail a scan over a table
+            warnings.append(f"تعذّر استخراج الجداول: {exc}")
+
     # Grade
     answer_key = payload.get("answerKey")
     grade = None
@@ -2214,6 +2226,7 @@ def process(payload: Dict[str, Any]) -> Dict[str, Any]:
         "version": version,
         "answers": answers,
         "grade": grade,
+        "tables": tables,
         "diagnostics": diag,
         "correctedImage": None,
         "debugImage": None,
