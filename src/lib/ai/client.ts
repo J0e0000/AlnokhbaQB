@@ -20,6 +20,8 @@
 // ============================================================
 
 import { ensureZaiConfig } from '@/lib/zai-config';
+import { cloudflareAiConfig } from '@/lib/cloudflare/config';
+import { visionOcr } from '@/lib/cloudflare/ai';
 
 // ---------- errors ----------
 
@@ -299,6 +301,13 @@ interface VisionParams {
 }
 
 /** One-shot vision call: image + instruction → text. */
+/** `data:image/png;base64,AAA` → { base64, mime } (null when not a data URL). */
+export function splitDataUrl(dataUrl: string): { base64: string; mime: string } | null {
+  const match = /^data:([^;,]+);base64,([\s\S]*)$/.exec(dataUrl.trim());
+  if (!match) return null;
+  return { mime: match[1], base64: match[2] };
+}
+
 export async function aiVisionText({
   prompt,
   dataUrl,
@@ -306,6 +315,21 @@ export async function aiVisionText({
   timeoutMs = 120_000,
   temperature = 0,
 }: VisionParams): Promise<string> {
+  // Cloudflare Workers AI first: it needs no provider account beyond the
+  // Cloudflare token, and it is the only vision backend that answers Arabic
+  // reliably here. Any failure falls through to the configured provider.
+  if (cloudflareAiConfig()) {
+    const split = splitDataUrl(dataUrl);
+    if (split) {
+      try {
+        const { text } = await visionOcr({ ...split, prompt, maxTokens });
+        if (text) return text;
+      } catch (err) {
+        console.error('[ai] cloudflare vision failed, falling back:', err);
+      }
+    }
+  }
+
   const cfg = assertConfigured();
   if (cfg.apiKey) {
     const { text } = await postChatResilient(

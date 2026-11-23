@@ -35,6 +35,13 @@ const LANG_LABEL: Record<ClientOcrLang, string> = {
   'ara+eng': 'عربي + English',
 };
 
+const ENGINE_LABELS: Record<string, string> = {
+  cloudflare: 'Cloudflare Workers AI',
+  'vlm-api': 'نموذج رؤية — الخادم',
+  vlm: 'نموذج رؤية — الخادم',
+  tesseract: 'Tesseract — الخادم',
+};
+
 export default function OcrImport({ onCreated }: { onCreated: (examId: string) => void }) {
   const [lang, setLang] = useState<ClientOcrLang>('ara');
   const [target, setTarget] = useState<'exam' | 'bank'>('exam');
